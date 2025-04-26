@@ -24,8 +24,13 @@ import { auth as firebaseAuth } from './firebase';
 // Firebase Admin SDK'yı kaldırıyoruz, client tarafında kullanılmamalı
 // import { auth as adminAuth } from './firebase-admin';
 
-// Auth referansını dışa aktar
-export const auth = firebaseAuth;
+// Auth referansını bir fonksiyon olarak dışa aktar
+export function getAuth() {
+  return firebaseAuth;
+}
+
+// Auth referansını doğrudan kullanmak için
+const auth = firebaseAuth;
 
 // Firestore referansı
 const db = getFirestore();
@@ -80,6 +85,7 @@ export const registerUser = async (
     }
     
     console.log('Firebase ile kullanıcı kaydı yapılıyor:', email);
+    const auth = getAuth();
     
     // Firebase Authentication ile kullanıcı oluştur
     const userCredential: UserCredential = await createUserWithEmailAndPassword(
@@ -139,6 +145,7 @@ export const loginUser = async (
       email = email.trim(); // Boşlukları temizle
       console.log('E-posta boşluklar temizlendi:', email);
     }
+    const auth = getAuth();
     
     const userCredential: UserCredential = await signInWithEmailAndPassword(
       auth, 
@@ -190,6 +197,7 @@ export const sendResetPasswordEmail = async (email: string): Promise<void> => {
     }
     
     console.log('Sending password reset email:', email);
+    const auth = getAuth();
     
     // Firebase şifre sıfırlama e-postası gönder
     // ActionCodeSettings parametresi opsiyonel olarak eklenebilir
@@ -216,6 +224,7 @@ export const sendResetPasswordEmail = async (email: string): Promise<void> => {
 // Kullanıcı çıkışı
 export const logoutUser = async (): Promise<void> => {
   try {
+    const auth = getAuth();
     await signOut(auth);
   } catch (error: any) {
     console.error('Logout error:', error);
@@ -265,11 +274,14 @@ export async function updateUserProfile(userId: string, data: { name?: string })
     });
     
     // Eğer isim güncellemesi varsa, Firebase Auth profilini de güncelle
-    if (data.name && auth.currentUser) {
-      await updateProfile(auth.currentUser, {
-        displayName: data.name
-      });
-      console.log('Firebase Auth profile updated');
+    if (data.name) {
+      const auth = getAuth();
+      if (auth.currentUser) {
+        await updateProfile(auth.currentUser, {
+          displayName: data.name
+        });
+        console.log('Firebase Auth profile updated');
+      }
     }
     
     return true;
@@ -283,6 +295,7 @@ export async function updateUserProfile(userId: string, data: { name?: string })
 // Kullanıcı şifresini güncelle
 export async function updateUserPassword(oldPassword: string, newPassword: string) {
   try {
+    const auth = getAuth();
     const user = auth.currentUser;
     
     if (!user || !user.email) {
@@ -317,6 +330,7 @@ export async function updateUserPassword(oldPassword: string, newPassword: strin
 // Kullanıcı hesabını sil
 export async function deleteUserAccount(password: string) {
   try {
+    const auth = getAuth();
     const user = auth.currentUser;
     
     if (!user || !user.email) {

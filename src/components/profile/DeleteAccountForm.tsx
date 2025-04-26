@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { auth, deleteUserAccount } from '@/lib/auth-firebase';
+import { getAuth, deleteUserAccount } from '@/lib/auth-firebase';
 import { signInWithEmailAndPassword, signOut, User as FirebaseUser } from 'firebase/auth';
 
 export default function DeleteAccountForm() {
@@ -12,6 +12,7 @@ export default function DeleteAccountForm() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const auth = getAuth();
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(auth.currentUser);
   
   const { user, logout } = useAuth();
