@@ -42,13 +42,13 @@ export async function setAuthCookieOnServer(token: string, response: NextRespons
     value: token,
     httpOnly: false, // Client tarafında erişilebilir olması için false
     path: '/',
-    secure: process.env.NODE_ENV === 'production',
+    secure: false, // Hem HTTP hem HTTPS üzerinde çalışabilmesi için
     maxAge: 60 * 60 * 24 * 7, // 1 week
-    sameSite: 'lax' as const,
+    sameSite: 'lax' as const, // Tarayıcı uyumluluğu için lax kullanıyoruz
     priority: 'high' as const
   };
 
-  console.log('Response ile cookie ayarlanıyor');
+  console.log('Response ile cookie ayarlanıyor', cookieOptions);
   response.cookies.set(cookieOptions);
   
   // Cache kontrolü

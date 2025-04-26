@@ -31,12 +31,13 @@ export default function LoginForm() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ email, password }),
+        credentials: 'include', // Önemli: Cookie'lerin gönderilmesini ve alınmasını sağlar
       });
       
       const data = await response.json();
       
       if (!response.ok) {
-        throw new Error(data.error || 'Login failed');
+        throw new Error(data.error || data.message || 'Login failed');
       }
       
       console.log('Login successful:', data);
@@ -45,7 +46,16 @@ export default function LoginForm() {
       if (data.token) {
         console.log('Setting token on client side');
         setAuthTokenInClient(data.token);
+        
+        // Cookies doğru şekilde ayarlanana kadar localStorage'a da kaydedelim
+        localStorage.setItem('auth-token', data.token);
+        localStorage.setItem('user-info', JSON.stringify(data.user));
+        localStorage.setItem('isLoggedIn', 'true');
       }
+      
+      // Token ayarlandığını doğrulayalım
+      const savedToken = localStorage.getItem('auth-token');
+      console.log('Saved token exists:', !!savedToken);
       
       // Redirect after successful login
       console.log('Redirecting to:', data.redirectUrl || '/dashboard');
@@ -53,7 +63,7 @@ export default function LoginForm() {
       // Redirect by reloading the page
       setTimeout(() => {
         window.location.href = data.redirectUrl || '/dashboard';
-      }, 100);
+      }, 500); // Süreyi biraz uzattık
       
     } catch (error: any) {
       console.error('Login error:', error);
