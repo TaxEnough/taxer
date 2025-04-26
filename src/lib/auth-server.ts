@@ -7,8 +7,13 @@ import { cookies } from 'next/headers';
 import { auth } from './firebase-admin';
 
 // JWT için gerekli sabitleri tanımla (JWT_SECRET varsa)
-export const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-export const COOKIE_NAME = 'auth-token';
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const COOKIE_NAME = 'auth-token';
+
+// Sabitleri dışa aktaran yardımcı fonksiyon
+export async function getConstants() {
+  return { JWT_SECRET, COOKIE_NAME };
+}
 
 export async function hashPassword(password: string): Promise<string> {
   return hash(password, 10);
@@ -18,11 +23,11 @@ export async function verifyPassword(password: string, hashedPassword: string): 
   return compare(password, hashedPassword);
 }
 
-export function generateToken(userId: string): string {
+export async function generateToken(userId: string): Promise<string> {
   return sign({ userId }, JWT_SECRET, { expiresIn: '7d' });
 }
 
-export function verifyToken(token: string): { userId: string } | null {
+export async function verifyToken(token: string): Promise<{ userId: string } | null> {
   try {
     return verify(token, JWT_SECRET) as { userId: string };
   } catch (error) {
@@ -56,7 +61,7 @@ export async function setAuthCookieOnServer(token: string, response: NextRespons
   return response;
 }
 
-export function getAuthCookieFromRequest(request: Request): string | undefined {
+export async function getAuthCookieFromRequest(request: Request): Promise<string | undefined> {
   console.log('getAuthCookieFromRequest çağrıldı');
   
   // Önce Authorization header kontrolü
@@ -87,7 +92,7 @@ export function getAuthCookieFromRequest(request: Request): string | undefined {
   return token;
 }
 
-export function removeAuthCookieOnServer(): void {
+export async function removeAuthCookieOnServer(): Promise<void> {
   console.log('removeAuthCookieOnServer çağrıldı');
   cookies().delete(COOKIE_NAME);
 }
