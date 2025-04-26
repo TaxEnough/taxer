@@ -1,6 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  swcMinify: true,
+  experimental: {
+    serverActions: true,
+  },
+  // Firebase Admin SDK gibi Node.js modüllerini istemci tarafına derlememek için transpilePackages yapılandırması
+  transpilePackages: [],
   
   // Alt alan adları (subdomain) için yapılandırma
   async rewrites() {
@@ -20,16 +26,18 @@ const nextConfig = {
   
   // Firebase Admin SDK için Node.js modüllerini webpack'te yönetme
   webpack: (config, { isServer }) => {
-    // Firebase Admin SDK sadece sunucu tarafında kullanılacak
+    // İstemci tarafında çalışacak kodda Node.js modüllerini yoksay
     if (!isServer) {
       config.resolve.fallback = {
-        ...config.resolve.fallback,
-        net: false,
         fs: false,
-        http2: false,
-        dns: false,
+        net: false,
         tls: false,
-        child_process: false,
+        http2: false,
+        path: false,
+        os: false,
+        crypto: false,
+        util: false,
+        ...config.resolve.fallback,
       };
     }
     return config;
