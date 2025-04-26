@@ -1,7 +1,16 @@
 'use client';
 
+import Cookie from 'js-cookie';
+
 // Client tarafında çerez işlemleri
 const COOKIE_NAME = 'auth-token';
+
+const AUTH_TOKEN_KEY = 'auth-token';
+const COOKIE_OPTIONS = {
+  secure: true,
+  sameSite: 'lax' as const, // 'lax' is better for most cases, preventing CSRF while allowing normal navigation
+  expires: 7 // days
+};
 
 export function getClientCookie(name: string): string | null {
   if (typeof document === 'undefined') return null;
@@ -38,108 +47,63 @@ export function removeClientCookie(name: string): void {
   console.log(`Cookie ${name} silindi`);
 }
 
-// Auth token için özel fonksiyonlar
+// Get token from client-side sources
 export function getAuthTokenFromClient(): string | null {
+  // Check if we're in a browser environment
   if (typeof window === 'undefined') {
-    console.warn('getAuthTokenFromClient server tarafında çağrılmaya çalışılıyor!');
     return null;
   }
   
-  // Önce localStorage'a bak
-  try {
-    const lsToken = localStorage.getItem('auth-token');
-    if (lsToken) {
-      console.log('Token localStorage\'dan alındı');
-      return lsToken;
-    }
-  } catch (e) {
-    console.error('localStorage erişimi sırasında hata:', e);
-  }
+  // Try to get from cookie first
+  const cookieToken = Cookie.get(AUTH_TOKEN_KEY);
   
-  // Sonra cookie'ye bak
-  try {
-    const cookies = document.cookie.split(';');
-    for (let i = 0; i < cookies.length; i++) {
-      const cookie = cookies[i].trim();
-      if (cookie.startsWith('auth-token=')) {
-        const token = cookie.substring('auth-token='.length, cookie.length);
-        console.log('Token cookie\'den alındı');
-        return token;
-      }
-    }
-  } catch (e) {
-    console.error('Cookie okunurken hata:', e);
-  }
-  
-  console.log('Token bulunamadı');
-  return null;
-}
-
-export function setAuthTokenInClient(token: string): void {
-  console.log('Client tarafında token ayarlanıyor');
-  
-  if (typeof window === 'undefined') {
-    console.warn('setAuthTokenInClient server tarafında çağrılmaya çalışılıyor!');
-    return;
-  }
-  
-  // Cookie yönteminden önce localStorage kullanımı
-  try {
-    localStorage.setItem('auth-token', token);
-    localStorage.setItem('isLoggedIn', 'true');
-    console.log('Token localStorage\'a kaydedildi');
-  } catch (e) {
-    console.error('localStorage erişimi sırasında hata:', e);
-  }
-
-  // Cookie'yi manuel olarak ayarlayalım
-  try {
-    const expiryDate = new Date();
-    expiryDate.setDate(expiryDate.getDate() + 7); // 7 gün
+  // If not in cookie, try localStorage
+  if (!cookieToken) {
+    const localStorageToken = localStorage.getItem(AUTH_TOKEN_KEY);
     
-    document.cookie = `auth-token=${token}; path=/; expires=${expiryDate.toUTCString()}; SameSite=Lax`;
-    console.log('Token cookie olarak ayarlandı');
-  } catch (e) {
-    console.error('Cookie ayarlanırken hata:', e);
+    // If found in localStorage but not in cookie, restore cookie
+    if (localStorageToken) {
+      Cookie.set(AUTH_TOKEN_KEY, localStorageToken, COOKIE_OPTIONS);
+      return localStorageToken;
+    }
+    
+    return null;
   }
   
-  // Global state'i güncelle
-  if (typeof window !== 'undefined') {
-    window.__isAuthenticated = true;
-    window.__lastTokenCheck = Date.now();
+  // Cookie token exists but verify it matches localStorage
+  const localStorageToken = localStorage.getItem(AUTH_TOKEN_KEY);
+  
+  // If tokens don't match, update localStorage
+  if (localStorageToken !== cookieToken) {
+    localStorage.setItem(AUTH_TOKEN_KEY, cookieToken);
   }
+  
+  return cookieToken;
 }
 
+// Set token in client-side storage
+export function setAuthTokenInClient(token: string): void {
+  // Set in both cookie and localStorage for redundancy
+  Cookie.set(AUTH_TOKEN_KEY, token, COOKIE_OPTIONS);
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+  
+  // Set login status flag
+  localStorage.setItem('isLoggedIn', 'true');
+  
+  console.log('Token saved in client storage');
+}
+
+// Remove token from client-side storage
 export function removeAuthTokenFromClient(): void {
-  console.log('Client tarafında token kaldırılıyor');
+  // Remove from both cookie and localStorage
+  Cookie.remove(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_TOKEN_KEY);
   
-  if (typeof window === 'undefined') {
-    console.warn('removeAuthTokenFromClient server tarafında çağrılmaya çalışılıyor!');
-    return;
-  }
+  // Clear login status flag
+  localStorage.setItem('isLoggedIn', 'false');
   
-  // localStorage'dan kaldır
-  try {
-    localStorage.removeItem('auth-token');
-    localStorage.removeItem('isLoggedIn');
-    localStorage.removeItem('user-info');
-    console.log('Token localStorage\'dan kaldırıldı');
-  } catch (e) {
-    console.error('localStorage erişimi sırasında hata:', e);
-  }
+  // Clear user info
+  localStorage.removeItem('user-info');
   
-  // Cookie'yi sil
-  try {
-    document.cookie = 'auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-    console.log('Token cookie\'den kaldırıldı');
-  } catch (e) {
-    console.error('Cookie kaldırılırken hata:', e);
-  }
-  
-  // Global state'i güncelle
-  if (typeof window !== 'undefined') {
-    window.__isAuthenticated = false;
-    window.__userInfo = null;
-    window.__lastTokenCheck = 0;
-  }
+  console.log('Token removed from client storage');
 } 

@@ -22,7 +22,7 @@ interface AuthContextType {
   updateUser: (updatedUser: User) => void;
 }
 
-// Context'i React.Context tipinde tanımla
+// Define context with React.Context type
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
@@ -32,12 +32,12 @@ const AuthContext = createContext<AuthContextType>({
   updateUser: () => {},
 });
 
-// Korumalı rotalar listesi
+// Protected routes list
 const protectedRoutes = ['/dashboard', '/profile', '/transactions', '/reports'];
-// Kimlik doğrulama gerektirmeyen rotalar
+// Routes that don't require authentication
 const authRoutes = ['/login', '/register'];
 
-// Global window tipi için interface tanımla
+// Define interface for global window type
 declare global {
   interface Window {
     __isAuthenticated?: boolean;
@@ -52,20 +52,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Client tarafında çerez kontrolü ve kullanıcı bilgilerini alma
+  // Check cookies and get user info on client side
   useEffect(() => {
     console.log('AuthProvider main useEffect running');
     let isMounted = true;
     
     const fetchUserData = async () => {
       try {
-        // Client side token check
+        // Check for tokens in multiple storage locations
         const token = getAuthTokenFromClient();
-        console.log('Client side token:', token ? 'exists' : 'none');
+        const localStorageToken = localStorage.getItem('auth-token');
+        const isLoggedInFlag = localStorage.getItem('isLoggedIn') === 'true';
+        const userInfoStr = localStorage.getItem('user-info');
         
-        // Check login status in localStorage with a global variable
+        console.log('Auth check:', { 
+          tokenExists: !!token, 
+          lsTokenExists: !!localStorageToken,
+          isLoggedIn: isLoggedInFlag
+        });
+        
+        // Use any available token
+        const effectiveToken = token || localStorageToken;
+        
+        // Consider user authenticated if any token exists or the flag is set
+        const isAuthenticated = !!effectiveToken || isLoggedInFlag;
+        
+        // Set global authentication state
         if (typeof window !== 'undefined') {
-          window.__isAuthenticated = !!token;
+          window.__isAuthenticated = isAuthenticated;
           
           // Check last token verification time to prevent too frequent API calls
           const now = Date.now();
@@ -78,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('Time since last token check:', Math.floor((now - lastCheck) / 1000), 'seconds');
           
           // Use cached user if available and no new check is needed
-          if (window.__userInfo && !shouldRefetch && token) {
+          if (window.__userInfo && !shouldRefetch && isAuthenticated) {
             console.log('Using cached user information');
             if (isMounted) {
               setUser(window.__userInfo);
@@ -87,19 +101,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return;
           }
           
+          // Try to use stored user info from localStorage if available
+          if (userInfoStr && !window.__userInfo) {
+            try {
+              const parsedUserInfo = JSON.parse(userInfoStr);
+              window.__userInfo = parsedUserInfo;
+              
+              if (isMounted && !user) {
+                console.log('Restoring user from localStorage:', parsedUserInfo);
+                setUser(parsedUserInfo);
+              }
+            } catch (e) {
+              console.error('Failed to parse user info from localStorage:', e);
+            }
+          }
+          
           // Update last check time
           window.__lastTokenCheck = now;
         }
         
-        if (token) {
+        if (effectiveToken) {
           // If token exists and enough time has passed, get user info from API
-          console.log('Token exists, getting user info from API');
+          console.log('Token exists, verifying with API...');
           
           try {
             const response = await fetch('/api/auth/me', {
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
+                'Authorization': `Bearer ${effectiveToken}`,
+                'X-Auth-Token': effectiveToken
               },
               // Prevent caching and make new request if at least 10 seconds passed
               cache: 'no-store'
@@ -110,36 +140,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               console.log('User info received from API:', data);
               
               // Cache the request result in global variable
+              const userInfo = {
+                id: data.id,
+                email: data.email,
+                name: data.name || data.email.split('@')[0],
+              };
+              
               if (typeof window !== 'undefined') {
-                window.__userInfo = {
-                  id: data.id,
-                  email: data.email,
-                  name: data.name || data.email.split('@')[0],
-                };
+                window.__userInfo = userInfo;
+                window.__isAuthenticated = true;
               }
               
               if (isMounted) {
-                setUser({
-                  id: data.id,
-                  email: data.email,
-                  name: data.name || data.email.split('@')[0],
-                });
+                setUser(userInfo);
                 
-                // Update localStorage when user info is received
+                // Update localStorage
                 localStorage.setItem('isLoggedIn', 'true');
+                localStorage.setItem('user-info', JSON.stringify(userInfo));
                 
-                // Check Firebase session
-                const currentUser = auth.currentUser;
-                if (!currentUser && data.email) {
-                  console.log('No Firebase session but token exists, automatic login might be attempted');
-                  // Note: We can't do automatic login here because password is required
-                  // But we can inform the user that they need to login with Firebase
+                // Ensure token is saved in all places
+                if (token && !localStorageToken) {
+                  localStorage.setItem('auth-token', token);
+                } else if (!token && localStorageToken) {
+                  setAuthTokenInClient(localStorageToken);
                 }
+                
+                setLoading(false);
               }
             } else {
-              console.error('Could not get user info from API:', response.status);
-              // Token might be invalid, clear it
+              console.warn('API verification failed:', response.status);
+              
+              // Even if API verification fails, don't immediately log out on protected pages
+              // Trust localStorage if we have user info there
+              if (userInfoStr && protectedRoutes.some(route => pathname?.startsWith(route))) {
+                console.log('Using local user info despite API verification failure');
+                try {
+                  const fallbackUser = JSON.parse(userInfoStr);
+                  if (isMounted) {
+                    setUser(fallbackUser);
+                    setLoading(false);
+                  }
+                  return;
+                } catch (e) {
+                  console.error('Failed to parse fallback user info:', e);
+                }
+              }
+              
+              // Clear tokens only if API explicitly rejects with 401
               if (response.status === 401) {
+                console.log('Token rejected by API, clearing auth state');
                 removeAuthTokenFromClient();
                 if (typeof window !== 'undefined') {
                   window.__userInfo = null;
@@ -152,15 +201,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               }
             }
           } catch (error) {
-            console.error('Error getting user info from API:', error);
+            console.error('Error verifying token with API:', error);
+            // Don't clear tokens on network errors
           } finally {
             if (isMounted) {
               setLoading(false);
             }
           }
+        } else if (isLoggedInFlag && userInfoStr) {
+          // Even without token, if localStorage says we're logged in and has user info
+          // Keep the user logged in on protected pages to avoid disruption
+          try {
+            const parsedUserInfo = JSON.parse(userInfoStr);
+            if (isMounted) {
+              console.log('No token but localStorage has user info, maintaining session');
+              setUser(parsedUserInfo);
+              setLoading(false);
+              return;
+            }
+          } catch (e) {
+            console.error('Failed to parse user info from isLoggedIn flag:', e);
+          }
         } else {
-          // No token means user is not logged in
-          console.log('No token, user is not logged in');
+          // No token or local storage info means user is not logged in
+          console.log('No authentication data, user is not logged in');
           if (typeof window !== 'undefined') {
             window.__userInfo = null;
           }
@@ -169,9 +233,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             localStorage.setItem('isLoggedIn', 'false');
             setLoading(false);
             
-            // If we're on a protected page and there's no token, redirect to login page
+            // If we're on a protected page and no auth data, redirect to login page
             if (protectedRoutes.some(route => pathname?.startsWith(route))) {
-              console.log('On protected page with no token, redirecting to login page');
+              console.log('On protected page with no auth data, redirecting to login page');
               router.push('/login');
             }
           }
@@ -198,42 +262,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Check for a token before getting user info from API
         const token = getAuthTokenFromClient();
         if (!token) {
-          console.log('No token but Firebase session exists, token needed for API request');
-          // In this case, an API endpoint might be needed to create a token
-          // For now, we just set basic user info
-          const userData = {
+          console.log('No token found, creating from Firebase session');
+          // Generate token here or set user info directly
+          setUser({
             id: firebaseUser.uid,
             email: firebaseUser.email || '',
-            name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User'
-          };
-          
-          if (typeof window !== 'undefined') {
-            window.__userInfo = userData;
-          }
-          
-          setUser(userData);
+            name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || '',
+          });
         }
-      }
-      
-      // If there's no Firebase session but user in context, clear user info
-      if (!firebaseUser && user && isMounted) {
-        console.log('No Firebase session but context user exists, you can end the session');
-        // We're not doing anything for now, user can call logout function
       }
     });
     
-    // Check auth status at intervals, refresh only when needed
+    // Set up periodic auth check (less frequent API calls)
     const checkAuthInterval = setInterval(() => {
-      const token = getAuthTokenFromClient();
-      const isLoggedInFromStorage = localStorage.getItem('isLoggedIn') === 'true';
-      
-      // Update if token status doesn't match localStorage
-      if ((!!token) !== isLoggedInFromStorage) {
-        console.log('Auth status change detected, rechecking');
-        fetchUserData();
+      if (typeof window !== 'undefined' && window.__isAuthenticated) {
+        console.log('Periodic auth check running');
+        const now = Date.now();
+        const lastCheck = window.__lastTokenCheck || 0;
+        
+        // Only check every 60 seconds
+        if ((now - lastCheck) > 60000) {
+          console.log('Refreshing auth state');
+          fetchUserData();
+        }
       }
-    }, 5000); // Check every 5 seconds (with API calls no more frequent than 10 seconds)
+    }, 30000);
     
+    // Cleanup on unmount
     return () => { 
       isMounted = false;
       clearInterval(checkAuthInterval);
