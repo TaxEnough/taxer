@@ -1,0 +1,21 @@
+{
+  "rules": {
+    "firestore": {
+      "match/databases/{database}/documents": {
+        "match/contactMessages/{document}": {
+          "allow read": false,
+          "allow create": true,
+          "allow update": false,
+          "allow delete": false
+        },
+        "match/blogPosts/{document}": {
+          "allow read": true,
+          "allow create, update, delete": "request.auth != null && request.auth.token.email == 'info.taxenough@gmail.com'"
+        },
+        "match/{restofpath=**}": {
+          "allow read, write": "request.auth != null"
+        }
+      }
+    }
+  }
+} 
