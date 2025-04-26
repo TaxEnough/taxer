@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
   
   try {
     // Token doğrulama
-    const token = getAuthCookieFromRequest(request);
+    const token = await getAuthCookieFromRequest(request);
     
     if (!token) {
       console.log('Token bulunamadı');

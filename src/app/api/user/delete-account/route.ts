@@ -8,7 +8,7 @@ export async function DELETE(request: NextRequest) {
   
   try {
     // Token kontrolü
-    const token = getAuthCookieFromRequest(request);
+    const token = await getAuthCookieFromRequest(request);
     
     if (!token) {
       console.log('Token bulunamadı');

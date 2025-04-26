@@ -6,11 +6,14 @@ import { auth } from '@/lib/firebase';
 
 // Şifre değiştirme API'si
 export async function POST(request: NextRequest) {
-  console.log('Password change API called');
+  console.log('Change password API called');
   
   try {
+    // Şifre değiştirme API güvenlik katmanı
+    // Firebase Admin SDK yetkisi olmadığı için token kontrolü ve client-side işlemler kullanıyoruz
+    
     // Token kontrolü
-    const token = getAuthCookieFromRequest(request);
+    const token = await getAuthCookieFromRequest(request);
     
     if (!token) {
       console.log('Token not found');

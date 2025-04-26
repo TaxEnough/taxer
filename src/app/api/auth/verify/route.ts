@@ -3,7 +3,7 @@ import { getAuthCookieFromRequest, verifyTokenServer } from '@/lib/auth-server';
 
 export async function POST(request: NextRequest) {
   try {
-    const token = getAuthCookieFromRequest(request) || '';
+    const token = await getAuthCookieFromRequest(request) || '';
     
     if (!token) {
       return NextResponse.json({ 
