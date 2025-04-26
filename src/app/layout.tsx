@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import '../styles/globals.css'
 import { Providers } from './providers'
 import LoadingTransition from '@/components/LoadingTransition'
+import React, { Suspense } from 'react'
 
 const inter = Inter({ subsets: ['latin'] })
 

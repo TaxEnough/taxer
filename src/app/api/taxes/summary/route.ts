@@ -3,6 +3,9 @@ import { db } from '@/lib/firebase';
 import { doc, getDoc, collection, getDocs, query, where, setDoc, serverTimestamp } from 'firebase/firestore';
 import { verifyToken } from '@/lib/auth-firebase';
 
+// API rotasını dinamik olarak işaretliyoruz
+export const dynamic = 'force-dynamic';
+
 // Vergi özeti arayüzü
 interface TaxSummary {
   shortTermGains: number;

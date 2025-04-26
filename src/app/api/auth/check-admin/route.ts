@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth-firebase';
 import { headers } from 'next/headers';
 
+// API rotasını dinamik olarak işaretliyoruz
+export const dynamic = 'force-dynamic';
+
 // Admin e-posta listesi - info.taxenough@gmail.com eklenmiştir
 const ADMIN_EMAILS = ['info.taxenough@gmail.com'];
 

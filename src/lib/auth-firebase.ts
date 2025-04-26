@@ -21,6 +21,7 @@ import {
   getFirestore
 } from 'firebase/firestore';
 import { auth as firebaseAuth } from './firebase';
+import { auth as adminAuth } from './firebase-admin';
 
 // Auth referansını dışa aktar
 export const auth = firebaseAuth;
@@ -34,47 +35,22 @@ const validateEmail = (email: string): boolean => {
   return emailRegex.test(email);
 };
 
-// Token doğrulama
-export const verifyToken = async (token: string) => {
+/**
+ * Firebase kimlik doğrulama token'ını doğrular
+ * 
+ * @param token Firebase kimlik doğrulama token'ı
+ * @returns Doğrulanmış token bilgisi veya null
+ */
+export async function verifyToken(token: string) {
   try {
-    // Firebase Admin SDK olmadığı için client tarafında token doğrulama
-    // Bu fonksiyon, API rotalarında kullanılacak basit bir doğrulama sağlar
-    // Gerçek bir uygulamada, Firebase Admin SDK ile server tarafında doğrulama yapılmalıdır
-    
-    // JWT'yi decode et (basit bir implementasyon)
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-    }).join(''));
-
-    const parsed = JSON.parse(jsonPayload);
-    
-    // Kullanıcı ID'sinin uid property'sinde veya sub/user_id property'sinde 
-    // olup olmadığını kontrol et
-    if (!parsed.uid) {
-      // JWT standart alanlarını kontrol et
-      if (parsed.sub) {
-        parsed.uid = parsed.sub;
-      } else if (parsed.user_id) {
-        parsed.uid = parsed.user_id;
-      } else if (parsed.userId) {
-        parsed.uid = parsed.userId;
-      }
-    }
-    
-    // Eğer hala uid yoksa, hata fırlat
-    if (!parsed.uid) {
-      console.error('Token içinde kullanıcı ID\'si bulunamadı:', parsed);
-      throw new Error('Invalid token: User ID not found');
-    }
-    
-    return parsed;
-  } catch (error: any) {
-    console.error('Token validation error:', error);
-    throw new Error('Invalid token');
+    // Firebase Auth token'ını doğrula
+    const decodedToken = await adminAuth.verifyIdToken(token);
+    return decodedToken;
+  } catch (error) {
+    console.error('Token doğrulama hatası:', error);
+    return null;
   }
-};
+}
 
 // Kullanıcı kaydı
 export const registerUser = async (

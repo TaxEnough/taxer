@@ -3,6 +3,9 @@ import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where, doc, addDoc, updateDoc, deleteDoc, orderBy, serverTimestamp } from 'firebase/firestore';
 import { verifyToken } from '@/lib/auth-firebase';
 
+// API rotasını dinamik olarak işaretliyoruz
+export const dynamic = 'force-dynamic';
+
 // İşlem arayüzü
 interface Transaction {
   id?: string;
