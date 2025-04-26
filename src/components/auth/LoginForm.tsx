@@ -9,11 +9,13 @@ export default function LoginForm() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [debug, setDebug] = useState('');
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setDebug('');
     
     // Validate form data
     if (!email || !password) {
@@ -22,9 +24,12 @@ export default function LoginForm() {
     }
     
     setLoading(true);
+    setDebug('İstek gönderiliyor...');
     
     try {
       // Send request to API
+      setDebug('İstek hazırlanıyor...');
+      
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
@@ -34,13 +39,37 @@ export default function LoginForm() {
         credentials: 'include', // Önemli: Cookie'lerin gönderilmesini ve alınmasını sağlar
       });
       
-      const data = await response.json();
+      setDebug(prev => prev + '\nAPI yanıtı alındı: ' + response.status);
       
+      // Yanıtı JSON'a dönüştürmeye çalış
+      let data;
+      try {
+        data = await response.json();
+        setDebug(prev => prev + '\nYanıt başarıyla JSON\'a dönüştürüldü');
+      } catch (jsonError) {
+        console.error('JSON parse error:', jsonError);
+        setDebug(prev => prev + '\nJSON ayrıştırma hatası: ' + jsonError);
+        throw new Error('Invalid server response format');
+      }
+      
+      // Yanıt tamam mı kontrol et
       if (!response.ok) {
-        throw new Error(data.error || data.message || 'Login failed');
+        const errorMsg = data.error || data.message || 'Login failed';
+        setDebug(prev => prev + '\nHata yanıtı: ' + errorMsg);
+        throw new Error(errorMsg);
       }
       
       console.log('Login successful:', data);
+      setDebug(prev => prev + '\nGiriş başarılı, veri alındı');
+      
+      // Kullanıcı verileri doğru mu kontrol et
+      if (!data.user || !data.token) {
+        setDebug(prev => prev + '\nEksik yanıt verileri! Kullanıcı veya token yok.');
+        throw new Error('Incomplete server response');
+      }
+      
+      // Token'ı kaydet
+      setDebug(prev => prev + '\nToken kaydediliyor...');
       
       // Set the token from the API on the client side
       if (data.token) {
@@ -51,24 +80,32 @@ export default function LoginForm() {
         localStorage.setItem('auth-token', data.token);
         localStorage.setItem('user-info', JSON.stringify(data.user));
         localStorage.setItem('isLoggedIn', 'true');
+        
+        setDebug(prev => prev + '\nToken kaydedildi. Yönlendirme hazırlanıyor...');
       }
       
-      // Token ayarlandığını doğrulayalım
-      const savedToken = localStorage.getItem('auth-token');
-      console.log('Saved token exists:', !!savedToken);
-      
-      // Redirect after successful login
-      console.log('Redirecting to:', data.redirectUrl || '/dashboard');
-      
-      // Redirect by reloading the page
+      // Manual token check
       setTimeout(() => {
-        window.location.href = data.redirectUrl || '/dashboard';
-      }, 500); // Süreyi biraz uzattık
+        const savedToken = localStorage.getItem('auth-token');
+        if (savedToken) {
+          console.log('Stored token exists:', !!savedToken);
+          setDebug(prev => prev + '\nToken doğrulandı. Yönlendirme yapılıyor...');
+          
+          // Redirect after successful login
+          console.log('Redirecting to:', data.redirectUrl || '/dashboard');
+          window.location.href = data.redirectUrl || '/dashboard';
+        } else {
+          setDebug(prev => prev + '\nKAYDEDİLEN TOKEN BULUNAMADI!');
+          console.error('Saved token not found after login!');
+          setError('Login successful but session storage failed. Please try again.');
+          setLoading(false);
+        }
+      }, 1000); // 1 saniye bekleyerek token kaydının gerçekleştiğinden emin olalım
       
     } catch (error: any) {
       console.error('Login error:', error);
       setError(error.message || 'Login failed');
-    } finally {
+      setDebug(prev => prev + '\nHata: ' + (error.message || 'Bilinmeyen hata'));
       setLoading(false);
     }
   };
@@ -139,6 +176,13 @@ export default function LoginForm() {
           Register
         </a>
       </p>
+      
+      {debug && process.env.NODE_ENV !== 'production' && (
+        <div className="mt-4 border border-gray-300 p-3 rounded text-xs text-gray-600 whitespace-pre-wrap">
+          <p className="font-bold mb-1">Debug Info:</p>
+          {debug}
+        </div>
+      )}
     </div>
   );
 } 

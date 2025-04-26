@@ -37,26 +37,37 @@ export async function verifyToken(token: string): Promise<{ userId: string } | n
 export async function setAuthCookieOnServer(token: string, response: NextResponse): Promise<NextResponse> {
   console.log('setAuthCookieOnServer çağrıldı, token:', token ? 'var' : 'yok');
   
+  // Vercel'de çalışması için cookie ayarları
   const cookieOptions = {
     name: COOKIE_NAME,
     value: token,
-    httpOnly: false, // Client tarafında erişilebilir olması için false
-    path: '/',
-    secure: false, // Hem HTTP hem HTTPS üzerinde çalışabilmesi için
-    maxAge: 60 * 60 * 24 * 7, // 1 week
-    sameSite: 'lax' as const, // Tarayıcı uyumluluğu için lax kullanıyoruz
+    httpOnly: true,             // HttpOnly, güvenlik için
+    path: '/',                  // Tüm path'lerde geçerli
+    secure: true,               // HTTPS üzerinde çalışması için
+    maxAge: 60 * 60 * 24 * 7,   // 1 hafta
+    sameSite: 'none' as const,  // Cross-site istekleri için
     priority: 'high' as const
   };
 
-  console.log('Response ile cookie ayarlanıyor', cookieOptions);
-  response.cookies.set(cookieOptions);
+  console.log('Response ile cookie ayarlanıyor:', cookieOptions);
   
-  // Cache kontrolü
-  response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  response.headers.set('Pragma', 'no-cache');
-  response.headers.set('Expires', '0');
-  
-  return response;
+  try {
+    // Next.js Cookies API ile cookie ayarla
+    response.cookies.set(cookieOptions);
+    
+    // Response header'larında token gönder (yedek yöntem)
+    response.headers.set('X-Auth-Token', token);
+    
+    // Cache kontrolü
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+    
+    return response;
+  } catch (error) {
+    console.error('Cookie ayarlanırken hata:', error);
+    return response;
+  }
 }
 
 export async function getAuthCookieFromRequest(request: Request): Promise<string | undefined> {
@@ -68,6 +79,13 @@ export async function getAuthCookieFromRequest(request: Request): Promise<string
     const token = authHeader.substring(7);
     console.log('Authorization header\'dan token bulundu');
     return token;
+  }
+  
+  // X-Auth-Token header kontrolü (yedek yöntem)
+  const xAuthToken = request.headers.get('X-Auth-Token');
+  if (xAuthToken) {
+    console.log('X-Auth-Token header\'dan token bulundu');
+    return xAuthToken;
   }
   
   console.log('Request\'ten cookie alınıyor');
