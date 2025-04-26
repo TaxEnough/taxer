@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { setAuthTokenInClient } from '@/lib/auth-client';
 
@@ -10,12 +10,25 @@ export default function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [debug, setDebug] = useState('');
+  const [success, setSuccess] = useState(false);
   const router = useRouter();
+
+  // Handle direct navigation after login
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => {
+        window.location.href = '/dashboard';
+      }, 1500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setDebug('');
+    setSuccess(false);
     
     // Validate form data
     if (!email || !password) {
@@ -74,33 +87,70 @@ export default function LoginForm() {
       // Set the token from the API on the client side
       if (data.token) {
         console.log('Setting token on client side');
-        setAuthTokenInClient(data.token);
         
-        // Cookies doğru şekilde ayarlanana kadar localStorage'a da kaydedelim
-        localStorage.setItem('auth-token', data.token);
-        localStorage.setItem('user-info', JSON.stringify(data.user));
-        localStorage.setItem('isLoggedIn', 'true');
+        try {
+          // Doğrudan document.cookie ile ayarla
+          const expiryDate = new Date();
+          expiryDate.setDate(expiryDate.getDate() + 7); // 7 gün
+          document.cookie = `auth-token=${data.token}; path=/; expires=${expiryDate.toUTCString()}`;
+          setDebug(prev => prev + '\nToken cookie olarak ayarlandı');
+        } catch (cookieError) {
+          console.error('Cookie set error:', cookieError);
+          setDebug(prev => prev + '\nCookie ayarlama hatası: ' + cookieError);
+        }
         
-        setDebug(prev => prev + '\nToken kaydedildi. Yönlendirme hazırlanıyor...');
+        try {
+          // localStorage ile kaydet
+          localStorage.setItem('auth-token', data.token);
+          localStorage.setItem('user-info', JSON.stringify(data.user));
+          localStorage.setItem('isLoggedIn', 'true');
+          setDebug(prev => prev + '\nToken localStorage\'a kaydedildi');
+        } catch (storageError) {
+          console.error('localStorage error:', storageError);
+          setDebug(prev => prev + '\nLocalStorage hatası: ' + storageError);
+        }
+        
+        try {
+          // Client auth lib ile ayarla
+          setAuthTokenInClient(data.token);
+          setDebug(prev => prev + '\nToken client auth kütüphanesi ile ayarlandı');
+        } catch (clientAuthError) {
+          console.error('Client auth error:', clientAuthError);
+          setDebug(prev => prev + '\nClient auth hatası: ' + clientAuthError);
+        }
       }
       
-      // Manual token check
+      // Check for token in different places
       setTimeout(() => {
-        const savedToken = localStorage.getItem('auth-token');
-        if (savedToken) {
-          console.log('Stored token exists:', !!savedToken);
-          setDebug(prev => prev + '\nToken doğrulandı. Yönlendirme yapılıyor...');
+        try {
+          // Cookie kontrolü
+          const cookies = document.cookie.split(';');
+          const authCookie = cookies.find(c => c.trim().startsWith('auth-token='));
           
-          // Redirect after successful login
-          console.log('Redirecting to:', data.redirectUrl || '/dashboard');
-          window.location.href = data.redirectUrl || '/dashboard';
-        } else {
-          setDebug(prev => prev + '\nKAYDEDİLEN TOKEN BULUNAMADI!');
-          console.error('Saved token not found after login!');
-          setError('Login successful but session storage failed. Please try again.');
+          // localStorage kontrolü
+          const lsToken = localStorage.getItem('auth-token');
+          
+          setDebug(prev => prev + 
+            '\n\nToken kontrol:' + 
+            '\n- Cookie: ' + (authCookie ? 'BULUNDU ✓' : 'YOK ✗') + 
+            '\n- LocalStorage: ' + (lsToken ? 'BULUNDU ✓' : 'YOK ✗')
+          );
+          
+          // Her şey yolunda
+          if (authCookie || lsToken) {
+            setSuccess(true);
+            setDebug(prev => prev + '\n\nGiriş başarılı! Yönlendiriliyor...');
+          } else {
+            setError('Login successful but session storage failed. Please try refreshing the page.');
+            setLoading(false);
+          }
+        } catch (checkError) {
+          console.error('Token check error:', checkError);
+          setDebug(prev => prev + '\nToken kontrol hatası: ' + checkError);
+          setError('An error occurred during login. Please try again.');
           setLoading(false);
         }
-      }, 1000); // 1 saniye bekleyerek token kaydının gerçekleştiğinden emin olalım
+      }, 1000);
       
     } catch (error: any) {
       console.error('Login error:', error);
@@ -120,6 +170,12 @@ export default function LoginForm() {
         </div>
       )}
       
+      {success && (
+        <div className="bg-green-50 border-l-4 border-green-500 p-4 mb-6">
+          <p className="text-green-700">Login successful! Redirecting...</p>
+        </div>
+      )}
+      
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
           <label htmlFor="email" className="block text-gray-700 text-sm font-medium mb-2">
@@ -132,6 +188,7 @@ export default function LoginForm() {
             onChange={(e) => setEmail(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
             required
+            disabled={loading || success}
           />
         </div>
         
@@ -146,13 +203,14 @@ export default function LoginForm() {
             onChange={(e) => setPassword(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
             required
+            disabled={loading || success}
           />
         </div>
         
         <div>
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || success}
             className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
           >
             {loading ? (
@@ -163,6 +221,8 @@ export default function LoginForm() {
                 </svg>
                 Logging in...
               </>
+            ) : success ? (
+              'Redirecting...'
             ) : (
               'Login'
             )}
@@ -177,7 +237,7 @@ export default function LoginForm() {
         </a>
       </p>
       
-      {debug && process.env.NODE_ENV !== 'production' && (
+      {debug && (
         <div className="mt-4 border border-gray-300 p-3 rounded text-xs text-gray-600 whitespace-pre-wrap">
           <p className="font-bold mb-1">Debug Info:</p>
           {debug}

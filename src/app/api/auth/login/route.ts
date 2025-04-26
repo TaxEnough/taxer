@@ -9,7 +9,7 @@ const validateEmail = (email: string): boolean => {
 };
 
 export async function POST(request: NextRequest) {
-  console.log('Login API called');
+  console.log('Login API called - Endpoint başlangıcı');
   
   try {
     const data = await request.json();
@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
     let email = emailInput;
 
     if (!email || !password) {
+      console.log('Login API - Email veya şifre eksik');
       return NextResponse.json({
         success: false,
         message: 'E-posta ve şifre gereklidir',
@@ -27,6 +28,7 @@ export async function POST(request: NextRequest) {
 
     // Check email format
     if (!validateEmail(email)) {
+      console.log('Login API - Geçersiz email formatı');
       return NextResponse.json(
         { error: 'Invalid email format. Please enter a valid email address.' },
         { status: 400 }
@@ -45,6 +47,7 @@ export async function POST(request: NextRequest) {
       const userCredential = await loginUser(email, password);
       
       if (!userCredential) {
+        console.log('Login API - Kullanıcı girişi başarısız');
         return NextResponse.json({
           success: false,
           message: 'Kullanıcı girişi başarısız oldu',
@@ -52,46 +55,68 @@ export async function POST(request: NextRequest) {
       }
 
       // Generate token
-      console.log('Generating token');
+      console.log('Login API - Token oluşturuluyor');
       const token = await generateToken(userCredential.uid);
       
-      // Create response
-      const response = NextResponse.json({
-        success: true,
-        user: {
-          uid: userCredential.uid,
-          email: userCredential.email,
-          displayName: userCredential.displayName,
-          photoURL: userCredential.photoURL,
-          emailVerified: userCredential.emailVerified,
-        },
-        token: token, // Send token to client side too
-        redirectUrl: '/dashboard'
+      // Kullanıcı bilgilerini hazırla
+      const userData = {
+        uid: userCredential.uid,
+        email: userCredential.email,
+        displayName: userCredential.displayName,
+        photoURL: userCredential.photoURL,
+        emailVerified: userCredential.emailVerified,
+      };
+      
+      console.log('Login API - Kullanıcı bilgileri hazır:', {
+        uid: userData.uid,
+        email: userData.email,
+        displayName: userData.displayName
       });
       
-      // Set cookie - Use response.cookies directly
-      console.log('Setting cookie');
+      // Response'ı hazırla
+      const responseBody = {
+        success: true,
+        user: userData,
+        token: token,
+        redirectUrl: '/dashboard'
+      };
       
-      // Cookie settings
-      await setAuthCookieOnServer(token, response);
+      // Create response
+      console.log('Login API - Yanıt oluşturuluyor');
+      const response = NextResponse.json(responseBody);
       
-      // Set response headers
+      // Set cookie directly
+      console.log('Login API - Cookie ayarlanıyor');
+      response.cookies.set({
+        name: 'auth-token',
+        value: token,
+        httpOnly: false,      // Client erişimi için false
+        path: '/',
+        sameSite: 'lax',      // Vercel uyumluluğu için standart değer
+        secure: false,        // HTTP için de çalışsın
+        maxAge: 60 * 60 * 24 * 7 // 7 gün
+      });
+      
+      // Manual header token
+      response.headers.set('X-Auth-Token', token);
+      
+      // Cache kontrolü
       response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
       response.headers.set('Pragma', 'no-cache');
       response.headers.set('Expires', '0');
       
-      console.log('Returning successful response, user:', {
-        id: userCredential.uid,
-        email: userCredential.email,
-        name: userCredential.displayName
-      });
-      
+      console.log('Login API - İşlem başarılı, yanıt dönülüyor');
       return response;
     } catch (loginError: any) {
       console.error('Firebase login error:', loginError);
+      const errorMessage = loginError.message || 'Login failed';
+      const statusCode = loginError.code?.includes('auth/') ? 401 : 500;
+      
+      console.log(`Login API - Firebase hatası: ${errorMessage}, kod: ${statusCode}`);
+      
       return NextResponse.json(
-        { error: loginError.message || 'Login failed' },
-        { status: 401 }
+        { error: errorMessage },
+        { status: statusCode }
       );
     }
   } catch (error: any) {
@@ -111,6 +136,8 @@ export async function POST(request: NextRequest) {
       errorMessage = 'Bu hesap devre dışı bırakılmıştır';
       statusCode = 403;
     }
+    
+    console.log(`Login API - Genel hata: ${errorMessage}, kod: ${statusCode}`);
     
     return NextResponse.json({
       success: false,
