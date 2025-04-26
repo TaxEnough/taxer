@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { registerUser } from '@/lib/auth-firebase';
-import { generateToken, COOKIE_NAME } from '@/lib/auth';
+import { generateToken, setAuthCookieOnServer, getConstants } from '@/lib/auth-server';
 
 // E-posta formatı doğrulama
 const validateEmail = (email: string): boolean => {
@@ -66,7 +66,8 @@ export async function POST(request: NextRequest) {
       };
       console.log('Token created, content:', userData);
       
-      const token = generateToken(userData);
+      const token = await generateToken(user.uid);
+      const { COOKIE_NAME } = await getConstants();
       
       // Create response
       const response = NextResponse.json({
@@ -84,16 +85,7 @@ export async function POST(request: NextRequest) {
       console.log('Setting cookie');
       
       // Cookie settings
-      response.cookies.set({
-        name: COOKIE_NAME,
-        value: token,
-        httpOnly: false, // Allow access from client side
-        path: '/',
-        maxAge: 60 * 60 * 24 * 7, // 7 days
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-        priority: 'high'
-      });
+      await setAuthCookieOnServer(token, response);
       
       // Set response headers
       response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');

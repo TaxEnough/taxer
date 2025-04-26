@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
 
       // Generate token
       console.log('Generating token');
-      const token = generateToken(userCredential.uid);
+      const token = await generateToken(userCredential.uid);
       
       // Create response
       const response = NextResponse.json({
