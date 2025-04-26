@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server';
-import { removeAuthCookieOnServer } from '@/lib/auth-server';
-import { COOKIE_NAME } from '@/lib/auth';
+import { removeAuthCookieOnServer, getConstants } from '@/lib/auth-server';
 
 export async function POST() {
   console.log('POST /api/auth/logout endpoint çağrıldı');
   
   try {
     // Server tarafında çerezi temizle
-    removeAuthCookieOnServer();
+    await removeAuthCookieOnServer();
+    
+    // Cookie adını al
+    const { COOKIE_NAME } = await getConstants();
     
     // Başarılı yanıt döndür
     const response = NextResponse.json({ success: true });
