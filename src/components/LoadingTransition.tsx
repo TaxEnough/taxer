@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 
-export default function LoadingTransition() {
+// SearchParams hook'unu saran bir iç bileşen oluşturuyorum
+function LoadingTransitionInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
@@ -211,5 +212,14 @@ export default function LoadingTransition() {
         </div>
       )}
     </div>
+  );
+}
+
+// Ana bileşen, Suspense kullanıyor
+export default function LoadingTransition() {
+  return (
+    <Suspense fallback={null}>
+      <LoadingTransitionInner />
+    </Suspense>
   );
 } 
