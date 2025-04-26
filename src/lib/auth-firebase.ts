@@ -21,7 +21,8 @@ import {
   getFirestore
 } from 'firebase/firestore';
 import { auth as firebaseAuth } from './firebase';
-import { auth as adminAuth } from './firebase-admin';
+// Firebase Admin SDK'yı kaldırıyoruz, client tarafında kullanılmamalı
+// import { auth as adminAuth } from './firebase-admin';
 
 // Auth referansını dışa aktar
 export const auth = firebaseAuth;
@@ -37,15 +38,23 @@ const validateEmail = (email: string): boolean => {
 
 /**
  * Firebase kimlik doğrulama token'ını doğrular
+ * Bu fonksiyon istemci tarafından kullanılacak,
+ * sunucu tarafı doğrulama için auth-server.ts dosyasındaki verifyTokenServer kullanılmalıdır.
  * 
  * @param token Firebase kimlik doğrulama token'ı
  * @returns Doğrulanmış token bilgisi veya null
  */
 export async function verifyToken(token: string) {
   try {
-    // Firebase Auth token'ını doğrula
-    const decodedToken = await adminAuth.verifyIdToken(token);
-    return decodedToken;
+    // İstemci tarafında basit bir JWT ayrıştırması yapılıyor
+    // Gerçek doğrulama sunucu tarafında yapılacak
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+
+    return JSON.parse(jsonPayload);
   } catch (error) {
     console.error('Token doğrulama hatası:', error);
     return null;

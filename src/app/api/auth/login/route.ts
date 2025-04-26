@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { loginUser } from '@/lib/auth-firebase';
-import { generateToken, COOKIE_NAME } from '@/lib/auth';
-import { getUserData } from '@/lib/auth-firebase';
+import { generateToken, setAuthCookieOnServer } from '@/lib/auth-server';
 
 // E-posta formatı doğrulama
 const validateEmail = (email: string): boolean => {
@@ -13,25 +12,21 @@ export async function POST(request: NextRequest) {
   console.log('Login API called');
   
   try {
-    // Get request body
-    const body = await request.json();
+    const data = await request.json();
+    const { email: emailInput, password } = data;
     
-    // Log with sensitive info hidden
-    console.log('Request body:', { 
-      email: body.email, 
-      password: body.password ? '***' : undefined 
-    });
-    
-    // Check required fields
-    if (!body.email || !body.password) {
-      return NextResponse.json(
-        { error: 'Email and password are required' },
-        { status: 400 }
-      );
+    // Email değerini düzelt
+    let email = emailInput;
+
+    if (!email || !password) {
+      return NextResponse.json({
+        success: false,
+        message: 'E-posta ve şifre gereklidir',
+      }, { status: 400 });
     }
-    
+
     // Check email format
-    if (!validateEmail(body.email)) {
+    if (!validateEmail(email)) {
       return NextResponse.json(
         { error: 'Invalid email format. Please enter a valid email address.' },
         { status: 400 }
@@ -39,36 +34,36 @@ export async function POST(request: NextRequest) {
     }
     
     // Clean email spaces
-    if (body.email.includes(' ')) {
-      body.email = body.email.trim();
-      console.log('Email spaces cleaned:', body.email);
+    if (email.includes(' ')) {
+      email = email.trim();
+      console.log('Email spaces cleaned:', email);
     }
     
     try {
       // User login
-      console.log('Logging in user:', body.email);
-      const user = await loginUser(body.email, body.password);
-      console.log('User login successful:', user.uid);
+      console.log('Logging in user:', email);
+      const userCredential = await loginUser(email, password);
       
-      // Get user data
-      const userData = await getUserData(user.uid);
-      const name = userData?.name || user.email?.split('@')[0] || 'User';
-      
+      if (!userCredential) {
+        return NextResponse.json({
+          success: false,
+          message: 'Kullanıcı girişi başarısız oldu',
+        }, { status: 401 });
+      }
+
       // Generate token
       console.log('Generating token');
-      const token = generateToken({
-        uid: user.uid,
-        email: user.email || '',
-        name: name
-      });
+      const token = generateToken(userCredential.uid);
       
       // Create response
       const response = NextResponse.json({
         success: true,
         user: {
-          id: user.uid,
-          email: user.email,
-          name: name
+          uid: userCredential.uid,
+          email: userCredential.email,
+          displayName: userCredential.displayName,
+          photoURL: userCredential.photoURL,
+          emailVerified: userCredential.emailVerified,
         },
         token: token, // Send token to client side too
         redirectUrl: '/dashboard'
@@ -78,16 +73,7 @@ export async function POST(request: NextRequest) {
       console.log('Setting cookie');
       
       // Cookie settings
-      response.cookies.set({
-        name: COOKIE_NAME,
-        value: token,
-        httpOnly: false, // Allow access from client side
-        path: '/',
-        maxAge: 60 * 60 * 24 * 7, // 7 days
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-        priority: 'high'
-      });
+      await setAuthCookieOnServer(token, response);
       
       // Set response headers
       response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
@@ -95,9 +81,9 @@ export async function POST(request: NextRequest) {
       response.headers.set('Expires', '0');
       
       console.log('Returning successful response, user:', {
-        id: user.uid,
-        email: user.email,
-        name: name
+        id: userCredential.uid,
+        email: userCredential.email,
+        name: userCredential.displayName
       });
       
       return response;
@@ -110,9 +96,25 @@ export async function POST(request: NextRequest) {
     }
   } catch (error: any) {
     console.error('General login error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Login failed' },
-      { status: 500 }
-    );
+    
+    // Firebase auth hatalarını değerlendir
+    let errorMessage = 'Giriş işlemi başarısız oldu';
+    let statusCode = 500;
+    
+    if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+      errorMessage = 'E-posta veya şifre hatalı';
+      statusCode = 401;
+    } else if (error.code === 'auth/too-many-requests') {
+      errorMessage = 'Çok fazla başarısız giriş denemesi. Lütfen daha sonra tekrar deneyin';
+      statusCode = 429;
+    } else if (error.code === 'auth/user-disabled') {
+      errorMessage = 'Bu hesap devre dışı bırakılmıştır';
+      statusCode = 403;
+    }
+    
+    return NextResponse.json({
+      success: false,
+      message: errorMessage,
+    }, { status: statusCode });
   }
 } 

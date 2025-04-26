@@ -1,10 +1,14 @@
+'use server';
+
 import { compare, hash } from 'bcryptjs';
 import { sign, verify } from 'jsonwebtoken';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { auth } from './firebase-admin';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-const COOKIE_NAME = 'auth-token';
+// JWT için gerekli sabitleri tanımla (JWT_SECRET varsa)
+export const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+export const COOKIE_NAME = 'auth-token';
 
 export async function hashPassword(password: string): Promise<string> {
   return hash(password, 10);
@@ -86,4 +90,21 @@ export function getAuthCookieFromRequest(request: Request): string | undefined {
 export function removeAuthCookieOnServer(): void {
   console.log('removeAuthCookieOnServer çağrıldı');
   cookies().delete(COOKIE_NAME);
+}
+
+/**
+ * Firebase kimlik doğrulama token'ını doğrular
+ * 
+ * @param token Firebase kimlik doğrulama token'ı
+ * @returns Doğrulanmış token bilgisi veya null
+ */
+export async function verifyTokenServer(token: string) {
+  try {
+    // Firebase Auth token'ını doğrula
+    const decodedToken = await auth.verifyIdToken(token);
+    return decodedToken;
+  } catch (error) {
+    console.error('Token doğrulama hatası:', error);
+    return null;
+  }
 } 
