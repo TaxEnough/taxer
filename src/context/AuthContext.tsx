@@ -19,7 +19,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  updateUser: (updatedUser: User) => void;
+  updateUserProfile: (updatedUser: User) => void;
 }
 
 // Define context with React.Context type
@@ -29,7 +29,7 @@ const AuthContext = createContext<AuthContextType>({
   login: async () => {},
   register: async () => {},
   logout: async () => {},
-  updateUser: () => {},
+  updateUserProfile: () => {},
 });
 
 // Protected routes list
@@ -85,11 +85,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const now = Date.now();
           const lastCheck = window.__lastTokenCheck || 0;
           
-          // Make API call only if at least 10 seconds passed since last check
-          const shouldRefetch = (now - lastCheck) > 10000;
+          // Make API call only if at least 30 seconds passed since last check
+          const shouldRefetch = (now - lastCheck) > 30000;
           
           console.log('Global auth status:', window.__isAuthenticated ? 'logged in' : 'not logged in');
           console.log('Time since last token check:', Math.floor((now - lastCheck) / 1000), 'seconds');
+          
+          // Try to use stored user info from localStorage if available
+          if (userInfoStr && (!window.__userInfo || !user)) {
+            try {
+              const parsedUserInfo = JSON.parse(userInfoStr);
+              window.__userInfo = parsedUserInfo;
+              
+              if (isMounted && !user) {
+                console.log('Restoring user from localStorage:', parsedUserInfo);
+                setUser(parsedUserInfo);
+                
+                // If on protected page and not loading, stop here to prevent flicker
+                if (protectedRoutes.some(route => pathname?.startsWith(route)) && !loading) {
+                  setLoading(false);
+                  
+                  // Only make API call in background if needed
+                  if (shouldRefetch && effectiveToken) {
+                    verifyWithApi(effectiveToken);
+                  }
+                  return;
+                }
+              }
+            } catch (e) {
+              console.error('Failed to parse user info from localStorage:', e);
+            }
+          }
           
           // Use cached user if available and no new check is needed
           if (window.__userInfo && !shouldRefetch && isAuthenticated) {
@@ -101,21 +127,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return;
           }
           
-          // Try to use stored user info from localStorage if available
-          if (userInfoStr && !window.__userInfo) {
-            try {
-              const parsedUserInfo = JSON.parse(userInfoStr);
-              window.__userInfo = parsedUserInfo;
-              
-              if (isMounted && !user) {
-                console.log('Restoring user from localStorage:', parsedUserInfo);
-                setUser(parsedUserInfo);
-              }
-            } catch (e) {
-              console.error('Failed to parse user info from localStorage:', e);
-            }
-          }
-          
           // Update last check time
           window.__lastTokenCheck = now;
         }
@@ -123,91 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (effectiveToken) {
           // If token exists and enough time has passed, get user info from API
           console.log('Token exists, verifying with API...');
-          
-          try {
-            const response = await fetch('/api/auth/me', {
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${effectiveToken}`,
-                'X-Auth-Token': effectiveToken
-              },
-              // Prevent caching and make new request if at least 10 seconds passed
-              cache: 'no-store'
-            });
-            
-            if (response.ok) {
-              const data = await response.json();
-              console.log('User info received from API:', data);
-              
-              // Cache the request result in global variable
-              const userInfo = {
-                id: data.id,
-                email: data.email,
-                name: data.name || data.email.split('@')[0],
-              };
-              
-              if (typeof window !== 'undefined') {
-                window.__userInfo = userInfo;
-                window.__isAuthenticated = true;
-              }
-              
-              if (isMounted) {
-                setUser(userInfo);
-                
-                // Update localStorage
-                localStorage.setItem('isLoggedIn', 'true');
-                localStorage.setItem('user-info', JSON.stringify(userInfo));
-                
-                // Ensure token is saved in all places
-                if (token && !localStorageToken) {
-                  localStorage.setItem('auth-token', token);
-                } else if (!token && localStorageToken) {
-                  setAuthTokenInClient(localStorageToken);
-                }
-                
-                setLoading(false);
-              }
-            } else {
-              console.warn('API verification failed:', response.status);
-              
-              // Even if API verification fails, don't immediately log out on protected pages
-              // Trust localStorage if we have user info there
-              if (userInfoStr && protectedRoutes.some(route => pathname?.startsWith(route))) {
-                console.log('Using local user info despite API verification failure');
-                try {
-                  const fallbackUser = JSON.parse(userInfoStr);
-                  if (isMounted) {
-                    setUser(fallbackUser);
-                    setLoading(false);
-                  }
-                  return;
-                } catch (e) {
-                  console.error('Failed to parse fallback user info:', e);
-                }
-              }
-              
-              // Clear tokens only if API explicitly rejects with 401
-              if (response.status === 401) {
-                console.log('Token rejected by API, clearing auth state');
-                removeAuthTokenFromClient();
-                if (typeof window !== 'undefined') {
-                  window.__userInfo = null;
-                  window.__isAuthenticated = false;
-                }
-                if (isMounted) {
-                  setUser(null);
-                  localStorage.setItem('isLoggedIn', 'false');
-                }
-              }
-            }
-          } catch (error) {
-            console.error('Error verifying token with API:', error);
-            // Don't clear tokens on network errors
-          } finally {
-            if (isMounted) {
-              setLoading(false);
-            }
-          }
+          await verifyWithApi(effectiveToken);
         } else if (isLoggedInFlag && userInfoStr) {
           // Even without token, if localStorage says we're logged in and has user info
           // Keep the user logged in on protected pages to avoid disruption
@@ -249,6 +176,106 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
     
+    // Separate API verification to avoid code duplication
+    const verifyWithApi = async (token: string) => {
+      try {
+        const response = await fetch('/api/auth/me', {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'X-Auth-Token': token
+          },
+          cache: 'no-store'
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('User info received from API:', data);
+          
+          // Cache the request result in global variable
+          const userInfo = {
+            id: data.id,
+            email: data.email,
+            name: data.name || data.email.split('@')[0],
+          };
+          
+          if (typeof window !== 'undefined') {
+            window.__userInfo = userInfo;
+            window.__isAuthenticated = true;
+            window.__lastTokenCheck = Date.now();
+          }
+          
+          if (isMounted) {
+            setUser(userInfo);
+            
+            // Update localStorage
+            localStorage.setItem('isLoggedIn', 'true');
+            localStorage.setItem('user-info', JSON.stringify(userInfo));
+            
+            // Ensure token is saved in all places
+            setAuthTokenInClient(token);
+            
+            setLoading(false);
+          }
+        } else {
+          console.warn('API verification failed:', response.status);
+          
+          // Use localStorage user info if available
+          const userInfoStr = localStorage.getItem('user-info');
+          
+          // Even if API verification fails, don't immediately log out on protected pages
+          // Trust localStorage if we have user info there
+          if (userInfoStr && protectedRoutes.some(route => pathname?.startsWith(route))) {
+            console.log('Using local user info despite API verification failure');
+            try {
+              const fallbackUser = JSON.parse(userInfoStr);
+              if (isMounted) {
+                setUser(fallbackUser);
+                setLoading(false);
+              }
+              return;
+            } catch (e) {
+              console.error('Failed to parse fallback user info:', e);
+            }
+          }
+          
+          // Clear tokens only if API explicitly rejects with 401 AND we're not on a protected page
+          if (response.status === 401 && !protectedRoutes.some(route => pathname?.startsWith(route))) {
+            console.log('Token rejected by API, clearing auth state');
+            removeAuthTokenFromClient();
+            if (typeof window !== 'undefined') {
+              window.__userInfo = null;
+              window.__isAuthenticated = false;
+            }
+            if (isMounted) {
+              setUser(null);
+              localStorage.setItem('isLoggedIn', 'false');
+            }
+          }
+          
+          if (isMounted) {
+            setLoading(false);
+          }
+        }
+      } catch (error) {
+        console.error('Error verifying token with API:', error);
+        // On network errors, keep the user logged in using localStorage info
+        const userInfoStr = localStorage.getItem('user-info');
+        if (userInfoStr && isMounted) {
+          try {
+            const fallbackUser = JSON.parse(userInfoStr);
+            setUser(fallbackUser);
+          } catch (e) {
+            console.error('Failed to parse fallback user info on network error:', e);
+          }
+        }
+        
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+    
     fetchUserData();
     
     // Listen to Firebase Auth state
@@ -264,11 +291,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!token) {
           console.log('No token found, creating from Firebase session');
           // Generate token here or set user info directly
-          setUser({
+          const userInfo = {
             id: firebaseUser.uid,
             email: firebaseUser.email || '',
             name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || '',
-          });
+          };
+          
+          setUser(userInfo);
+          
+          // Save user info to localStorage
+          localStorage.setItem('user-info', JSON.stringify(userInfo));
+          localStorage.setItem('isLoggedIn', 'true');
+          
+          if (typeof window !== 'undefined') {
+            window.__userInfo = userInfo;
+            window.__isAuthenticated = true;
+          }
         }
       }
     });
@@ -280,13 +318,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const now = Date.now();
         const lastCheck = window.__lastTokenCheck || 0;
         
-        // Only check every 60 seconds
-        if ((now - lastCheck) > 60000) {
+        // Only check every 2 minutes (120 seconds)
+        if ((now - lastCheck) > 120000) {
           console.log('Refreshing auth state');
           fetchUserData();
         }
       }
-    }, 30000);
+    }, 60000); // Check every minute if refresh is needed
     
     // Cleanup on unmount
     return () => { 
@@ -411,16 +449,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
   
   // Kullanıcı bilgilerini güncelleme fonksiyonu
-  const updateUser = (updatedUser: User) => {
+  const updateUserProfile = (updatedUser: User) => {
     setUser(updatedUser);
     if (typeof window !== 'undefined') {
       window.__userInfo = updatedUser;
+      localStorage.setItem('user-info', JSON.stringify(updatedUser));
     }
   };
 
   // Context.Provider'a value prop'u geçerken object olarak inline tanımla
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser }}>
+    <AuthContext.Provider 
+      value={{
+        user,
+        loading,
+        login,
+        register,
+        logout,
+        updateUserProfile,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
