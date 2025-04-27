@@ -31,11 +31,17 @@ export async function GET(request: NextRequest) {
     // Token'ı doğrula
     console.log('Token doğrulanıyor...');
     const decodedToken = await verifyToken(token);
-    console.log('Token doğrulandı, email:', decodedToken.email);
     
-    if (!decodedToken || !decodedToken.email) {
-      console.log('Token geçerli değil veya email bilgisi yok');
+    if (!decodedToken) {
+      console.log('Token geçerli değil, null değer döndü');
       return NextResponse.json({ error: 'Geçersiz token' }, { status: 401 });
+    }
+    
+    console.log('Token doğrulandı, email:', decodedToken.email || 'Email bilgisi yok');
+    
+    if (!decodedToken.email) {
+      console.log('Token geçerli ancak email bilgisi yok');
+      return NextResponse.json({ error: 'Geçersiz token: Email bilgisi yok' }, { status: 401 });
     }
     
     // Admin kontrolü
