@@ -26,16 +26,27 @@ export async function GET(request: NextRequest) {
     try {
       // Token'ı doğrula
       const decodedToken = await verifyToken(token);
-      console.log('Token doğrulandı, kullanıcı ID:', decodedToken.uid);
       
       // Kullanıcı ID'si kontrolü
-      if (!decodedToken.uid) {
+      if (!decodedToken || !decodedToken.uid) {
         console.log('Token geçerli ancak kullanıcı ID bulunamadı');
+        // Token yapısını log'a yazdır (hassas bilgileri kırparak)
+        console.log('Token içeriği:', JSON.stringify({
+          ...decodedToken,
+          email: decodedToken?.email ? '[GİZLİ]' : undefined,
+          sub: decodedToken?.sub ? '[VAR]' : undefined,
+          user_id: decodedToken?.user_id ? '[VAR]' : undefined,
+          userId: decodedToken?.userId ? '[VAR]' : undefined,
+          firebase: decodedToken?.firebase ? '[VAR]' : undefined,
+        }));
+        
         return NextResponse.json(
           { error: 'Geçersiz token: Kullanıcı ID bulunamadı' },
           { status: 401 }
         );
       }
+      
+      console.log('Token doğrulandı, kullanıcı ID:', decodedToken.uid);
       
       // Firestore'dan kullanıcı bilgilerini al
       try {
