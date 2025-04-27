@@ -5,6 +5,8 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
+import SubscribeButton from '@/components/SubscribeButton';
+import { PRICES } from '@/lib/stripe';
 
 export default function Pricing() {
   const { user } = useAuth();
@@ -28,7 +30,8 @@ export default function Pricing() {
       buttonText: 'Get Started',
       buttonColor: 'bg-primary-600 hover:bg-primary-700',
       borderColor: 'border-gray-200',
-      popular: false
+      popular: false,
+      priceId: PRICES.BASIC.id
     },
     {
       name: 'Premium',
@@ -46,9 +49,33 @@ export default function Pricing() {
       buttonText: 'Get Started',
       buttonColor: 'bg-primary-600 hover:bg-primary-700',
       borderColor: 'border-primary-500',
-      popular: true
+      popular: true,
+      priceId: PRICES.PREMIUM.id
     }
   ];
+
+  // Function to render the appropriate button based on user state
+  const renderActionButton = (plan: any) => {
+    if (!user) {
+      return (
+        <a 
+          href="/register"
+          className={`${plan.buttonColor} w-full inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500`}
+        >
+          Sign up to subscribe
+        </a>
+      );
+    } else {
+      return (
+        <SubscribeButton 
+          priceId={plan.priceId}
+          className={`${plan.buttonColor} w-full inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500`}
+        >
+          {plan.buttonText}
+        </SubscribeButton>
+      );
+    }
+  };
 
   return (
     <>
@@ -151,12 +178,7 @@ export default function Pricing() {
                   </div>
                   
                   <div className="mt-8">
-                    <Link 
-                      href={user ? "/dashboard" : "/register"}
-                      className={`${plan.buttonColor} w-full inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500`}
-                    >
-                      {plan.buttonText}
-                    </Link>
+                    {renderActionButton(plan)}
                   </div>
                 </div>
               </div>
@@ -238,10 +260,10 @@ export default function Pricing() {
               <div>
                 <h3 className="text-xl font-bold text-gray-900">What is your refund policy?</h3>
                 <p className="mt-2 text-base text-gray-600">
-                  We provide refunds for eligible cancellations. Please visit our <Link 
+                  We provide refunds for eligible cancellations. Please visit our <a 
                     href="/refund"
                     className="text-primary-600 hover:text-primary-800 underline"
-                  >refund policy page</Link> for detailed information about our refund process and eligibility requirements.
+                  >refund policy page</a> for detailed information about our refund process and eligibility requirements.
                 </p>
               </div>
               
