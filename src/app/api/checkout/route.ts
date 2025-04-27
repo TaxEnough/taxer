@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { PRICES } from '@/lib/stripe';
 import { getAuthCookieFromRequest, verifyToken } from '@/lib/auth-server';
+import { db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 // CORS headers for Vercel
 const corsHeaders = {
@@ -13,6 +15,26 @@ const corsHeaders = {
 // Handle OPTIONS request (preflight)
 export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
+}
+
+// Get user's email from Firestore
+async function getUserEmail(userId: string): Promise<string | null> {
+  try {
+    console.log('Fetching user email from Firestore for userId:', userId);
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    
+    if (userDoc.exists()) {
+      const userData = userDoc.data();
+      console.log('User document found:', userData.email ? 'Email exists' : 'No email');
+      return userData.email || null;
+    }
+    
+    console.log('User document not found');
+    return null;
+  } catch (error) {
+    console.error('Error fetching user email:', error);
+    return null;
+  }
 }
 
 export async function POST(req: Request) {
@@ -81,14 +103,17 @@ export async function POST(req: Request) {
       );
     }
 
-    // Use the user's ID as email (for now)
-    const userEmail = session.userId;
-    console.log('Creating checkout session for user:', userEmail);
+    // Get user's email from Firestore
+    const userEmail = await getUserEmail(session.userId);
+    
+    // If email not found, create a fallback email
+    const customerEmail = userEmail || `user+${session.userId}@taxenough.com`;
+    console.log('Using email for checkout:', customerEmail);
 
     try {
       // Create Checkout Session
       const checkoutSession = await stripe.checkout.sessions.create({
-        customer_email: userEmail,
+        customer_email: customerEmail,
         line_items: [
           {
             price: priceId,
