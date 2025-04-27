@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import Link from 'next/link';
@@ -11,6 +11,17 @@ import { PRICES } from '@/lib/stripe';
 export default function Pricing() {
   const { user } = useAuth();
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('yearly');
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  
+  useEffect(() => {
+    // Log authentication status for debugging
+    console.log('Auth state in pricing page:', { 
+      isLoggedIn: !!user, 
+      user: user 
+    });
+    
+    setIsAuthenticated(!!user);
+  }, [user]);
   
   const plans = [
     {
@@ -56,7 +67,14 @@ export default function Pricing() {
 
   // Function to render the appropriate button based on user state
   const renderActionButton = (plan: any) => {
-    if (!user) {
+    // Log which button will be shown
+    console.log(`Rendering button for ${plan.name} plan:`, { 
+      isAuthenticated, 
+      showingSubscribeButton: isAuthenticated, 
+      priceId: plan.priceId 
+    });
+    
+    if (!isAuthenticated) {
       return (
         <a 
           href="/register"

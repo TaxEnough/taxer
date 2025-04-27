@@ -12,10 +12,14 @@ interface SubscribeButtonProps {
 
 export default function SubscribeButton({ priceId, className = '', children }: SubscribeButtonProps) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubscription = async () => {
     try {
       setLoading(true);
+      setError(null);
+      
+      console.log('Starting subscription process for price ID:', priceId);
       
       // Create a checkout session via the API
       const { data } = await axios.post('/api/checkout', {
@@ -24,26 +28,49 @@ export default function SubscribeButton({ priceId, className = '', children }: S
         cancelUrl: `${window.location.origin}/pricing?subscription=cancelled`,
       });
       
+      console.log('Checkout session created:', data);
+      
+      // Check if we have a URL to redirect to
+      if (!data.url) {
+        console.error('No checkout URL received from server');
+        setError('No checkout URL received. Please try again.');
+        return;
+      }
+      
       // Redirect to Stripe Checkout
       const stripe = await getStripe();
-      if (stripe && data.url) {
+      if (stripe) {
+        console.log('Redirecting to Stripe checkout:', data.url);
         window.location.href = data.url;
+      } else {
+        console.error('Stripe failed to initialize');
+        setError('Payment system failed to initialize. Please try again.');
       }
-    } catch (error) {
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Something went wrong';
       console.error('Error subscribing:', error);
-      alert('Something went wrong. Please try again.');
+      console.error('Response data:', error.response?.data);
+      setError(`Error: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <button
-      onClick={handleSubscription}
-      disabled={loading}
-      className={`${className} ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
-    >
-      {loading ? 'Processing...' : children || 'Subscribe'}
-    </button>
+    <div>
+      <button
+        onClick={handleSubscription}
+        disabled={loading}
+        className={`${className} ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
+      >
+        {loading ? 'Processing...' : children || 'Subscribe'}
+      </button>
+      
+      {error && (
+        <div className="mt-2 text-sm text-red-600">
+          {error}
+        </div>
+      )}
+    </div>
   );
 } 
