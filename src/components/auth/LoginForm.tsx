@@ -52,7 +52,6 @@ export default function LoginForm() {
       try {
         data = await response.json();
       } catch (jsonError) {
-        console.error('JSON parse error:', jsonError);
         throw new Error('Invalid server response format');
       }
       
@@ -62,8 +61,6 @@ export default function LoginForm() {
         throw new Error(errorMsg);
       }
       
-      console.log('Login successful:', data);
-      
       // Kullanıcı verileri doğru mu kontrol et
       if (!data.user || !data.token) {
         throw new Error('Incomplete server response');
@@ -71,8 +68,6 @@ export default function LoginForm() {
       
       // Set the token from the API on the client side
       if (data.token) {
-        console.log('Setting token on client side');
-        
         try {
           // Doğrudan document.cookie ile ayarla
           const expiryDate = new Date();
@@ -117,14 +112,12 @@ export default function LoginForm() {
             setLoading(false);
           }
         } catch (checkError) {
-          console.error('Token check error:', checkError);
           setError('An error occurred during login. Please try again.');
           setLoading(false);
         }
       }, 1000);
       
     } catch (error: any) {
-      console.error('Login error:', error);
       setError(error.message || 'Login failed');
       setLoading(false);
     }
