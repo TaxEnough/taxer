@@ -9,7 +9,10 @@ import {
   EmailAuthProvider,
   reauthenticateWithCredential,
   updateProfile,
-  updatePassword
+  updatePassword,
+  sendEmailVerification,
+  updateEmail as updateFirebaseEmail,
+  updatePassword as updateFirebasePassword
 } from 'firebase/auth';
 import { 
   doc, 
@@ -21,6 +24,7 @@ import {
   getFirestore
 } from 'firebase/firestore';
 import { auth as firebaseAuth } from './firebase';
+import jwt from 'jsonwebtoken';
 // Firebase Admin SDK'yı kaldırıyoruz, client tarafında kullanılmamalı
 // import { auth as adminAuth } from './firebase-admin';
 
@@ -41,6 +45,20 @@ const validateEmail = (email: string): boolean => {
   return emailRegex.test(email);
 };
 
+// JWT token için özel interface
+interface DecodedToken {
+  uid?: string;
+  sub?: string;
+  user_id?: string;
+  userId?: string;
+  firebase?: {
+    identities?: {
+      [key: string]: string[];
+    };
+  };
+  [key: string]: any;
+}
+
 /**
  * Firebase kimlik doğrulama token'ını doğrular
  * Bu fonksiyon istemci tarafından kullanılacak,
@@ -49,22 +67,42 @@ const validateEmail = (email: string): boolean => {
  * @param token Firebase kimlik doğrulama token'ı
  * @returns Doğrulanmış token bilgisi veya null
  */
-export async function verifyToken(token: string) {
+export const verifyToken = async (token: string): Promise<DecodedToken | null> => {
   try {
-    // İstemci tarafında basit bir JWT ayrıştırması yapılıyor
-    // Gerçek doğrulama sunucu tarafında yapılacak
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-    }).join(''));
-
-    return JSON.parse(jsonPayload);
+    // JWT token'ı decode et
+    const decoded = jwt.decode(token) as DecodedToken | null;
+    
+    if (!decoded) {
+      console.error('Token decode edilemedi');
+      return null;
+    }
+    
+    // UID kontrolü - token'ın içeriğindeki farklı alanlarda uid olabilir
+    if (!decoded.uid) {
+      // sub alanını kontrol et (JWT standardı)
+      if (decoded.sub) {
+        decoded.uid = decoded.sub;
+      }
+      // user_id alanını kontrol et (Firebase'in kullandığı bir alan)
+      else if (decoded.user_id) {
+        decoded.uid = decoded.user_id;
+      }
+      // Firebase identities içinde bakabilir
+      else if (decoded.firebase && decoded.firebase.identities && decoded.firebase.identities['firebase.com']) {
+        decoded.uid = decoded.firebase.identities['firebase.com'][0];
+      }
+      // userId alanını kontrol et (özel bir alan)
+      else if (decoded.userId) {
+        decoded.uid = decoded.userId;
+      }
+    }
+    
+    return decoded;
   } catch (error) {
     console.error('Token doğrulama hatası:', error);
     return null;
   }
-}
+};
 
 // Kullanıcı kaydı
 export const registerUser = async (
