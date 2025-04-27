@@ -3,7 +3,7 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   experimental: {
-    // Server Actions artık varsayılan olarak etkin, serverActions alanını kaldırıyoruz
+
   },
   // Firebase Admin SDK gibi Node.js modüllerini istemci tarafına derlememek için transpilePackages yapılandırması
   transpilePackages: [],
