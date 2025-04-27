@@ -71,8 +71,14 @@ export async function POST(request: NextRequest) {
       // Token'ı doğrula
       const decodedToken = await verifyToken(token);
       
-      if (!decodedToken || !decodedToken.email) {
+      if (!decodedToken) {
+        console.log('Token geçerli değil, null değer döndü');
         return NextResponse.json({ error: 'Geçersiz token' }, { status: 401 });
+      }
+      
+      if (!decodedToken.email) {
+        console.log('Token geçerli ancak email bilgisi yok');
+        return NextResponse.json({ error: 'Geçersiz token: Email bilgisi yok' }, { status: 401 });
       }
       
       // Admin kontrolü
