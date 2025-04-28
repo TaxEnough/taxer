@@ -76,7 +76,41 @@ export default function ProfilePage() {
             
             // Yenileme tarihini formatla
             const renewalDate = subData.currentPeriodEnd ? 
-              new Date(subData.currentPeriodEnd).toLocaleDateString() : '-';
+              (() => {
+                // currentPeriodEnd bir Firestore Timestamp, Date veya epoch ms olabilir
+                let date;
+                if (subData.currentPeriodEnd.toDate && typeof subData.currentPeriodEnd.toDate === 'function') {
+                  // Firestore Timestamp
+                  date = subData.currentPeriodEnd.toDate();
+                } else if (subData.currentPeriodEnd instanceof Date) {
+                  // Date nesnesi
+                  date = subData.currentPeriodEnd;
+                } else if (typeof subData.currentPeriodEnd === 'number') {
+                  // Epoch milliseconds
+                  date = new Date(subData.currentPeriodEnd);
+                } else {
+                  // String veya başka format olabilir
+                  try {
+                    date = new Date(subData.currentPeriodEnd);
+                  } catch (e) {
+                    console.error('Geçersiz tarih formatı:', subData.currentPeriodEnd);
+                    return '-';
+                  }
+                }
+                
+                // Tarih geçerli mi kontrol et
+                if (isNaN(date.getTime())) {
+                  console.error('Geçersiz tarih:', date);
+                  return '-';
+                }
+                
+                // Türkiye için tarih formatı
+                return date.toLocaleDateString('tr-TR', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                });
+              })() : '-';
             
             setSubscriptionData({
               plan: planType,
