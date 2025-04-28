@@ -138,7 +138,7 @@ export default function Navbar() {
             <div className="flex-shrink-0 flex items-center">
               <Link href="/" className="flex items-center" onClick={handleLinkClick}>
                 <img src="/images/logo_text.png" alt="Logo" width={32} height={32} className="h-8 w-auto" />
-                <span className="ml-2 text-xl font-bold text-gray-800">Taxer</span>
+                <span className="ml-2 text-xl font-bold text-gray-800"></span>
               </Link>
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
