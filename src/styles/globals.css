@@ -16,6 +16,7 @@ body {
       rgb(var(--background-end-rgb))
     )
     rgb(var(--background-start-rgb));
+  padding-top: 4rem; /* Add padding to account for fixed navbar */
 }
 
 @layer components {
