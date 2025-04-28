@@ -104,8 +104,8 @@ export default function ProfilePage() {
                   return '-';
                 }
                 
-                // Türkiye için tarih formatı
-                return date.toLocaleDateString('tr-TR', {
+                // Amerikan tarih formatı kullan
+                return date.toLocaleDateString('en-US', {
                   year: 'numeric',
                   month: 'long',
                   day: 'numeric'
