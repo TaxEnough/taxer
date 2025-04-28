@@ -14,11 +14,26 @@ export default function ProfileForm() {
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
   const [subscriptionStatus, setSubscriptionStatus] = useState('Free Plan');
+  const [debugInfo, setDebugInfo] = useState('');
 
   useEffect(() => {
+    // Debug bilgisi
+    console.log('ProfileForm - Auth Context User:', user);
+    
     if (user) {
       setName(user.name || '');
+      // Eğer context'ten alınan e-posta yoksa veya boşsa Firestore'dan doğrudan almayı deneyelim
       setEmail(user.email || '');
+      
+      // Debug için bilgiyi ayarla
+      const debugText = `User ID: ${user.id || 'Missing'}\nName: ${user.name || 'Missing'}\nEmail: ${user.email || 'Missing'}\n`;
+      setDebugInfo(debugText);
+      
+      // E-posta alanı boşsa, direkt Firestore'dan almayı dene
+      if (!user.email) {
+        console.log('Email not found in AuthContext, trying to get directly from Firestore');
+        getEmailFromFirestore(user.id);
+      }
       
       // Abonelik durumunu kontrol et
       const checkSubscription = async () => {
@@ -28,6 +43,14 @@ export default function ProfileForm() {
           
           if (userSnap.exists()) {
             const userData = userSnap.data();
+            
+            // Eğer email hala boşsa ve Firestore'da varsa
+            if (!email && userData.email) {
+              console.log('Setting email from Firestore:', userData.email);
+              setEmail(userData.email);
+              setDebugInfo(prev => prev + `\nFirestore Email: ${userData.email}`);
+            }
+            
             if (userData.subscriptionStatus === 'active' && userData.subscriptionId) {
               const subscriptionRef = doc(db, 'subscriptions', userData.subscriptionId);
               const subscriptionSnap = await getDoc(subscriptionRef);
@@ -52,6 +75,35 @@ export default function ProfileForm() {
       checkSubscription();
     }
   }, [user]);
+  
+  // Direkt olarak Firestore'dan email verisini al
+  const getEmailFromFirestore = async (userId: string) => {
+    if (!userId) return;
+    
+    try {
+      const userRef = doc(db, 'users', userId);
+      const userSnap = await getDoc(userRef);
+      
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        
+        if (userData.email) {
+          console.log('Email found in Firestore:', userData.email);
+          setEmail(userData.email);
+          setDebugInfo(prev => prev + `\nFirestore email found: ${userData.email}`);
+        } else {
+          console.log('No email found in Firestore document');
+          setDebugInfo(prev => prev + '\nNo email in Firestore document');
+        }
+      } else {
+        console.log('User document not found in Firestore');
+        setDebugInfo(prev => prev + '\nUser document not found in Firestore');
+      }
+    } catch (error) {
+      console.error('Error getting email from Firestore:', error);
+      setDebugInfo(prev => prev + '\nError getting email from Firestore');
+    }
+  };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -213,7 +265,7 @@ export default function ProfileForm() {
             </div>
             <div className="sm:col-span-1">
               <dt className="text-sm font-medium text-gray-500">Email Address</dt>
-              <dd className="mt-1 text-sm text-gray-900">{user?.email || 'Not available'}</dd>
+              <dd className="mt-1 text-sm text-gray-900">{email || user?.email || 'Not available'}</dd>
             </div>
             <div className="sm:col-span-1">
               <dt className="text-sm font-medium text-gray-500">Account ID</dt>
@@ -232,6 +284,13 @@ export default function ProfileForm() {
               </dd>
             </div>
           </dl>
+          
+          {/* Debug bilgileri - yalnızca test için */}
+          {debugInfo && process.env.NODE_ENV !== 'production' && (
+            <div className="mt-6 p-3 bg-gray-100 rounded-md text-xs font-mono whitespace-pre-wrap opacity-70">
+              {debugInfo}
+            </div>
+          )}
         </div>
       )}
     </div>
