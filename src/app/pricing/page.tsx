@@ -27,41 +27,28 @@ export default function Pricing() {
     {
       name: 'Basic',
       description: 'For individual investors.',
-      monthlyPrice: 19.99,
-      yearlyPrice: 199.99,
+      monthlyPrice: PRICES.BASIC.MONTHLY.price,
+      yearlyPrice: PRICES.BASIC.YEARLY.price,
       discount: '16%',
-      features: [
-        'Basic tax calculations',
-        'Tax estimate reports',
-        'Annual tax summary',
-        'Access to all tools',
-        'Unlimited portfolio tracking/management',
-        'Email support'
-      ],
+      features: PRICES.BASIC.features,
       buttonText: 'Get Started',
       buttonColor: 'bg-primary-600 hover:bg-primary-700',
       borderColor: 'border-gray-200',
       popular: false,
-      priceId: PRICES.BASIC.id
+      priceId: billingCycle === 'monthly' ? PRICES.BASIC.MONTHLY.id : PRICES.BASIC.YEARLY.id
     },
     {
       name: 'Premium',
       description: 'For active traders.',
-      monthlyPrice: 29.99,
-      yearlyPrice: 299.99,
+      monthlyPrice: PRICES.PREMIUM.MONTHLY.price,
+      yearlyPrice: PRICES.PREMIUM.YEARLY.price,
       discount: '16%',
-      features: [
-        'Everything in Basic',
-        'Faster support response',
-        'Reminder setup options',
-        'Priority email support',
-        'Multi-portfolio management'
-      ],
+      features: PRICES.PREMIUM.features,
       buttonText: 'Get Started',
       buttonColor: 'bg-primary-600 hover:bg-primary-700',
       borderColor: 'border-primary-500',
       popular: true,
-      priceId: PRICES.PREMIUM.id
+      priceId: billingCycle === 'monthly' ? PRICES.PREMIUM.MONTHLY.id : PRICES.PREMIUM.YEARLY.id
     }
   ];
 
