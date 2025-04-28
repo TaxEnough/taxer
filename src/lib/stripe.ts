@@ -13,9 +13,18 @@ export const getStripe = () => {
 // Pricing configuration
 export const PRICES = {
   BASIC: {
-    id: 'price_1RIS0fLhWC2oNMWwizDKv78o',
-    name: 'Basic Plan',
-    price: 19.99,
+    MONTHLY: {
+      id: 'price_1RIS0fLhWC2oNMWwizDKv78o', // Basic Monthly $19.99
+      name: 'Basic Plan (Monthly)',
+      price: 19.99,
+      interval: 'month'
+    },
+    YEARLY: {
+      id: 'price_1RIoHlLhWC2oNMWwKzOx9WBD', // Basic Yearly $199.99
+      name: 'Basic Plan (Yearly)',
+      price: 199.99,
+      interval: 'year'
+    },
     features: [
       'Basic tax calculations',
       'Tax estimate reports',
@@ -24,9 +33,18 @@ export const PRICES = {
     ]
   },
   PREMIUM: {
-    id: 'premium_price_id_here', // Replace with your premium price ID when needed
-    name: 'Premium Plan',
-    price: 29.99,
+    MONTHLY: {
+      id: 'price_1RIoIVLhWC2oNMWwZZ7GOZhY', // Premium Monthly $29.99
+      name: 'Premium Plan (Monthly)',
+      price: 29.99,
+      interval: 'month'
+    },
+    YEARLY: {
+      id: 'price_1RIoJ3LhWC2oNMWwBpw1oZTl', // Premium Yearly $299.99
+      name: 'Premium Plan (Yearly)',
+      price: 299.99,
+      interval: 'year'
+    },
     features: [
       'Everything in Basic',
       'Faster support response',
