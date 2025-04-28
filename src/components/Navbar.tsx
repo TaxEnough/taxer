@@ -137,7 +137,7 @@ export default function Navbar() {
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
               <Link href="/" className="flex items-center" onClick={handleLinkClick}>
-                <Image src="/logo.svg" alt="Logo" width={32} height={32} />
+                <img src="/logo.svg" alt="Logo" width={32} height={32} className="h-8 w-auto" />
                 <span className="ml-2 text-xl font-bold text-gray-800">Taxer</span>
               </Link>
             </div>
