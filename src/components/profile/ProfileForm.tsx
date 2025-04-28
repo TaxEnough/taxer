@@ -57,7 +57,7 @@ export default function ProfileForm() {
               
               if (subscriptionSnap.exists()) {
                 const subData = subscriptionSnap.data();
-                const planType = subData.priceId?.includes('basic') ? 'Basic' : 'Premium';
+                const planType = subData.priceId === 'price_1RIS0fLhWC2oNMWwizDKv78o' ? 'Basic' : 'Premium';
                 setSubscriptionStatus(planType);
               } else {
                 setSubscriptionStatus('Free Plan');

@@ -71,7 +71,8 @@ export default function ProfilePage() {
           
           if (subscriptionSnap.exists()) {
             const subData = subscriptionSnap.data();
-            const planType = subData.priceId?.includes('basic') ? 'Basic' : 'Premium';
+            // Basic planın ID'si ile tam eşleşme kontrolü yapıyoruz
+            const planType = subData.priceId === 'price_1RIS0fLhWC2oNMWwizDKv78o' ? 'Basic' : 'Premium';
             
             // Yenileme tarihini formatla
             const renewalDate = subData.currentPeriodEnd ? 
