@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { updateProfile } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 export default function ProfileForm() {
   const { user } = useAuth();
@@ -12,11 +13,43 @@ export default function ProfileForm() {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
+  const [subscriptionStatus, setSubscriptionStatus] = useState('Free Plan');
 
   useEffect(() => {
     if (user) {
       setName(user.name || '');
       setEmail(user.email || '');
+      
+      // Abonelik durumunu kontrol et
+      const checkSubscription = async () => {
+        try {
+          const userRef = doc(db, 'users', user.id);
+          const userSnap = await getDoc(userRef);
+          
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            if (userData.subscriptionStatus === 'active' && userData.subscriptionId) {
+              const subscriptionRef = doc(db, 'subscriptions', userData.subscriptionId);
+              const subscriptionSnap = await getDoc(subscriptionRef);
+              
+              if (subscriptionSnap.exists()) {
+                const subData = subscriptionSnap.data();
+                const planType = subData.priceId?.includes('basic') ? 'Basic' : 'Premium';
+                setSubscriptionStatus(planType);
+              } else {
+                setSubscriptionStatus('Free Plan');
+              }
+            } else {
+              setSubscriptionStatus('Free Plan');
+            }
+          }
+        } catch (error) {
+          console.error('Abonelik durumu kontrol edilirken hata oluştu:', error);
+          setSubscriptionStatus('Free Plan');
+        }
+      };
+      
+      checkSubscription();
     }
   }, [user]);
 
@@ -180,17 +213,21 @@ export default function ProfileForm() {
             </div>
             <div className="sm:col-span-1">
               <dt className="text-sm font-medium text-gray-500">Email Address</dt>
-              <dd className="mt-1 text-sm text-gray-900">{user?.email}</dd>
+              <dd className="mt-1 text-sm text-gray-900">{user?.email || 'Not available'}</dd>
             </div>
             <div className="sm:col-span-1">
               <dt className="text-sm font-medium text-gray-500">Account ID</dt>
-              <dd className="mt-1 text-sm text-gray-900">{user?.id}</dd>
+              <dd className="mt-1 text-sm text-gray-900">{user?.id || 'Not available'}</dd>
             </div>
             <div className="sm:col-span-1">
               <dt className="text-sm font-medium text-gray-500">Account Status</dt>
-              <dd className="mt-1 text-sm text-gray-900">
-                <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                  Active
+              <dd className="mt-1 text-sm">
+                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                  subscriptionStatus === 'Free Plan' 
+                    ? 'bg-gray-100 text-gray-800' 
+                    : 'bg-green-100 text-green-800'
+                }`}>
+                  {subscriptionStatus}
                 </span>
               </dd>
             </div>
