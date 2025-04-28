@@ -3,181 +3,99 @@
 import { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import SubscribeButton from '@/components/SubscribeButton';
+import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { db } from '@/lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
-import { useRouter } from 'next/navigation';
-
-// Define the plan type to include optional upgradeMessage
-type Plan = {
-  name: string;
-  description: string;
-  price: number;
-  features: string[];
-  highlight: boolean;
-  upgradeMessage?: string;
-};
+import SubscribeButton from '@/components/SubscribeButton';
+import { PRICES } from '@/lib/stripe';
 
 export default function Pricing() {
   const { user } = useAuth();
-  const router = useRouter();
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
-  const [subscriptionPlan, setSubscriptionPlan] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  // Check if user is authenticated
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('yearly');
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  
   useEffect(() => {
-    console.log("Auth state:", user);
+    // Log authentication status for debugging
+    console.log('Auth state in pricing page:', { 
+      isLoggedIn: !!user, 
+      user: user 
+    });
+    
     setIsAuthenticated(!!user);
-    if (user) {
-      checkSubscriptionStatus();
-    } else {
-      setLoading(false);
-    }
   }, [user]);
-
-  // Fetch subscription status from Firestore
-  const checkSubscriptionStatus = async () => {
-    if (user && user.id) {
-      try {
-        const userRef = doc(db, 'users', user.id);
-        const userSnap = await getDoc(userRef);
-        
-        if (userSnap.exists()) {
-          const userData = userSnap.data();
-          setSubscriptionStatus(userData.subscriptionStatus || null);
-          setSubscriptionPlan(userData.subscriptionPlan || null);
-        } else {
-          setSubscriptionStatus(null);
-          setSubscriptionPlan(null);
-        }
-      } catch (error) {
-        console.error("Error checking subscription status:", error);
-        setSubscriptionStatus(null);
-        setSubscriptionPlan(null);
-      } finally {
-        setLoading(false);
-      }
+  
+  const plans = [
+    {
+      name: 'Basic',
+      description: 'For individual investors.',
+      monthlyPrice: 19.99,
+      yearlyPrice: 199.99,
+      discount: '16%',
+      features: [
+        'Basic tax calculations',
+        'Tax estimate reports',
+        'Annual tax summary',
+        'Access to all tools',
+        'Unlimited portfolio tracking/management',
+        'Email support'
+      ],
+      buttonText: 'Get Started',
+      buttonColor: 'bg-primary-600 hover:bg-primary-700',
+      borderColor: 'border-gray-200',
+      popular: false,
+      priceId: PRICES.BASIC.id
+    },
+    {
+      name: 'Premium',
+      description: 'For active traders.',
+      monthlyPrice: 29.99,
+      yearlyPrice: 299.99,
+      discount: '16%',
+      features: [
+        'Everything in Basic',
+        'Faster support response',
+        'Reminder setup options',
+        'Priority email support',
+        'Multi-portfolio management'
+      ],
+      buttonText: 'Get Started',
+      buttonColor: 'bg-primary-600 hover:bg-primary-700',
+      borderColor: 'border-primary-500',
+      popular: true,
+      priceId: PRICES.PREMIUM.id
     }
-  };
+  ];
 
-  // Get plans to display based on subscription status
-  const getPlansToDisplay = (): Plan[] => {
-    // If user has active basic subscription, only show premium plan
-    if (subscriptionStatus === 'active' && subscriptionPlan === 'basic') {
-      return [
-        {
-          name: "Premium",
-          description: "Upgrade to Premium for enhanced features",
-          price: billingCycle === 'monthly' ? 19.99 : 180,
-          features: [
-            "Everything in Basic plan",
-            "Advanced tax optimization strategies",
-            "Priority customer support",
-            "Monthly tax analysis reports",
-            "Integration with accounting software",
-            "Access to exclusive tax resources"
-          ],
-          highlight: true,
-          upgradeMessage: "Upgrade from your Basic plan for just $9.99 more per month"
-        }
-      ];
-    }
+  // Function to render the appropriate button based on user state
+  const renderActionButton = (plan: any) => {
+    // Log which button will be shown
+    console.log(`Rendering button for ${plan.name} plan:`, { 
+      isAuthenticated, 
+      showingSubscribeButton: isAuthenticated, 
+      priceId: plan.priceId 
+    });
     
-    // If user has active premium subscription, show a message
-    if (subscriptionStatus === 'active' && subscriptionPlan === 'premium') {
-      return [];
-    }
-    
-    // Default: show both plans for users without subscription
-    return [
-      {
-        name: "Basic",
-        description: "Perfect for individual investors",
-        price: billingCycle === 'monthly' ? 10 : 100,
-        features: [
-          "Track up to 50 investments",
-          "Basic tax calculation",
-          "Annual tax report generation",
-          "Email support",
-          "Mobile app access",
-          "Data export in CSV format"
-        ],
-        highlight: false
-      },
-      {
-        name: "Premium",
-        description: "Comprehensive solution for serious investors",
-        price: billingCycle === 'monthly' ? 19.99 : 180,
-        features: [
-          "Everything in Basic plan",
-          "Unlimited investment tracking",
-          "Advanced tax optimization strategies",
-          "Priority customer support",
-          "Monthly tax analysis reports",
-          "Integration with accounting software",
-          "Access to exclusive tax resources"
-        ],
-        highlight: true
-      }
-    ];
-  };
-
-  // Function to render the appropriate action button
-  const renderActionButton = (plan: Plan) => {
     if (!isAuthenticated) {
       return (
-        <button
-          onClick={() => router.push('/register')}
-          className="block w-full bg-primary-600 text-white text-center py-2 px-4 rounded-lg hover:bg-primary-700 transition duration-150 ease-in-out mt-4"
+        <a 
+          href="/register"
+          className={`${plan.buttonColor} w-full inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500`}
         >
-          Sign Up
-        </button>
+          Sign up to subscribe
+        </a>
+      );
+    } else {
+      return (
+        <SubscribeButton 
+          priceId={plan.priceId}
+          className={`${plan.buttonColor} w-full inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500`}
+        >
+          {plan.buttonText}
+        </SubscribeButton>
       );
     }
-
-    // If user has an active subscription
-    if (subscriptionStatus === 'active') {
-      // For premium user viewing premium plan (should never happen with current logic)
-      if (subscriptionPlan === 'premium' && plan.name === 'Premium') {
-        return (
-          <div className="block w-full bg-gray-200 text-gray-700 text-center py-2 px-4 rounded-lg mt-4">
-            Current Plan
-          </div>
-        );
-      }
-      
-      // For basic user viewing premium plan
-      if (subscriptionPlan === 'basic' && plan.name === 'Premium') {
-        return (
-          <SubscribeButton
-            priceId={billingCycle === 'monthly' ? 'price_premium_monthly' : 'price_premium_yearly'}
-            className="block w-full bg-primary-600 text-white text-center py-2 px-4 rounded-lg hover:bg-primary-700 transition duration-150 ease-in-out mt-4"
-          >
-            Upgrade Now
-          </SubscribeButton>
-        );
-      }
-    }
-
-    // Default subscription button
-    return (
-      <SubscribeButton
-        priceId={
-          plan.name === 'Basic' 
-            ? (billingCycle === 'monthly' ? 'price_basic_monthly' : 'price_basic_yearly')
-            : (billingCycle === 'monthly' ? 'price_premium_monthly' : 'price_premium_yearly')
-        }
-        className="block w-full bg-primary-600 text-white text-center py-2 px-4 rounded-lg hover:bg-primary-700 transition duration-150 ease-in-out mt-4"
-      >
-        Subscribe Now
-      </SubscribeButton>
-    );
   };
 
+<<<<<<< HEAD
   if (loading) {
     return (
       <div>
@@ -192,9 +110,12 @@ export default function Pricing() {
     );
   }
 
+=======
+>>>>>>> 7fc6ed4f513536133e5bc034f76e831fd3763f2c
   return (
-    <div>
+    <>
       <Navbar />
+<<<<<<< HEAD
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="text-center">
           <h1 className="text-4xl font-extrabold text-gray-900 sm:text-5xl sm:tracking-tight lg:text-6xl">
@@ -268,165 +189,206 @@ export default function Pricing() {
                     Manage Subscription
                   </button>
                 </div>
+=======
+      <main className="bg-gray-50 py-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-extrabold text-gray-900 sm:text-3xl sm:tracking-tight lg:text-4xl">
+              Tax Calculation and Portfolio Management Solution for Investors
+            </h1>
+            
+            {/* Billing toggle */}
+            <div className="mt-6 flex justify-center">
+              <div className="relative rounded-full p-1 bg-gray-100 flex">
+                <button
+                  type="button"
+                  className={`${
+                    billingCycle === 'monthly'
+                      ? 'bg-white shadow-sm'
+                      : 'bg-transparent'
+                  } relative py-2 px-6 rounded-full text-sm font-medium whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-primary-500 focus:z-10`}
+                  onClick={() => setBillingCycle('monthly')}
+                >
+                  Monthly
+                </button>
+                <button
+                  type="button"
+                  className={`${
+                    billingCycle === 'yearly'
+                      ? 'bg-white shadow-sm'
+                      : 'bg-transparent'
+                  } relative py-2 px-6 rounded-full text-sm font-medium whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-primary-500 focus:z-10`}
+                  onClick={() => setBillingCycle('yearly')}
+                >
+                  <span>Annually</span>
+                  <span className="absolute -top-2 -right-12 bg-green-100 text-green-800 text-xs font-semibold px-2 py-0.5 rounded-full">
+                    16% Off
+                  </span>
+                </button>
+>>>>>>> 7fc6ed4f513536133e5bc034f76e831fd3763f2c
               </div>
             </div>
           </div>
-        )}
 
-        {/* Billing cycle toggle */}
-        {(subscriptionStatus !== 'active' || subscriptionPlan === 'basic') && (
-          <div className="mt-12 sm:mt-16 mb-8 flex justify-center">
-            <div className="relative bg-gray-100 p-0.5 rounded-lg flex">
-              <button
-                type="button"
-                className={`${
-                  billingCycle === 'monthly' ? 'bg-white shadow-sm' : 'bg-transparent'
-                } relative py-2 px-6 rounded-md text-sm font-medium whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-primary-500 focus:z-10`}
-                onClick={() => setBillingCycle('monthly')}
-              >
-                Monthly Billing
-              </button>
-              <button
-                type="button"
-                className={`${
-                  billingCycle === 'yearly' ? 'bg-white shadow-sm' : 'bg-transparent'
-                } ml-0.5 relative py-2 px-6 rounded-md text-sm font-medium whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-primary-500 focus:z-10`}
-                onClick={() => setBillingCycle('yearly')}
-              >
-                Annual Billing
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Display discount message for yearly billing */}
-        {billingCycle === 'yearly' && (subscriptionStatus !== 'active' || subscriptionPlan === 'basic') && (
-          <div className="text-center mb-12">
-            <span className="inline-flex items-center px-3 py-0.5 rounded-full text-sm font-medium bg-green-100 text-green-800">
-              Save up to 20% with annual billing
-            </span>
-          </div>
-        )}
-
-        {/* Pricing plans */}
-        {(subscriptionStatus !== 'active' || subscriptionPlan === 'basic') && (
-          <div className="mt-6 grid gap-6 lg:grid-cols-2 lg:gap-8">
-            {getPlansToDisplay().map((plan) => (
+          <div className="grid grid-cols-1 gap-y-8 sm:grid-cols-2 sm:gap-12 lg:grid-cols-2 lg:gap-8">
+            {plans.map((plan) => (
               <div
                 key={plan.name}
-                className={`
-                  border rounded-lg shadow-sm divide-y divide-gray-200 overflow-hidden
-                  ${plan.highlight ? 'border-primary-500 relative' : 'border-gray-200'}
-                `}
+                className={`rounded-lg shadow-lg overflow-hidden ${
+                  plan.popular ? 'ring-2 ring-primary-500 transform scale-105' : ''
+                }`}
               >
-                {plan.highlight && (
-                  <div className="absolute top-0 inset-x-0 transform translate-y-px">
-                    <div className="flex justify-center transform -translate-y-1/2">
-                      <span className="inline-flex rounded-full bg-primary-500 px-4 py-1 text-xs font-semibold uppercase tracking-wider text-white">
+                <div className="p-6 bg-white">
+                  {plan.popular && (
+                    <div className="absolute top-0 right-0 -mr-2 -mt-2 bg-primary-500 rounded-bl-lg p-1">
+                      <span className="text-xs font-medium uppercase tracking-wide text-white px-2 py-1">
                         Most Popular
                       </span>
                     </div>
-                  </div>
-                )}
-                <div className="p-6">
-                  <h2 className="text-xl font-medium text-gray-900">{plan.name}</h2>
-                  <p className="mt-2 text-sm text-gray-500">{plan.description}</p>
-                  <p className="mt-4">
-                    <span className="text-4xl font-extrabold text-gray-900">${plan.price}</span>
-                    <span className="text-base font-medium text-gray-500">
-                      /{billingCycle === 'monthly' ? 'mo' : 'year'}
+                  )}
+                  <h3 className="text-xl font-bold text-gray-900 mb-1">{plan.name}</h3>
+                  <p className="text-sm text-gray-500 mb-3">{plan.description}</p>
+                  <p className="mt-3">
+                    <span className="text-3xl font-extrabold text-gray-900">
+                      ${billingCycle === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice}
+                    </span>
+                    <span className="text-sm font-medium text-gray-500">
+                      {billingCycle === 'monthly' ? '/month' : '/year'}
                     </span>
                   </p>
-
-                  {/* Special upgrade message for basic subscribers viewing Premium */}
-                  {plan.upgradeMessage && (
-                    <div className="mt-4 bg-green-50 px-3 py-2 rounded-md">
-                      <p className="text-sm text-green-700">{plan.upgradeMessage}</p>
-                    </div>
+                  
+                  {billingCycle === 'yearly' && (
+                    <p className="mt-1 text-sm text-green-500">
+                      16% savings - ${(plan.monthlyPrice * 12 - plan.yearlyPrice).toFixed(2)}
+                    </p>
                   )}
                   
-                  {renderActionButton(plan)}
-                </div>
-                <div className="pt-6 pb-8 px-6">
-                  <h3 className="text-sm font-medium text-gray-900">What's included</h3>
-                  <ul className="mt-4 space-y-3">
-                    {plan.features.map((feature, index) => (
-                      <li key={index} className="flex items-start">
-                        <svg className="flex-shrink-0 h-5 w-5 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                        </svg>
-                        <span className="ml-2 text-sm text-gray-700">{feature}</span>
-                      </li>
+                  <div className="mt-6 space-y-3">
+                    {plan.features.map((feature) => (
+                      <div key={feature} className="flex items-start">
+                        <div className="flex-shrink-0">
+                          <svg
+                            className="h-6 w-6 text-green-500"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            aria-hidden="true"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        </div>
+                        <p className="ml-3 text-base text-gray-700">{feature}</p>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
+                  
+                  <div className="mt-8">
+                    {renderActionButton(plan)}
+                  </div>
                 </div>
               </div>
             ))}
           </div>
-        )}
 
-        {/* FAQ Section - conditional based on subscription status */}
-        <div className="mt-16 border-t border-gray-200 pt-12">
-          <h2 className="text-3xl font-extrabold text-gray-900">
-            Frequently Asked Questions
-          </h2>
-          <div className="mt-6 grid gap-6 md:grid-cols-2">
-            <div>
-              <h3 className="text-lg font-medium text-gray-900">
-                {subscriptionStatus === 'active' 
-                  ? "How can I cancel my subscription?" 
-                  : "Can I cancel my subscription at any time?"}
-              </h3>
-              <p className="mt-2 text-base text-gray-500">
-                {subscriptionStatus === 'active' 
-                  ? "You can cancel your subscription anytime from your profile page. Your subscription will remain active until the end of your current billing period." 
-                  : "Yes, you can cancel your subscription at any time. Once canceled, your subscription will remain active until the end of your current billing period."}
-              </p>
-            </div>
-            <div>
-              <h3 className="text-lg font-medium text-gray-900">
-                {subscriptionStatus === 'active' && subscriptionPlan === 'basic'
-                  ? "How do I upgrade to Premium?"
-                  : subscriptionStatus === 'active' && subscriptionPlan === 'premium'
-                  ? "Can I downgrade to Basic?"
-                  : "Is there a free trial available?"}
-              </h3>
-              <p className="mt-2 text-base text-gray-500">
-                {subscriptionStatus === 'active' && subscriptionPlan === 'basic'
-                  ? "You can upgrade to our Premium plan at any time. Your account will be upgraded immediately, and you'll be charged the prorated difference for the remainder of your billing period."
-                  : subscriptionStatus === 'active' && subscriptionPlan === 'premium'
-                  ? "Yes, you can downgrade to our Basic plan. The change will take effect at the end of your current billing cycle."
-                  : "We don't currently offer a free trial, but we do have a 30-day money-back guarantee if you're not satisfied with our service."}
-              </p>
-            </div>
-            <div>
-              <h3 className="text-lg font-medium text-gray-900">
-                {subscriptionStatus === 'active'
-                  ? "Will I get a refund if I cancel mid-cycle?"
-                  : "What payment methods do you accept?"}
-              </h3>
-              <p className="mt-2 text-base text-gray-500">
-                {subscriptionStatus === 'active'
-                  ? "We don't provide refunds for partial billing periods. Your subscription will remain active until the end of your current billing cycle."
-                  : "We accept all major credit cards including Visa, Mastercard, American Express, and Discover. We also support payment through PayPal."}
-              </p>
-            </div>
-            <div>
-              <h3 className="text-lg font-medium text-gray-900">
-                {subscriptionStatus === 'active' && subscriptionPlan === 'basic'
-                  ? "What additional features do I get with Premium?"
-                  : "How secure is my payment information?"}
-              </h3>
-              <p className="mt-2 text-base text-gray-500">
-                {subscriptionStatus === 'active' && subscriptionPlan === 'basic'
-                  ? "Premium includes unlimited investment tracking, advanced tax optimization strategies, priority support, monthly analysis reports, accounting software integration, and exclusive tax resources."
-                  : "Very secure! We use Stripe for payment processing, which is PCI compliant and uses industry-leading encryption and security measures."}
+          <div className="mt-16 bg-white rounded-lg shadow-lg overflow-hidden">
+            <div className="px-4 py-3">
+              <h2 className="text-xl font-bold text-center text-gray-900 mb-4">All plans include:</h2>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <svg className="h-6 w-6 text-green-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                  </div>
+                  <p className="ml-3 text-base text-gray-700">100% security for your data</p>
+                </div>
+                
+                <div className="flex items-start justify-center">
+                  <div className="flex-shrink-0 mr-3">
+                    <svg className="h-6 w-6 text-green-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <p className="text-base text-gray-700">Cancel anytime</p>
+                </div>
+                
+                <div className="flex items-start justify-center">
+                  <div className="flex-shrink-0 mr-3">
+                    <svg className="h-6 w-6 text-green-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                    </svg>
+                  </div>
+                  <p className="text-base text-gray-700">Limitless usage</p>
+                </div>
+                
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <svg className="h-6 w-6 text-green-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                  </div>
+                  <p className="ml-3 text-base text-gray-700">Regular updates & new features</p>
+                </div>
+              </div>
+              
+              <p className="mt-6 text-base text-gray-600 text-center max-w-3xl mx-auto">
+                Tax Enough helps you estimate your expected taxes with ease, so you can focus on growing your investments, not paperwork.
+                Our Investment Journal helps you record and track your stock transactions in one place, and more tools are available to make managing your investments even easier.
               </p>
             </div>
           </div>
+
+          <div className="mt-16">
+            <h2 className="text-2xl font-extrabold text-gray-900 text-center mb-8">Frequently Asked Questions</h2>
+            <div className="space-y-8">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">How do I make a payment?</h3>
+                <p className="mt-2 text-base text-gray-600">
+                  All major credit cards (Visa, Mastercard, American Express) are accepted. Payments are processed securely.
+                </p>
+              </div>
+              
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Can I cancel my subscription anytime?</h3>
+                <p className="mt-2 text-base text-gray-600">
+                  Yes, you can cancel your subscription at any time. You'll continue to have access to our services until the end of your billing period, and no renewal will occur.
+                </p>
+              </div>
+              
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">How accurate are your tax calculations?</h3>
+                <p className="mt-2 text-base text-gray-600">
+                  Our algorithm-based calculation tools provide estimates based on information entered by the user and current tax data. These estimates are for informational purposes only and do not constitute official tax advice.
+                </p>
+              </div>
+              
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">What is your refund policy?</h3>
+                <p className="mt-2 text-base text-gray-600">
+                  We provide refunds for eligible cancellations. Please visit our <a 
+                    href="/refund"
+                    className="text-primary-600 hover:text-primary-800 underline"
+                  >refund policy page</a> for detailed information about our refund process and eligibility requirements.
+                </p>
+              </div>
+              
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Can I get technical support?</h3>
+                <p className="mt-2 text-base text-gray-600">
+                  Yes! All our plans include certain levels of support. Our Premium plan offers faster response times and priority support.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      </main>
       <Footer />
-    </div>
+    </>
   );
 } 
