@@ -12,6 +12,14 @@
           "allow read": true,
           "allow create, update, delete": "request.auth != null && request.auth.token.email == 'info.taxenough@gmail.com'"
         },
+        "match/subscriptions/{document}": {
+          "allow read": "request.auth != null",
+          "allow create, update, delete": true
+        },
+        "match/users/{userId}": {
+          "allow read": "request.auth != null && request.auth.uid == userId",
+          "allow write": "(request.auth != null && request.auth.uid == userId) || true"
+        },
         "match/{restofpath=**}": {
           "allow read, write": "request.auth != null"
         }
