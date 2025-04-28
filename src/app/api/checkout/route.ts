@@ -94,9 +94,16 @@ export async function POST(req: Request) {
     console.log('Stripe initialized');
 
     // Validate price ID against our defined prices
-    if (priceId !== PRICES.BASIC.id && priceId !== PRICES.PREMIUM.id) {
+    const validPriceIds = [
+      PRICES.BASIC.MONTHLY.id,
+      PRICES.BASIC.YEARLY.id,
+      PRICES.PREMIUM.MONTHLY.id,
+      PRICES.PREMIUM.YEARLY.id
+    ];
+
+    if (!validPriceIds.includes(priceId)) {
       console.error('Invalid price ID:', priceId);
-      console.log('Valid price IDs:', PRICES.BASIC.id, PRICES.PREMIUM.id);
+      console.log('Valid price IDs:', validPriceIds);
       return NextResponse.json(
         { error: 'Invalid price ID' },
         { status: 400, headers: corsHeaders }
