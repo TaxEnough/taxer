@@ -10,7 +10,7 @@ import { PRICES } from '@/lib/stripe';
 
 export default function Pricing() {
   const { user } = useAuth();
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('yearly');
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   
   useEffect(() => {
