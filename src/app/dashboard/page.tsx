@@ -529,6 +529,8 @@ GOOGL,Buy,2023-03-10,2,2450.75,4901.50,7.99`;
                               <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Shares</th>
                               <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Price</th>
                               <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Date</th>
+                              <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Total</th>
+                              <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Fees</th>
                             </tr>
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
@@ -539,6 +541,8 @@ GOOGL,Buy,2023-03-10,2,2450.75,4901.50,7.99`;
                                 <td className="px-2 py-1">{item.numberOfShares}</td>
                                 <td className="px-2 py-1">${item.pricePerShare.toFixed(2)}</td>
                                 <td className="px-2 py-1">{item.transactionDate}</td>
+                                <td className="px-2 py-1">${item.totalAmount ? item.totalAmount.toFixed(2) : (item.numberOfShares * item.pricePerShare).toFixed(2)}</td>
+                                <td className="px-2 py-1">${item.commissionFees ? item.commissionFees.toFixed(2) : '0.00'}</td>
                               </tr>
                             ))}
                           </tbody>
