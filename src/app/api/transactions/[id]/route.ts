@@ -221,27 +221,51 @@ export async function DELETE(
     }
     
     const idToken = authHeader.split('Bearer ')[1];
-    const decodedToken = await auth.verifyIdToken(idToken);
-    const userId = decodedToken.uid;
     
-    // Check transaction access
-    const transactionId = params.id;
-    const hasAccess = await checkTransactionAccess(transactionId, userId);
+    // Log token metadata for debugging (güvenlik için sadece ilk ve son 10 karakterini göster)
+    const tokenLength = idToken.length;
+    console.log(`Token uzunluğu: ${tokenLength}, İlk 10: ${idToken.substring(0, 10)}..., Son 10: ${idToken.substring(tokenLength - 10)}`);
     
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
+    try {
+      // Token doğrulama işlemini ayrı bir try-catch bloğunda yap
+      const decodedToken = await auth.verifyIdToken(idToken, true);
+      const userId = decodedToken.uid;
+      
+      // Check transaction access
+      const transactionId = params.id;
+      const hasAccess = await checkTransactionAccess(transactionId, userId);
+      
+      if (!hasAccess) {
+        return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
+      }
+      
+      // Delete the transaction
+      await db.collection('transactions').doc(transactionId).delete();
+      
+      return NextResponse.json({
+        message: 'Transaction successfully deleted'
+      });
+    } catch (tokenError: any) {
+      console.error('Token doğrulama hatası:', tokenError);
+      console.error('Hata detayları:', tokenError.code, tokenError.message);
+      
+      // Token hatası için daha açıklayıcı bir yanıt dön
+      return NextResponse.json(
+        { 
+          error: 'Invalid authentication token', 
+          details: tokenError.message,
+          code: tokenError.code || 'unknown_error'
+        },
+        { status: 401 }
+      );
     }
-    
-    // Delete the transaction
-    await db.collection('transactions').doc(transactionId).delete();
-    
-    return NextResponse.json({
-      message: 'Transaction successfully deleted'
-    });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting transaction:', error);
     return NextResponse.json(
-      { error: 'An error occurred while deleting the transaction' },
+      { 
+        error: 'An error occurred while deleting the transaction',
+        details: error.message || 'Unknown error'
+      },
       { status: 500 }
     );
   }

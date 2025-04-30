@@ -109,6 +109,15 @@ export default function TransactionList() {
     try {
       const token = getAuthTokenFromClient();
       
+      if (!token) {
+        toast({
+          title: 'Authentication Error',
+          description: 'You are not authenticated. Please log in again.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      
       const response = await fetch(`/api/transactions/${id}`, {
         method: 'DELETE',
         headers: {
@@ -118,7 +127,26 @@ export default function TransactionList() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to delete transaction');
+        // Parse error response to get more details
+        let errorDetails = 'Failed to delete transaction';
+        try {
+          const errorData = await response.json();
+          errorDetails = errorData.details || errorData.error || errorDetails;
+          console.error('Transaction deletion error:', errorData);
+        } catch (e) {
+          console.error('Failed to parse error response:', e);
+        }
+        
+        if (response.status === 401) {
+          toast({
+            title: 'Authentication Error',
+            description: 'Your session has expired. Please log in again.',
+            variant: 'destructive',
+          });
+          return;
+        }
+        
+        throw new Error(errorDetails);
       }
 
       setTransactions((prevTransactions) => 
@@ -129,11 +157,11 @@ export default function TransactionList() {
         title: 'Success',
         description: 'Transaction successfully deleted.',
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Transaction deletion error:', error);
       toast({
         title: 'Error',
-        description: 'An error occurred while deleting the transaction.',
+        description: error.message || 'An error occurred while deleting the transaction.',
         variant: 'destructive',
       });
     }
