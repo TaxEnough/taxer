@@ -509,7 +509,18 @@ GOOGL,Buy,2023-03-10,2,2450.75,4901.50,7.99`;
                         </div>
                       </div>
                       
-                      <div className={`overflow-y-auto text-xs border border-gray-200 rounded p-2 ${isTradeHistoryOpen ? 'max-h-[calc(100vh-200px)]' : 'max-h-40'}`}>
+                      <div className={`overflow-y-auto text-xs border border-gray-200 rounded p-2 ${isTradeHistoryOpen ? 'max-h-[calc(100vh-200px)]' : 'max-h-40'} relative`}>
+                        {!isTradeHistoryOpen && (
+                          <button
+                            onClick={() => setIsTradeHistoryOpen(true)}
+                            className="absolute top-2 right-2 bg-white bg-opacity-80 rounded-full p-1 shadow-sm hover:bg-gray-100 transition-colors"
+                            title="Expand view"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                            </svg>
+                          </button>
+                        )}
                         <table className="min-w-full divide-y divide-gray-200">
                           <thead className="bg-gray-50 sticky top-0">
                             <tr>
@@ -533,9 +544,14 @@ GOOGL,Buy,2023-03-10,2,2450.75,4901.50,7.99`;
                           </tbody>
                         </table>
                         {!isTradeHistoryOpen && processedData.length > 5 && (
-                          <p className="text-center text-gray-500 mt-1">
-                            And {processedData.length - 5} more transactions... <button onClick={() => setIsTradeHistoryOpen(true)} className="text-blue-600 hover:underline">View All</button>
-                          </p>
+                          <div className="text-center bg-gray-50 py-1.5 mt-1 rounded border border-gray-100 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => setIsTradeHistoryOpen(true)}>
+                            <p className="text-gray-600 text-xs font-medium flex items-center justify-center">
+                              {processedData.length - 5} more transactions
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </p>
+                          </div>
                         )}
                       </div>
                     </div>
