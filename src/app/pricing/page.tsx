@@ -23,13 +23,22 @@ export default function Pricing() {
     setIsAuthenticated(!!user);
   }, [user]);
   
+  const calculateDiscount = (monthlyPrice: number, yearlyPrice: number) => {
+    const yearlyTotal = monthlyPrice * 12;
+    const savings = yearlyTotal - yearlyPrice;
+    const discountPercentage = Math.round((savings / yearlyTotal) * 100);
+    return {
+      percentage: discountPercentage,
+      savings: savings.toFixed(2)
+    };
+  };
+
   const plans = [
     {
       name: 'Basic',
       description: 'For individual investors.',
       monthlyPrice: PRICES.BASIC.MONTHLY.price,
       yearlyPrice: PRICES.BASIC.YEARLY.price,
-      discount: '16%',
       features: PRICES.BASIC.features,
       buttonText: 'Get Started',
       buttonColor: 'bg-primary-600 hover:bg-primary-700',
@@ -42,7 +51,6 @@ export default function Pricing() {
       description: 'For active traders.',
       monthlyPrice: PRICES.PREMIUM.MONTHLY.price,
       yearlyPrice: PRICES.PREMIUM.YEARLY.price,
-      discount: '16%',
       features: PRICES.PREMIUM.features,
       buttonText: 'Get Started',
       buttonColor: 'bg-primary-600 hover:bg-primary-700',
@@ -117,7 +125,7 @@ export default function Pricing() {
                 >
                   <span>Annually</span>
                   <span className="absolute -top-2 -right-12 bg-green-100 text-green-800 text-xs font-semibold px-2 py-0.5 rounded-full">
-                    16% Off
+                    {calculateDiscount(PRICES.BASIC.MONTHLY.price, PRICES.BASIC.YEARLY.price).percentage}% Off
                   </span>
                 </button>
               </div>
@@ -153,7 +161,7 @@ export default function Pricing() {
                   
                   {billingCycle === 'yearly' && (
                     <p className="mt-1 text-sm text-green-500">
-                      16% savings - ${(plan.monthlyPrice * 12 - plan.yearlyPrice).toFixed(2)}
+                      {calculateDiscount(plan.monthlyPrice, plan.yearlyPrice).percentage}% savings - ${calculateDiscount(plan.monthlyPrice, plan.yearlyPrice).savings}
                     </p>
                   )}
                   

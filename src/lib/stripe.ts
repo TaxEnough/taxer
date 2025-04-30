@@ -20,9 +20,9 @@ export const PRICES = {
       interval: 'month'
     },
     YEARLY: {
-      id: 'price_1RIoHlLhWC2oNMWwKzOx9WBD', // Basic Yearly $199.99
+      id: 'price_1RIoHlLhWC2oNMWwKzOx9WBD', // Basic Yearly $120
       name: 'Basic Plan (Yearly)',
-      price: 199.99,
+      price: 120,
       interval: 'year'
     },
     features: [
@@ -40,9 +40,9 @@ export const PRICES = {
       interval: 'month'
     },
     YEARLY: {
-      id: 'price_1RIoJ3LhWC2oNMWwBpw1oZTl', // Premium Yearly $299.99
+      id: 'price_1RIoJ3LhWC2oNMWwBpw1oZTl', // Premium Yearly $180
       name: 'Premium Plan (Yearly)',
-      price: 299.99,
+      price: 180,
       interval: 'year'
     },
     features: [
