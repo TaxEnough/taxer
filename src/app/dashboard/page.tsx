@@ -47,6 +47,9 @@ export default function DashboardPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [processedData, setProcessedData] = useState<TradeData[]>([]);
   
+  // Add this new state for the collapsible panel
+  const [isTradeHistoryOpen, setIsTradeHistoryOpen] = useState(false);
+  
   // CSV Dosyası işleme
   const processCSV = async (file: File) => {
     try {
@@ -433,8 +436,39 @@ GOOGL,Buy,2023-03-10,2,2450.75,4901.50,7.99`;
               </div>
               
               <div className="mt-6">
-                <h2 className="text-lg font-medium text-gray-900 mb-4">Trading History Converter</h2>
-                <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-medium text-gray-900 mb-4">Trading History Converter</h2>
+                  <button
+                    onClick={() => setIsTradeHistoryOpen(!isTradeHistoryOpen)}
+                    className="text-sm text-blue-600 hover:text-blue-800 flex items-center"
+                  >
+                    {isTradeHistoryOpen ? 'Collapse' : 'Expand'}
+                    <svg 
+                      xmlns="http://www.w3.org/2000/svg" 
+                      className={`h-4 w-4 ml-1 transition-transform duration-200 ${isTradeHistoryOpen ? 'rotate-180' : ''}`} 
+                      fill="none" 
+                      viewBox="0 0 24 24" 
+                      stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                </div>
+                
+                <div className={`bg-white border border-gray-200 rounded-lg p-4 shadow-sm transition-all duration-300 ${isTradeHistoryOpen ? 'fixed inset-0 z-50 m-8 overflow-auto' : ''}`}>
+                  {isTradeHistoryOpen && (
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => setIsTradeHistoryOpen(false)}
+                        className="bg-white rounded-full p-2 hover:bg-gray-100"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                  
                   <p className="text-gray-600 text-sm mb-4">
                     Upload your trading history in CSV or Excel format to convert it to the format needed for tax calculations.
                   </p>
@@ -446,6 +480,7 @@ GOOGL,Buy,2023-03-10,2,2450.75,4901.50,7.99`;
                         onDataProcessed={(data) => {
                           setProcessedData(data);
                           setUploadedFile(null);
+                          setIsTradeHistoryOpen(true); // Open the panel when data is processed
                         }} 
                       />
                     </div>
@@ -463,7 +498,10 @@ GOOGL,Buy,2023-03-10,2,2450.75,4901.50,7.99`;
                             Upload Another File
                           </button>
                           <button
-                            onClick={transferToCalculator}
+                            onClick={() => {
+                              transferToCalculator();
+                              setIsTradeHistoryOpen(false); // Close the panel after transfer
+                            }}
                             className="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
                           >
                             Transfer to Calculator
@@ -471,9 +509,9 @@ GOOGL,Buy,2023-03-10,2,2450.75,4901.50,7.99`;
                         </div>
                       </div>
                       
-                      <div className="max-h-40 overflow-y-auto text-xs border border-gray-200 rounded p-2">
+                      <div className={`overflow-y-auto text-xs border border-gray-200 rounded p-2 ${isTradeHistoryOpen ? 'max-h-[calc(100vh-200px)]' : 'max-h-40'}`}>
                         <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
+                          <thead className="bg-gray-50 sticky top-0">
                             <tr>
                               <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Symbol</th>
                               <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Type</th>
@@ -483,7 +521,7 @@ GOOGL,Buy,2023-03-10,2,2450.75,4901.50,7.99`;
                             </tr>
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
-                            {processedData.slice(0, 5).map((item, index) => (
+                            {(isTradeHistoryOpen ? processedData : processedData.slice(0, 5)).map((item, index) => (
                               <tr key={index}>
                                 <td className="px-2 py-1">{item.ticker}</td>
                                 <td className="px-2 py-1">{item.transactionType}</td>
@@ -494,9 +532,9 @@ GOOGL,Buy,2023-03-10,2,2450.75,4901.50,7.99`;
                             ))}
                           </tbody>
                         </table>
-                        {processedData.length > 5 && (
+                        {!isTradeHistoryOpen && processedData.length > 5 && (
                           <p className="text-center text-gray-500 mt-1">
-                            And {processedData.length - 5} more transactions...
+                            And {processedData.length - 5} more transactions... <button onClick={() => setIsTradeHistoryOpen(true)} className="text-blue-600 hover:underline">View All</button>
                           </p>
                         )}
                       </div>
