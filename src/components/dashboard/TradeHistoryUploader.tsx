@@ -384,8 +384,8 @@ const TradeHistoryUploader: React.FC<TradeHistoryUploaderProps> = ({ onDataProce
           )}
         </div>
       ) : (
-        <div className="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-3xl mx-auto relative">
+        <div className="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-start justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 w-full max-w-3xl mx-auto relative my-4 max-h-[90vh] overflow-y-auto">
             <button 
               onClick={() => {
                 setIsFileLoaded(false);
@@ -393,7 +393,7 @@ const TradeHistoryUploader: React.FC<TradeHistoryUploaderProps> = ({ onDataProce
                 setFileData([]);
                 setError(null);
               }}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 z-10"
               aria-label="Close"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -401,139 +401,141 @@ const TradeHistoryUploader: React.FC<TradeHistoryUploaderProps> = ({ onDataProce
               </svg>
             </button>
             
-            <h3 className="text-xl font-bold mb-4">Map Your Columns</h3>
-            
-            <div className="mb-5">
-              <p className="text-sm text-gray-600 mb-2">
-                We've automatically mapped your columns. Please verify or adjust if needed.
-              </p>
-              <p className="text-sm font-medium text-gray-800 mb-3">
-                Required fields: <span className="text-primary-600">Symbol, Transaction Type, Number of Shares, Price Per Share</span>
-              </p>
+            <div className="mb-20 pb-4"> {/* Extra bottom padding to ensure space for fixed buttons */}
+              <h3 className="text-xl font-bold mb-4">Map Your Columns</h3>
               
-              <div className="p-4 bg-blue-50 border border-blue-100 rounded-md mb-5">
-                <p className="text-sm text-blue-700">
-                  <strong>Tip:</strong> Select the column names from your file that match each field. The system will automatically standardize values.
+              <div className="mb-5">
+                <p className="text-sm text-gray-600 mb-2">
+                  We've automatically mapped your columns. Please verify or adjust if needed.
                 </p>
-                <ul className="text-xs text-blue-700 mt-2 list-disc pl-4 space-y-1">
-                  <li><strong>Transaction Type:</strong> Values like "Buy", "b", "Long", "Purchase" will be recognized as "Buy"</li>
-                  <li><strong>Symbol:</strong> Stock ticker symbol (e.g., AAPL, MSFT, GOOGL)</li>
-                  <li><strong>Date Format:</strong> Any standard date format is accepted (YYYY-MM-DD recommended)</li>
-                </ul>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Stock Symbol <span className="text-red-500">*</span></label>
-                  <select 
-                    value={columnMapping.ticker} 
-                    onChange={(e) => handleMappingChange('ticker', e.target.value)}
-                    className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
-                  >
-                    <option value="">-- Select --</option>
-                    {headers.map((header, index) => (
-                      <option key={index} value={header}>{header}</option>
-                    ))}
-                  </select>
-                </div>
+                <p className="text-sm font-medium text-gray-800 mb-3">
+                  Required fields: <span className="text-primary-600">Symbol, Transaction Type, Number of Shares, Price Per Share</span>
+                </p>
                 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Transaction Type <span className="text-red-500">*</span></label>
-                  <select 
-                    value={columnMapping.transactionType} 
-                    onChange={(e) => handleMappingChange('transactionType', e.target.value)}
-                    className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
-                  >
-                    <option value="">-- Select --</option>
-                    {headers.map((header, index) => (
-                      <option key={index} value={header}>{header}</option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Number of Shares <span className="text-red-500">*</span></label>
-                  <select 
-                    value={columnMapping.numberOfShares} 
-                    onChange={(e) => handleMappingChange('numberOfShares', e.target.value)}
-                    className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
-                  >
-                    <option value="">-- Select --</option>
-                    {headers.map((header, index) => (
-                      <option key={index} value={header}>{header}</option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Price Per Share <span className="text-red-500">*</span></label>
-                  <select 
-                    value={columnMapping.pricePerShare} 
-                    onChange={(e) => handleMappingChange('pricePerShare', e.target.value)}
-                    className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
-                  >
-                    <option value="">-- Select --</option>
-                    {headers.map((header, index) => (
-                      <option key={index} value={header}>{header}</option>
-                    ))}
-                  </select>
+                <div className="p-3 sm:p-4 bg-blue-50 border border-blue-100 rounded-md mb-5">
+                  <p className="text-sm text-blue-700">
+                    <strong>Tip:</strong> Select the column names from your file that match each field. The system will automatically standardize values.
+                  </p>
+                  <ul className="text-xs text-blue-700 mt-2 list-disc pl-4 space-y-1">
+                    <li><strong>Transaction Type:</strong> Values like "Buy", "b", "Long", "Purchase" will be recognized as "Buy"</li>
+                    <li><strong>Symbol:</strong> Stock ticker symbol (e.g., AAPL, MSFT, GOOGL)</li>
+                    <li><strong>Date Format:</strong> Any standard date format is accepted (YYYY-MM-DD recommended)</li>
+                  </ul>
                 </div>
               </div>
               
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Date (Optional)</label>
-                  <select 
-                    value={columnMapping.transactionDate} 
-                    onChange={(e) => handleMappingChange('transactionDate', e.target.value)}
-                    className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
-                  >
-                    <option value="">-- Select --</option>
-                    {headers.map((header, index) => (
-                      <option key={index} value={header}>{header}</option>
-                    ))}
-                  </select>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Stock Symbol <span className="text-red-500">*</span></label>
+                    <select 
+                      value={columnMapping.ticker} 
+                      onChange={(e) => handleMappingChange('ticker', e.target.value)}
+                      className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                    >
+                      <option value="">-- Select --</option>
+                      {headers.map((header, index) => (
+                        <option key={index} value={header}>{header}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Transaction Type <span className="text-red-500">*</span></label>
+                    <select 
+                      value={columnMapping.transactionType} 
+                      onChange={(e) => handleMappingChange('transactionType', e.target.value)}
+                      className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                    >
+                      <option value="">-- Select --</option>
+                      {headers.map((header, index) => (
+                        <option key={index} value={header}>{header}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Number of Shares <span className="text-red-500">*</span></label>
+                    <select 
+                      value={columnMapping.numberOfShares} 
+                      onChange={(e) => handleMappingChange('numberOfShares', e.target.value)}
+                      className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                    >
+                      <option value="">-- Select --</option>
+                      {headers.map((header, index) => (
+                        <option key={index} value={header}>{header}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Price Per Share <span className="text-red-500">*</span></label>
+                    <select 
+                      value={columnMapping.pricePerShare} 
+                      onChange={(e) => handleMappingChange('pricePerShare', e.target.value)}
+                      className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                    >
+                      <option value="">-- Select --</option>
+                      {headers.map((header, index) => (
+                        <option key={index} value={header}>{header}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount (Optional)</label>
-                  <select 
-                    value={columnMapping.totalAmount} 
-                    onChange={(e) => handleMappingChange('totalAmount', e.target.value)}
-                    className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
-                  >
-                    <option value="">-- Select --</option>
-                    {headers.map((header, index) => (
-                      <option key={index} value={header}>{header}</option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Commission/Fees (Optional)</label>
-                  <select 
-                    value={columnMapping.commissionFees} 
-                    onChange={(e) => handleMappingChange('commissionFees', e.target.value)}
-                    className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
-                  >
-                    <option value="">-- Select --</option>
-                    {headers.map((header, index) => (
-                      <option key={index} value={header}>{header}</option>
-                    ))}
-                  </select>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Date (Optional)</label>
+                    <select 
+                      value={columnMapping.transactionDate} 
+                      onChange={(e) => handleMappingChange('transactionDate', e.target.value)}
+                      className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                    >
+                      <option value="">-- Select --</option>
+                      {headers.map((header, index) => (
+                        <option key={index} value={header}>{header}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount (Optional)</label>
+                    <select 
+                      value={columnMapping.totalAmount} 
+                      onChange={(e) => handleMappingChange('totalAmount', e.target.value)}
+                      className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                    >
+                      <option value="">-- Select --</option>
+                      {headers.map((header, index) => (
+                        <option key={index} value={header}>{header}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Commission/Fees (Optional)</label>
+                    <select 
+                      value={columnMapping.commissionFees} 
+                      onChange={(e) => handleMappingChange('commissionFees', e.target.value)}
+                      className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                    >
+                      <option value="">-- Select --</option>
+                      {headers.map((header, index) => (
+                        <option key={index} value={header}>{header}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
+              
+              {error && (
+                <div className="bg-red-50 text-red-600 p-4 rounded-md mb-6 font-medium">
+                  {error}
+                </div>
+              )}
             </div>
             
-            {error && (
-              <div className="bg-red-50 text-red-600 p-4 rounded-md mb-6 font-medium">
-                {error}
-              </div>
-            )}
-            
-            <div className="flex justify-between border-t border-gray-200 pt-5">
+            <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 flex justify-between">
               <button 
                 onClick={() => {
                   setIsFileLoaded(false);
