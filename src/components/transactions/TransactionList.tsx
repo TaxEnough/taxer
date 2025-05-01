@@ -115,7 +115,7 @@ export default function TransactionList() {
           description: 'You are not authenticated. Please log in again.',
           variant: 'destructive',
         });
-        // Kullanıcıyı login sayfasına yönlendir
+        // Redirect user to login page
         window.location.href = '/login';
         return;
       }
@@ -136,34 +136,34 @@ export default function TransactionList() {
           errorDetails = errorData.details || errorData.error || errorDetails;
           console.error('Transaction deletion error:', errorData);
           
-          // Token ile ilgili bir hata varsa özel olarak işle
+          // Handle token-related errors specifically
           if (response.status === 401) {
             if (errorData.code === 'auth/argument-error' && errorData.details?.includes('no "kid" claim')) {
-              // "kid" claim hatası - sayfayı yenileme seçeneği sun
+              // "kid" claim error - try refreshing the page
               toast({
-                title: 'Yetkilendirme Hatası',
-                description: 'İşlem yetkilendirme hatası. Sayfayı yenileyip tekrar deneyiniz.',
+                title: 'Authentication Error',
+                description: 'Token validation failed. Please refresh the page and try again.',
                 variant: 'destructive',
               });
               
-              // Alternatif olarak manuel bir şekilde kullanıcıya seçenekler sunalım
-              if (confirm('Sayfa yenilensin mi? Bu sorunu çözebilir.')) {
+              // Auto-refresh after short delay
+              setTimeout(() => {
                 window.location.reload();
-              }
+              }, 2000);
               
               return;
             } else {
-              // Diğer yetkilendirme hataları
+              // Other authentication errors
               toast({
                 title: 'Authentication Error',
                 description: errorData.error || 'Your session has expired. Please log in again.',
                 variant: 'destructive',
               });
               
-              // Token'ı client-side'dan temizle
+              // Clear token from client-side
               removeAuthTokenFromClient();
               
-              // Kullanıcıyı login sayfasına yönlendir
+              // Redirect user to login page
               setTimeout(() => {
                 window.location.href = '/login';
               }, 1000);
@@ -183,10 +183,10 @@ export default function TransactionList() {
               variant: 'destructive',
             });
             
-            // Token'ı client-side'dan temizle
+            // Clear token from client-side
             removeAuthTokenFromClient();
             
-            // Kullanıcıyı login sayfasına yönlendir
+            // Redirect user to login page
             setTimeout(() => {
               window.location.href = '/login';
             }, 1000);

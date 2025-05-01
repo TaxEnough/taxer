@@ -224,14 +224,14 @@ export async function DELETE(
     
     // Log token metadata for debugging (güvenlik için sadece ilk ve son 10 karakterini göster)
     const tokenLength = idToken.length;
-    console.log(`Token uzunluğu: ${tokenLength}, İlk 10: ${idToken.substring(0, 10)}..., Son 10: ${idToken.substring(tokenLength - 10)}`);
+    console.log(`Token length: ${tokenLength}, First 10: ${idToken.substring(0, 10)}..., Last 10: ${idToken.substring(tokenLength - 10)}`);
     
-    // Token formatını basit şekilde kontrol et
+    // Check token format in a simple way
     if (!idToken || idToken.split('.').length !== 3) {
-      console.error('Token format hatası: Geçersiz JWT formatı');
+      console.error('Token format error: Invalid JWT format');
       return NextResponse.json(
         { 
-          error: 'Oturum bilginiz hatalı. Lütfen tekrar giriş yapın.', 
+          error: 'Invalid session token. Please login again.', 
           details: 'Invalid token format',
           code: 'auth/invalid-token-format'
         },
@@ -240,8 +240,8 @@ export async function DELETE(
     }
     
     try {
-      // Token doğrulama işlemini ayrı bir try-catch bloğunda yap
-      // checkRevoked parametresini false olarak ayarla
+      // Process token validation in a separate try-catch block
+      // Set checkRevoked parameter to false
       const decodedToken = await auth.verifyIdToken(idToken, false);
       const userId = decodedToken.uid;
       
@@ -260,22 +260,22 @@ export async function DELETE(
         message: 'Transaction successfully deleted'
       });
     } catch (tokenError: any) {
-      console.error('Token doğrulama hatası:', tokenError);
-      console.error('Hata detayları:', tokenError.code, tokenError.message);
+      console.error('Token validation error:', tokenError);
+      console.error('Error details:', tokenError.code, tokenError.message);
       
-      // Daha spesifik hata mesajları
-      let errorMessage = 'Token doğrulama hatası oluştu.';
+      // More specific error messages
+      let errorMessage = 'Token validation failed.';
       let statusCode = 401;
       
       if (tokenError.code === 'auth/argument-error' && tokenError.message.includes('no "kid" claim')) {
-        errorMessage = 'İşlem için yetkilendirme başarısız oldu. Sayfayı yenileyip tekrar deneyiniz.';
+        errorMessage = 'Session token validation failed. Please refresh the page and try again.';
       } else if (tokenError.code === 'auth/id-token-expired') {
-        errorMessage = 'Oturum süresi dolmuş. Lütfen tekrar giriş yapın.';
+        errorMessage = 'Your session has expired. Please log in again.';
       } else if (tokenError.code === 'auth/id-token-revoked') {
-        errorMessage = 'Oturumunuz sonlandırıldı. Lütfen tekrar giriş yapın.';
+        errorMessage = 'Your session has been revoked. Please log in again.';
       }
       
-      // Token hatası için daha açıklayıcı bir yanıt dön
+      // Return a more descriptive response for token errors
       return NextResponse.json(
         { 
           error: errorMessage, 
@@ -289,7 +289,7 @@ export async function DELETE(
     console.error('Error deleting transaction:', error);
     return NextResponse.json(
       { 
-        error: 'İşlem silinirken bir hata oluştu',
+        error: 'An error occurred while deleting the transaction',
         details: error.message || 'Unknown error'
       },
       { status: 500 }
