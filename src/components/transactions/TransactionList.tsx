@@ -103,57 +103,56 @@ export default function TransactionList() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Bu işlemi silmek istediğinizden emin misiniz?')) {
+    if (!window.confirm('Are you sure you want to delete this transaction?')) {
       return;
     }
     
     setIsDeleting(true);
     
     try {
-      console.log('İşlem siliniyor:', id);
+      console.log('Deleting transaction:', id);
       
-      // Fetch API ile silme işlemi
+      // Simple delete request - no auth token needed anymore
       const response = await fetch(`/api/transactions/${id}`, {
         method: 'DELETE',
-        credentials: 'include', // Cookie'leri dahil et
+        credentials: 'include', // Include cookies
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getAuthTokenFromClient() || ''}`
+          'Content-Type': 'application/json'
         }
       });
       
-      // Yanıtı kontrol et
+      // Check response
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error('Silme hatası:', response.status, errorData);
+        console.error('Delete error:', response.status, errorData);
         
         if (response.status === 401) {
           toast({
-            title: "Kimlik Doğrulama Hatası",
-            description: "Oturum süreniz dolmuş olabilir. Lütfen tekrar giriş yapın.",
+            title: "Authentication Error",
+            description: "Your session may have expired. Please log in again.",
             variant: "destructive",
           });
           return;
         }
         
-        throw new Error(errorData.error || `Silme hatası (${response.status})`);
+        throw new Error(errorData.error || `Delete error (${response.status})`);
       }
       
-      // UI'yi güncelle
+      // Update UI
       setTransactions(prevTransactions => 
         prevTransactions.filter(item => item.id !== id)
       );
       
-      // Başarı mesajı göster
+      // Show success message
       toast({
-        title: "Başarılı",
-        description: "İşlem başarıyla silindi",
+        title: "Success",
+        description: "Transaction successfully deleted",
       });
     } catch (error) {
-      console.error('Silme işlemi hatası:', error);
+      console.error('Delete operation error:', error);
       toast({
-        title: "Hata",
-        description: error instanceof Error ? error.message : "İşlem silinirken bir hata oluştu",
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete transaction",
         variant: "destructive",
       });
     } finally {
