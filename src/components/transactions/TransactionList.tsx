@@ -137,13 +137,45 @@ export default function TransactionList() {
           console.error('Transaction deletion error:', errorData);
           
           // Token ile ilgili bir hata varsa özel olarak işle
-          if (
-            response.status === 401 || 
-            (errorData.code && (
+          if (response.status === 401) {
+            if (errorData.code === 'auth/argument-error' && errorData.details?.includes('no "kid" claim')) {
+              // "kid" claim hatası - sayfayı yenileme seçeneği sun
+              toast({
+                title: 'Yetkilendirme Hatası',
+                description: 'İşlem yetkilendirme hatası. Sayfayı yenileyip tekrar deneyiniz.',
+                variant: 'destructive',
+              });
+              
+              // Alternatif olarak manuel bir şekilde kullanıcıya seçenekler sunalım
+              if (confirm('Sayfa yenilensin mi? Bu sorunu çözebilir.')) {
+                window.location.reload();
+              }
+              
+              return;
+            } else {
+              // Diğer yetkilendirme hataları
+              toast({
+                title: 'Authentication Error',
+                description: errorData.error || 'Your session has expired. Please log in again.',
+                variant: 'destructive',
+              });
+              
+              // Token'ı client-side'dan temizle
+              removeAuthTokenFromClient();
+              
+              // Kullanıcıyı login sayfasına yönlendir
+              setTimeout(() => {
+                window.location.href = '/login';
+              }, 1000);
+              
+              return;
+            }
+          } else if (
+            errorData.code && (
               errorData.code === 'auth/id-token-expired' ||
               errorData.code === 'auth/argument-error' ||
               errorData.code.includes('auth/')
-            ))
+            )
           ) {
             toast({
               title: 'Authentication Error',
@@ -163,19 +195,6 @@ export default function TransactionList() {
           }
         } catch (e) {
           console.error('Failed to parse error response:', e);
-        }
-        
-        if (response.status === 401) {
-          toast({
-            title: 'Authentication Error',
-            description: 'Your session has expired. Please log in again.',
-            variant: 'destructive',
-          });
-          // Kullanıcıyı login sayfasına yönlendir
-          setTimeout(() => {
-            window.location.href = '/login';
-          }, 1000);
-          return;
         }
         
         throw new Error(errorDetails);

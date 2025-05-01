@@ -226,9 +226,22 @@ export async function DELETE(
     const tokenLength = idToken.length;
     console.log(`Token uzunluğu: ${tokenLength}, İlk 10: ${idToken.substring(0, 10)}..., Son 10: ${idToken.substring(tokenLength - 10)}`);
     
+    // Token formatını basit şekilde kontrol et
+    if (!idToken || idToken.split('.').length !== 3) {
+      console.error('Token format hatası: Geçersiz JWT formatı');
+      return NextResponse.json(
+        { 
+          error: 'Oturum bilginiz hatalı. Lütfen tekrar giriş yapın.', 
+          details: 'Invalid token format',
+          code: 'auth/invalid-token-format'
+        },
+        { status: 401 }
+      );
+    }
+    
     try {
       // Token doğrulama işlemini ayrı bir try-catch bloğunda yap
-      // checkRevoked parametresini false olarak ayarla ve forceRefresh'i kullanma
+      // checkRevoked parametresini false olarak ayarla
       const decodedToken = await auth.verifyIdToken(idToken, false);
       const userId = decodedToken.uid;
       
@@ -251,11 +264,11 @@ export async function DELETE(
       console.error('Hata detayları:', tokenError.code, tokenError.message);
       
       // Daha spesifik hata mesajları
-      let errorMessage = 'Invalid authentication token';
+      let errorMessage = 'Token doğrulama hatası oluştu.';
       let statusCode = 401;
       
       if (tokenError.code === 'auth/argument-error' && tokenError.message.includes('no "kid" claim')) {
-        errorMessage = 'Oturum süresi dolmuş. Lütfen tekrar giriş yapın.';
+        errorMessage = 'İşlem için yetkilendirme başarısız oldu. Sayfayı yenileyip tekrar deneyiniz.';
       } else if (tokenError.code === 'auth/id-token-expired') {
         errorMessage = 'Oturum süresi dolmuş. Lütfen tekrar giriş yapın.';
       } else if (tokenError.code === 'auth/id-token-revoked') {
@@ -276,7 +289,7 @@ export async function DELETE(
     console.error('Error deleting transaction:', error);
     return NextResponse.json(
       { 
-        error: 'An error occurred while deleting the transaction',
+        error: 'İşlem silinirken bir hata oluştu',
         details: error.message || 'Unknown error'
       },
       { status: 500 }
