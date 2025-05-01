@@ -229,22 +229,22 @@ export default function TransactionList() {
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent className="max-w-md">
+        <AlertDialogContent className="max-w-md bg-white border border-gray-200 shadow-lg">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
+            <AlertDialogTitle className="flex items-center gap-2 text-gray-900">
               <AlertTriangle className="h-5 w-5 text-red-500" />
               Delete Transaction
             </AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="text-gray-600">
               Are you sure you want to delete this transaction? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="border-gray-200 bg-white text-gray-700 hover:bg-gray-50">
+          <AlertDialogFooter className="border-t border-gray-100 pt-4">
+            <AlertDialogCancel className="border border-gray-200 bg-white text-gray-700 hover:bg-gray-50">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction 
-              className="bg-red-600 text-white hover:bg-red-700 focus:ring-red-500"
+              className="bg-red-600 text-white hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
               onClick={handleDeleteConfirmed}
             >
               Delete
