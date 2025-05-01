@@ -15,7 +15,7 @@ import { Edit, Trash2 } from 'lucide-react';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import Link from 'next/link';
 import { useToast } from '@/components/ui/use-toast';
-import { getAuthTokenFromClient } from '@/lib/auth-client';
+import { getAuthTokenFromClient, removeAuthTokenFromClient } from '@/lib/auth-client';
 
 // Transaction data type from API
 type ApiTransaction = {
@@ -115,6 +115,8 @@ export default function TransactionList() {
           description: 'You are not authenticated. Please log in again.',
           variant: 'destructive',
         });
+        // Kullanıcıyı login sayfasına yönlendir
+        window.location.href = '/login';
         return;
       }
       
@@ -133,6 +135,32 @@ export default function TransactionList() {
           const errorData = await response.json();
           errorDetails = errorData.details || errorData.error || errorDetails;
           console.error('Transaction deletion error:', errorData);
+          
+          // Token ile ilgili bir hata varsa özel olarak işle
+          if (
+            response.status === 401 || 
+            (errorData.code && (
+              errorData.code === 'auth/id-token-expired' ||
+              errorData.code === 'auth/argument-error' ||
+              errorData.code.includes('auth/')
+            ))
+          ) {
+            toast({
+              title: 'Authentication Error',
+              description: 'Your session has expired. Please log in again.',
+              variant: 'destructive',
+            });
+            
+            // Token'ı client-side'dan temizle
+            removeAuthTokenFromClient();
+            
+            // Kullanıcıyı login sayfasına yönlendir
+            setTimeout(() => {
+              window.location.href = '/login';
+            }, 1000);
+            
+            return;
+          }
         } catch (e) {
           console.error('Failed to parse error response:', e);
         }
@@ -143,6 +171,10 @@ export default function TransactionList() {
             description: 'Your session has expired. Please log in again.',
             variant: 'destructive',
           });
+          // Kullanıcıyı login sayfasına yönlendir
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 1000);
           return;
         }
         

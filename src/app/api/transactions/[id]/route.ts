@@ -228,7 +228,8 @@ export async function DELETE(
     
     try {
       // Token doğrulama işlemini ayrı bir try-catch bloğunda yap
-      const decodedToken = await auth.verifyIdToken(idToken, true);
+      // checkRevoked parametresini false olarak ayarla ve forceRefresh'i kullanma
+      const decodedToken = await auth.verifyIdToken(idToken, false);
       const userId = decodedToken.uid;
       
       // Check transaction access
@@ -249,14 +250,26 @@ export async function DELETE(
       console.error('Token doğrulama hatası:', tokenError);
       console.error('Hata detayları:', tokenError.code, tokenError.message);
       
+      // Daha spesifik hata mesajları
+      let errorMessage = 'Invalid authentication token';
+      let statusCode = 401;
+      
+      if (tokenError.code === 'auth/argument-error' && tokenError.message.includes('no "kid" claim')) {
+        errorMessage = 'Oturum süresi dolmuş. Lütfen tekrar giriş yapın.';
+      } else if (tokenError.code === 'auth/id-token-expired') {
+        errorMessage = 'Oturum süresi dolmuş. Lütfen tekrar giriş yapın.';
+      } else if (tokenError.code === 'auth/id-token-revoked') {
+        errorMessage = 'Oturumunuz sonlandırıldı. Lütfen tekrar giriş yapın.';
+      }
+      
       // Token hatası için daha açıklayıcı bir yanıt dön
       return NextResponse.json(
         { 
-          error: 'Invalid authentication token', 
+          error: errorMessage, 
           details: tokenError.message,
           code: tokenError.code || 'unknown_error'
         },
-        { status: 401 }
+        { status: statusCode }
       );
     }
   } catch (error: any) {
