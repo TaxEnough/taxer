@@ -16,6 +16,7 @@ import { formatDate, formatCurrency } from '@/lib/utils';
 import Link from 'next/link';
 import { useToast } from '@/components/ui/use-toast';
 import { getAuthTokenFromClient, removeAuthTokenFromClient } from '@/lib/auth-client';
+import { auth } from '@/lib/firebase';
 
 // Transaction data type from API
 type ApiTransaction = {
@@ -51,6 +52,7 @@ export default function TransactionList() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     fetchTransactions();
@@ -102,119 +104,58 @@ export default function TransactionList() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this transaction?')) {
-      return;
-    }
-
-    try {
-      const token = getAuthTokenFromClient();
-      
-      if (!token) {
-        toast({
-          title: 'Authentication Error',
-          description: 'You are not authenticated. Please log in again.',
-          variant: 'destructive',
+    if (window.confirm('Are you sure you want to delete this transaction?')) {
+      setIsDeleting(true);
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        const response = await fetch(`/api/transactions/${id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
         });
-        // Redirect user to login page
-        window.location.href = '/login';
-        return;
-      }
-      
-      const response = await fetch(`/api/transactions/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        // Parse error response to get more details
-        let errorDetails = 'Failed to delete transaction';
-        try {
-          const errorData = await response.json();
-          errorDetails = errorData.details || errorData.error || errorDetails;
-          console.error('Transaction deletion error:', errorData);
-          
-          // Handle token-related errors specifically
-          if (response.status === 401) {
-            if (errorData.code === 'auth/argument-error' && errorData.details?.includes('no "kid" claim')) {
-              // "kid" claim error - try refreshing the page
-              toast({
-                title: 'Authentication Error',
-                description: 'Token validation failed. Please refresh the page and try again.',
-                variant: 'destructive',
-              });
-              
-              // Auto-refresh after short delay
-              setTimeout(() => {
-                window.location.reload();
-              }, 2000);
-              
-              return;
-            } else {
-              // Other authentication errors
-              toast({
-                title: 'Authentication Error',
-                description: errorData.error || 'Your session has expired. Please log in again.',
-                variant: 'destructive',
-              });
-              
-              // Clear token from client-side
-              removeAuthTokenFromClient();
-              
-              // Redirect user to login page
-              setTimeout(() => {
-                window.location.href = '/login';
-              }, 1000);
-              
-              return;
-            }
-          } else if (
-            errorData.code && (
-              errorData.code === 'auth/id-token-expired' ||
-              errorData.code === 'auth/argument-error' ||
-              errorData.code.includes('auth/')
-            )
-          ) {
+        
+        const data = await response.json();
+        
+        // Handle different response scenarios
+        if (!response.ok) {
+          // Check for session expiration
+          if (data.code === 'auth/session-expired' || data.shouldRefresh) {
             toast({
-              title: 'Authentication Error',
-              description: 'Your session has expired. Please log in again.',
-              variant: 'destructive',
+              title: "Session expired",
+              description: "We're refreshing the page, please try again afterwards.",
+              variant: "destructive",
             });
             
-            // Clear token from client-side
-            removeAuthTokenFromClient();
-            
-            // Redirect user to login page
+            // Wait a moment before refreshing
             setTimeout(() => {
-              window.location.href = '/login';
-            }, 1000);
-            
+              window.location.reload();
+            }, 2000);
             return;
           }
-        } catch (e) {
-          console.error('Failed to parse error response:', e);
+          
+          // Handle other errors
+          throw new Error(data.error || 'An error occurred while deleting the transaction');
         }
         
-        throw new Error(errorDetails);
+        // Success case
+        toast({
+          title: "Transaction deleted",
+          description: "Transaction was successfully deleted",
+        });
+        
+        // Refresh the list
+        fetchTransactions();
+      } catch (error: any) {
+        console.error('Transaction deletion error:', error);
+        toast({
+          title: "Error",
+          description: error.message || "An error occurred while deleting the transaction",
+          variant: "destructive",
+        });
+      } finally {
+        setIsDeleting(false);
       }
-
-      setTransactions((prevTransactions) => 
-        prevTransactions.filter((transaction) => transaction.id !== id)
-      );
-
-      toast({
-        title: 'Success',
-        description: 'Transaction successfully deleted.',
-      });
-    } catch (error: any) {
-      console.error('Transaction deletion error:', error);
-      toast({
-        title: 'Error',
-        description: error.message || 'An error occurred while deleting the transaction.',
-        variant: 'destructive',
-      });
     }
   };
 
