@@ -48,7 +48,7 @@ export interface Transaction {
   updatedAt?: string;
 }
 
-export const TransactionList = () => {
+const TransactionList = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
@@ -315,4 +315,6 @@ export const TransactionList = () => {
       </Dialog>
     </div>
   );
-}; 
+};
+
+export default TransactionList; 
