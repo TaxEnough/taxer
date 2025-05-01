@@ -216,69 +216,46 @@ export async function DELETE(
     
     console.log(`Attempting to delete transaction: ${transactionId}`);
     
-    // Try to find the user ID from cookies or headers
-    let userId = null;
-    
-    // Look for auth-token cookie
-    const authCookie = request.cookies.get('auth-token')?.value;
-    if (authCookie) {
-      try {
-        const decodedToken = await auth.verifyIdToken(authCookie);
-        userId = decodedToken.uid;
-        console.log(`User authenticated via cookie: ${userId}`);
-      } catch (error) {
-        console.error('Cookie token verification failed:', error);
-      }
-    }
-    
-    // If no userId from cookie, try Authorization header
-    if (!userId) {
-      const authHeader = request.headers.get('authorization');
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        const token = authHeader.split('Bearer ')[1];
-        if (token && token.length > 20) {
-          try {
-            const decodedToken = await auth.verifyIdToken(token);
-            userId = decodedToken.uid;
-            console.log(`User authenticated via token: ${userId}`);
-          } catch (error) {
-            console.error('Bearer token verification failed:', error);
-          }
-        }
-      }
-    }
-    
-    // Search in all users' transaction collections if we have a valid user ID
-    if (userId) {
-      try {
-        // Check in the user's transaction collection
+    // Find all users
+    try {
+      // Get all users
+      const usersSnapshot = await db.collection('users').get();
+      
+      // For each user, check if they have the transaction
+      for (const userDoc of usersSnapshot.docs) {
+        const userId = userDoc.id;
+        console.log(`Checking user ${userId} for transaction ${transactionId}`);
+        
+        // Check if this user has the transaction
         const transactionRef = db.collection(`users/${userId}/transactions`).doc(transactionId);
         const transactionDoc = await transactionRef.get();
         
         if (transactionDoc.exists) {
-          // Transaction found, delete it
+          // Found it! Delete the transaction
           await transactionRef.delete();
-          console.log(`Transaction ${transactionId} deleted from user ${userId}`);
+          console.log(`Transaction ${transactionId} successfully deleted from user ${userId}`);
           
           return NextResponse.json({
             message: 'Transaction successfully deleted',
-            id: transactionId
+            id: transactionId,
+            userId: userId
           });
-        } else {
-          console.log(`Transaction ${transactionId} not found for user ${userId}`);
         }
-      } catch (dbError) {
-        console.error('Database error deleting transaction:', dbError);
       }
+      
+      // If we got here, we couldn't find the transaction in any user's collection
+      console.log(`Transaction ${transactionId} not found in any user collection`);
+      return NextResponse.json(
+        { error: 'Transaction not found in any user collection' },
+        { status: 404 }
+      );
+    } catch (dbError) {
+      console.error('Database error:', dbError);
+      return NextResponse.json(
+        { error: 'Database error while searching for transaction' },
+        { status: 500 }
+      );
     }
-    
-    // If we got here, we couldn't find the transaction in the user's collection
-    // Or we couldn't authenticate the user
-    console.log(`Transaction ${transactionId} not found or access denied`);
-    return NextResponse.json(
-      { error: 'Transaction not found' },
-      { status: 404 }
-    );
   } catch (error) {
     console.error('Delete API error:', error);
     return NextResponse.json(
