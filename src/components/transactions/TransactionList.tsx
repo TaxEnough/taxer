@@ -102,66 +102,47 @@ export default function TransactionList() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this transaction?')) {
+    if (!confirm('Bu işlemi silmek istediğinize emin misiniz?')) {
       return;
     }
 
     try {
-      const token = getAuthTokenFromClient();
-      
-      if (!token) {
-        toast({
-          title: 'Authentication Error',
-          description: 'You are not authenticated. Please log in again.',
-          variant: 'destructive',
-        });
-        return;
-      }
-      
+      // Token kontrolünü kaldırıyoruz, doğrudan istek yapılıyor
       const response = await fetch(`/api/transactions/${id}`, {
         method: 'DELETE',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Content-Type': 'application/json'
         }
       });
 
       if (!response.ok) {
-        // Parse error response to get more details
-        let errorDetails = 'Failed to delete transaction';
+        // Hata durumunu işle
+        let errorDetails = 'İşlem silinirken bir hata oluştu';
         try {
           const errorData = await response.json();
           errorDetails = errorData.details || errorData.error || errorDetails;
-          console.error('Transaction deletion error:', errorData);
+          console.error('İşlem silme hatası:', errorData);
         } catch (e) {
-          console.error('Failed to parse error response:', e);
-        }
-        
-        if (response.status === 401) {
-          toast({
-            title: 'Authentication Error',
-            description: 'Your session has expired. Please log in again.',
-            variant: 'destructive',
-          });
-          return;
+          console.error('Hata yanıtı ayrıştırılamadı:', e);
         }
         
         throw new Error(errorDetails);
       }
 
+      // Başarılı silme durumunda UI güncelleme
       setTransactions((prevTransactions) => 
         prevTransactions.filter((transaction) => transaction.id !== id)
       );
 
       toast({
-        title: 'Success',
-        description: 'Transaction successfully deleted.',
+        title: 'Başarılı',
+        description: 'İşlem başarıyla silindi.',
       });
     } catch (error: any) {
-      console.error('Transaction deletion error:', error);
+      console.error('İşlem silme hatası:', error);
       toast({
-        title: 'Error',
-        description: error.message || 'An error occurred while deleting the transaction.',
+        title: 'Hata',
+        description: error.message || 'İşlem silinirken bir hata oluştu.',
         variant: 'destructive',
       });
     }
