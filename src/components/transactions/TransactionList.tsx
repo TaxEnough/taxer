@@ -1,364 +1,234 @@
 'use client';
 
-import React, { useEffect, useState } from "react";
+import { useState, useEffect } from 'react';
 import {
   Table,
+  TableBody,
   TableCaption,
+  TableCell,
+  TableHead,
   TableHeader,
   TableRow,
-  TableHead,
-  TableBody,
-  TableCell,
-} from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/ui/use-toast";
-import Link from "next/link";
-import { formatCurrency, formatDate } from "@/lib/utils";
-import { Edit, Trash2 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { useAuth } from "@/context/AuthContext";
-import { getAuthTokenFromClient } from "@/lib/auth-client";
+} from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Edit, Trash2 } from 'lucide-react';
+import { formatDate, formatCurrency } from '@/lib/utils';
+import Link from 'next/link';
+import { useToast } from '@/components/ui/use-toast';
+import { getAuthTokenFromClient } from '@/lib/auth-client';
 
-// Transaction type interface
-export interface Transaction {
-  id?: string;
+// Transaction data type from API
+type ApiTransaction = {
+  id: string;
+  stock: string;
+  buyDate: string;
+  buyPrice: number;
+  sellDate: string;
+  sellPrice: number;
+  quantity: number;
+  profit: number;
+  type: string;
+  tradingFees: number;
+  note: string;
+  createdAt: any;
+  updatedAt: any;
+};
+
+// Transaction type used in component
+type Transaction = {
+  id: string;
   ticker: string;
-  type: 'buy' | 'sell' | 'dividend';
+  date: string;
+  transactionType: string;
   shares: number;
   price: number;
-  amount: number;
-  date: string;
-  fee?: number;
+  fees: number;
   notes?: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
+  profit?: number;
+};
 
-const TransactionList = () => {
+export default function TransactionList() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [transactionToDelete, setTransactionToDelete] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
-  
-  // Auth context kullanımı
-  const { user, loading: authLoading } = useAuth();
-  
-  // Sayfa yüklendiğinde verileri getir
+
   useEffect(() => {
-    if (!authLoading) {
-      if (user) {
-        console.log("Kullanıcı oturumu açık, işlemler getiriliyor");
-        fetchTransactions();
-      } else {
-        // Yedek kimlik doğrulama kontrolü
-        const token = getAuthTokenFromClient();
-        const isLoggedInFlag = localStorage.getItem('isLoggedIn') === 'true';
-        
-        if (token || isLoggedInFlag) {
-          console.log("AuthContext kullanıcı yok ama token/flag var, işlemler getiriliyor");
-          fetchTransactions();
-        } else {
-          console.log("Oturum açılmamış durumu");
-          setLoading(false);
-        }
-      }
-    }
-  }, [user, authLoading]);
+    fetchTransactions();
+  }, []);
 
   const fetchTransactions = async () => {
-    setLoading(true);
     try {
-      // Kimlik bilgilerini ekleyerek istek yap
+      setLoading(true);
       const token = getAuthTokenFromClient();
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json'
-      };
-      
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
       
       const response = await fetch('/api/transactions', {
-        headers,
-        credentials: 'include' // Çerezleri de gönder
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
       });
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error('Failed to load transactions');
       }
       
-      const data = await response.json();
+      // Get API response
+      const apiData: ApiTransaction[] = await response.json();
       
-      // Sort by date (newest first)
-      const sortedData = data.sort((a: Transaction, b: Transaction) => 
-        new Date(b.date).getTime() - new Date(a.date).getTime()
-      );
+      // Transform API data to component format
+      const formattedTransactions: Transaction[] = apiData.map(item => ({
+        id: item.id,
+        ticker: item.stock || '',
+        date: item.sellDate || item.buyDate || '',
+        transactionType: 'BUY', // Buy type as default
+        shares: item.quantity || 0,
+        price: item.sellPrice || item.buyPrice || 0,
+        fees: item.tradingFees || 0,
+        notes: item.note || '',
+        profit: item.profit || 0
+      }));
       
-      setTransactions(sortedData);
+      setTransactions(formattedTransactions);
     } catch (error) {
-      console.error("Error fetching transactions:", error);
+      console.error('Transaction loading error:', error);
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to load transactions",
-        variant: "destructive",
+        title: 'Error',
+        description: 'An error occurred while loading transactions.',
+        variant: 'destructive',
       });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleEdit = (transaction: Transaction) => {
-    setSelectedTransaction(transaction);
-    setIsDialogOpen(true);
-  };
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this transaction?')) {
+      return;
+    }
 
-  const handleDeleteClick = (transactionId: string) => {
-    setTransactionToDelete(transactionId);
-    setDeleteConfirmOpen(true);
-  };
-
-  const handleDelete = async () => {
-    if (!transactionToDelete) return;
-    
-    setIsDeleting(true);
     try {
-      // Kimlik bilgilerini ekleyerek istek yap
       const token = getAuthTokenFromClient();
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json'
-      };
       
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+      if (!token) {
+        toast({
+          title: 'Authentication Error',
+          description: 'You are not authenticated. Please log in again.',
+          variant: 'destructive',
+        });
+        return;
       }
       
-      // Ek yedek header'lar
-      const userInfoStr = localStorage.getItem('user-info');
-      if (userInfoStr) {
-        headers['x-user-info'] = userInfoStr;
-      }
-      
-      const isLoggedIn = localStorage.getItem('isLoggedIn');
-      if (isLoggedIn) {
-        headers['x-logged-in'] = isLoggedIn;
-      }
-      
-      const userId = user?.id;
-      if (userId) {
-        headers['x-user-id'] = userId;
-      }
-      
-      const response = await fetch(`/api/transactions/${transactionToDelete}`, {
+      const response = await fetch(`/api/transactions/${id}`, {
         method: 'DELETE',
-        headers,
-        credentials: 'include', // Çerezleri de gönder
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
       });
-      
+
       if (!response.ok) {
+        // Parse error response to get more details
+        let errorDetails = 'Failed to delete transaction';
+        try {
+          const errorData = await response.json();
+          errorDetails = errorData.details || errorData.error || errorDetails;
+          console.error('Transaction deletion error:', errorData);
+        } catch (e) {
+          console.error('Failed to parse error response:', e);
+        }
+        
         if (response.status === 401) {
           toast({
-            title: "Authentication Error",
-            description: "Please log in again to continue",
-            variant: "destructive",
+            title: 'Authentication Error',
+            description: 'Your session has expired. Please log in again.',
+            variant: 'destructive',
           });
           return;
         }
         
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to delete transaction");
+        throw new Error(errorDetails);
       }
-      
-      // Successfully deleted
-      setTransactions(
-        transactions.filter((t) => t.id !== transactionToDelete)
+
+      setTransactions((prevTransactions) => 
+        prevTransactions.filter((transaction) => transaction.id !== id)
       );
-      
+
       toast({
-        title: "Success",
-        description: "Transaction deleted successfully",
+        title: 'Success',
+        description: 'Transaction successfully deleted.',
       });
-    } catch (error) {
-      console.error("Failed to delete transaction:", error);
+    } catch (error: any) {
+      console.error('Transaction deletion error:', error);
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to delete transaction",
-        variant: "destructive",
+        title: 'Error',
+        description: error.message || 'An error occurred while deleting the transaction.',
+        variant: 'destructive',
       });
-    } finally {
-      setIsDeleting(false);
-      setDeleteConfirmOpen(false);
-      setTransactionToDelete(null);
     }
   };
 
-  const handleTransactionSaved = () => {
-    fetchTransactions();
-    setIsDialogOpen(false);
-    setSelectedTransaction(null);
-  };
-
-  if (loading || authLoading) {
+  if (loading) {
     return (
-      <div className="flex justify-center my-8">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
-
-  // Kimlik doğrulama kontrolü - context veya yedek yöntemler ile kontrol
-  const isUserAuthenticated = !!user || localStorage.getItem('isLoggedIn') === 'true' || !!getAuthTokenFromClient();
-
-  if (!isUserAuthenticated) {
-    return (
-      <div className="text-center my-8">
-        <p className="mb-4">Please sign in to view your transactions.</p>
-        <Link href="/login">
-          <Button>Sign In</Button>
-        </Link>
+      <div className="flex justify-center items-center py-10">
+        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary-500"></div>
       </div>
     );
   }
 
   if (transactions.length === 0) {
-    return (
-      <div className="text-center my-8">
-        <p className="mb-4">No transactions found. Add your first transaction to get started.</p>
-        <Button onClick={() => setIsDialogOpen(true)}>Add Transaction</Button>
-      </div>
-    );
+    return <div className="text-center py-8">No transactions found.</div>;
   }
 
   return (
-    <div>
-      <div className="mb-4 flex justify-between items-center">
-        <h2 className="text-xl font-bold">Your Transactions</h2>
-        <Button onClick={() => setIsDialogOpen(true)}>Add Transaction</Button>
-      </div>
-
-      <div className="overflow-x-auto">
-        <Table>
-          <TableCaption>
-            Your transaction history
-          </TableCaption>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Ticker</TableHead>
-              <TableHead className="text-right">Shares</TableHead>
-              <TableHead className="text-right">Price</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-              <TableHead className="text-right">Fee</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {transactions.map((transaction) => (
-              <TableRow key={transaction.id}>
-                <TableCell>{formatDate(transaction.date)}</TableCell>
-                <TableCell className={
-                  transaction.type === 'buy' 
-                    ? 'text-green-600 font-medium' 
-                    : transaction.type === 'sell' 
-                      ? 'text-red-600 font-medium'
-                      : 'text-blue-600 font-medium'
-                }>
-                  {transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}
-                </TableCell>
-                <TableCell className="font-medium">{transaction.ticker}</TableCell>
-                <TableCell className="text-right">{transaction.shares}</TableCell>
-                <TableCell className="text-right">{formatCurrency(transaction.price)}</TableCell>
-                <TableCell className="text-right font-medium">{formatCurrency(transaction.amount)}</TableCell>
-                <TableCell className="text-right">{transaction.fee ? formatCurrency(transaction.fee) : '-'}</TableCell>
-                <TableCell>
-                  <div className="flex space-x-2">
-                    <Button 
-                      variant="outline" 
-                      size="icon"
-                      onClick={() => handleEdit(transaction)}
-                    >
+    <div className="rounded-md border">
+      <Table>
+        <TableCaption>Transaction list</TableCaption>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Date</TableHead>
+            <TableHead>Symbol</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead className="text-right">Quantity</TableHead>
+            <TableHead className="text-right">Price</TableHead>
+            <TableHead className="text-right">Total</TableHead>
+            <TableHead className="text-right">Fees</TableHead>
+            <TableHead className="text-center">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {transactions.map((transaction) => (
+            <TableRow key={transaction.id}>
+              <TableCell>{formatDate(transaction.date ? new Date(transaction.date) : null)}</TableCell>
+              <TableCell className="font-medium">{transaction.ticker}</TableCell>
+              <TableCell>
+                <span className="px-2 py-1 text-xs font-medium rounded-md bg-green-50 text-green-600">
+                  Buy
+                </span>
+              </TableCell>
+              <TableCell className="text-right">{transaction.shares}</TableCell>
+              <TableCell className="text-right">{formatCurrency(transaction.price)}</TableCell>
+              <TableCell className="text-right">{formatCurrency(transaction.price * transaction.shares)}</TableCell>
+              <TableCell className="text-right">{formatCurrency(transaction.fees)}</TableCell>
+              <TableCell>
+                <div className="flex justify-center space-x-2">
+                  <Button variant="ghost" size="icon" asChild>
+                    <Link href={`/transactions/edit/${transaction.id}`}>
                       <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="icon"
-                      onClick={() => handleDeleteClick(transaction.id!)}
-                    >
-                      <Trash2 className="h-4 w-4 text-red-500" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this transaction? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleDelete} 
-              disabled={isDeleting}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {isDeleting ? 
-                <div className="animate-spin h-4 w-4 border-2 border-white rounded-full border-t-transparent"></div>
-                : 'Delete'
-              }
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Basit TransactionDialog uygulaması */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{selectedTransaction ? 'Edit Transaction' : 'Add Transaction'}</DialogTitle>
-          </DialogHeader>
-          
-          <p className="py-4">This is a simplified version for deployment. Please implement the full transaction form here.</p>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleTransactionSaved}>
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                    </Link>
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    onClick={() => handleDelete(transaction.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
-};
-
-export default TransactionList; 
+} 
