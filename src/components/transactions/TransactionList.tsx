@@ -107,7 +107,31 @@ export default function TransactionList() {
     if (window.confirm('Are you sure you want to delete this transaction?')) {
       setIsDeleting(true);
       try {
-        const token = await auth.currentUser?.getIdToken();
+        // Kullanıcının oturum açtığından emin olalım
+        if (!auth.currentUser) {
+          toast({
+            title: "Authentication required",
+            description: "Please log in to delete transactions",
+            variant: "destructive",
+          });
+          
+          // Kullanıcıyı giriş sayfasına yönlendir
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 1500);
+          return;
+        }
+        
+        // Token'ı tazeleyelim ve doğrulayalım
+        const token = await auth.currentUser.getIdToken(true);
+        
+        // Token kontrolü
+        if (!token) {
+          throw new Error('Failed to get authentication token');
+        }
+        
+        console.log(`Token length: ${token.length}, First 10: ${token.substring(0, 10)}..., Last 10: ${token.substring(token.length - 10)}`);
+        
         const response = await fetch(`/api/transactions/${id}`, {
           method: 'DELETE',
           headers: {
