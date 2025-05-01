@@ -138,7 +138,7 @@ export default function TransactionList() {
       console.error('Delete error:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to delete transaction",
+        description: error instanceof Error ? error.message : "Failed to delete transaction",
         variant: "destructive",
       });
     } finally {
