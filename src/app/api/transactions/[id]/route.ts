@@ -215,64 +215,38 @@ export async function DELETE(
     const transactionId = params.id;
     console.log(`Attempting to delete transaction: ${transactionId}`);
     
-    // Hardcoded solution for this specific transaction
-    if (transactionId === 'dN0j2iiyHOCDpkFWBLMo') {
-      // This is the specific transaction you're trying to delete
-      // Let's delete it from the specific user we know it belongs to (from the screenshot)
+    // Get all users and search for this transaction
+    const usersSnapshot = await db.collection('users').get();
+    
+    for (const userDoc of usersSnapshot.docs) {
+      const userId = userDoc.id;
+      
       try {
-        const userId = 'X8VgGDBJk1eSCr2L3VTvcoqiqqc2'; // User ID from your screenshot
-        
+        // Check if this user has the transaction
         const transactionRef = db.collection(`users/${userId}/transactions`).doc(transactionId);
-        await transactionRef.delete();
+        const transactionDoc = await transactionRef.get();
         
-        console.log(`Transaction ${transactionId} successfully deleted for user ${userId}`);
-        return NextResponse.json({
-          message: 'Transaction successfully deleted',
-          id: transactionId
-        });
-      } catch (specificError) {
-        console.error('Error deleting specific transaction:', specificError);
+        if (transactionDoc.exists) {
+          // Found the transaction, delete it
+          await transactionRef.delete();
+          console.log(`Transaction ${transactionId} successfully deleted from user ${userId}`);
+          
+          return NextResponse.json({
+            message: 'Transaction successfully deleted',
+            id: transactionId
+          });
+        }
+      } catch (error) {
+        console.error(`Error checking user ${userId}:`, error);
+        // Continue to next user even if there's an error with this one
       }
     }
     
-    // Try with all known users - last resort solution
-    try {
-      // Known active users in your system 
-      const knownUsers = [
-        'X8VgGDBJk1eSCr2L3VTvcoqiqqc2', // From your screenshot
-      ];
-      
-      for (const userId of knownUsers) {
-        try {
-          console.log(`Trying to delete transaction for user ${userId}`);
-          const transactionRef = db.collection(`users/${userId}/transactions`).doc(transactionId);
-          const doc = await transactionRef.get();
-          
-          if (doc.exists) {
-            await transactionRef.delete();
-            console.log(`Transaction ${transactionId} successfully deleted for user ${userId}`);
-            return NextResponse.json({
-              message: 'Transaction successfully deleted',
-              id: transactionId
-            });
-          }
-        } catch (userError) {
-          console.error(`Error checking user ${userId}:`, userError);
-        }
-      }
-      
-      // If we get here, we couldn't find the transaction for any known user
-      return NextResponse.json(
-        { error: 'Transaction not found for any known user' },
-        { status: 404 }
-      );
-    } catch (fallbackError) {
-      console.error('Error in fallback deletion:', fallbackError);
-      return NextResponse.json(
-        { error: 'Could not delete transaction' },
-        { status: 500 }
-      );
-    }
+    // If we get here, transaction wasn't found for any user
+    return NextResponse.json(
+      { error: 'Transaction not found in any user collection' },
+      { status: 404 }
+    );
   } catch (error) {
     console.error('Delete API error:', error);
     return NextResponse.json(
