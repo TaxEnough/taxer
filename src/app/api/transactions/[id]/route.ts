@@ -223,9 +223,9 @@ export async function DELETE(
     
     const idToken = authHeader.split('Bearer ')[1];
     
-    // Check if token is valid
+    // Check if token is valid format
     if (!idToken || idToken === 'undefined' || idToken.length < 20) {
-      console.error(`Invalid token received: ${idToken}`);
+      console.error(`Invalid token received: ${typeof idToken === 'string' ? idToken.substring(0, 10) + '...' : 'not a string'}`);
       return NextResponse.json(
         { 
           error: 'Invalid authentication token', 
@@ -238,42 +238,70 @@ export async function DELETE(
     
     // Log token metadata for debugging
     const tokenLength = idToken.length;
-    console.log(`Token length: ${tokenLength}, First 10: ${idToken.substring(0, 10)}..., Last 10: ${idToken.substring(tokenLength - 10)}`);
+    const firstChars = idToken.substring(0, 10);
+    const lastChars = idToken.substring(tokenLength - 10);
+    console.log(`Token debug: length=${tokenLength}, first=${firstChars}, last=${lastChars}`);
     
-    // Try to verify the token with Firebase
+    // Always use try/catch for token verification
+    let userId;
     try {
-      const decodedToken = await auth.verifyIdToken(idToken);
-      const userId = decodedToken.uid;
-      console.log(`User authenticated: ${userId}`);
+      // Verify the token with Firebase Admin SDK
+      const decodedToken = await auth.verifyIdToken(idToken, false);
+      userId = decodedToken.uid;
+      console.log(`Successfully verified token for user: ${userId}`);
       
-      // Check transaction access
-      const transactionId = params.id;
-      const hasAccess = await checkTransactionAccess(transactionId, userId);
+      if (!userId) {
+        throw new Error('Token verification succeeded but no user ID was found');
+      }
+    } catch (tokenError: any) {
+      // Specific error handling based on error type
+      console.error('Token verification failed:', tokenError);
       
-      if (!hasAccess) {
-        return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
+      const errorMessage = tokenError.message || 'Unknown token error';
+      const errorCode = tokenError.code || 'auth/token-verification-failed';
+      
+      // More specific error messages based on error types
+      let errorDetails = 'Your session has expired. Please log in again.';
+      
+      if (errorMessage.includes('Firebase ID token has expired')) {
+        errorDetails = 'Your login session has expired. Please log in again to continue.';
+      } else if (errorMessage.includes('Decoding Firebase ID token failed')) {
+        errorDetails = 'Invalid authentication token. Please log in again.';
       }
       
-      // Delete the transaction
-      await db.collection('transactions').doc(transactionId).delete();
-      
-      return NextResponse.json({
-        message: 'Transaction successfully deleted'
-      });
-    } catch (tokenError: any) {
-      console.error('Firebase token verification failed:', tokenError);
-      
-      // Send detailed error for debugging
       return NextResponse.json(
         { 
           error: 'Authentication failed', 
-          details: tokenError.message || 'Token verification failed',
-          code: tokenError.code || 'auth/token-verification-failed',
-          shouldRefresh: true
+          details: errorDetails,
+          code: errorCode,
+          message: errorMessage
         },
         { status: 401 }
       );
     }
+    
+    // Handle transaction deletion with the verified userId
+    const transactionId = params.id;
+    
+    // Check transaction access
+    const hasAccess = await checkTransactionAccess(transactionId, userId);
+    if (!hasAccess) {
+      return NextResponse.json(
+        { 
+          error: 'Transaction not found',
+          details: 'You do not have access to this transaction or it does not exist'
+        }, 
+        { status: 404 }
+      );
+    }
+    
+    // Delete the transaction
+    await db.collection('transactions').doc(transactionId).delete();
+    
+    return NextResponse.json({
+      message: 'Transaction successfully deleted',
+      transactionId
+    });
   } catch (error: any) {
     console.error('Error deleting transaction:', error);
     return NextResponse.json(

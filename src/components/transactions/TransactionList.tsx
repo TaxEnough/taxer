@@ -107,68 +107,72 @@ export default function TransactionList() {
     if (window.confirm('Are you sure you want to delete this transaction?')) {
       setIsDeleting(true);
       try {
-        // Kullanıcının oturum açtığından emin olalım
+        // Kullanıcı oturum açtı mı kontrol et
         if (!auth.currentUser) {
           toast({
             title: "Authentication required",
-            description: "Please log in to delete transactions",
+            description: "You need to be logged in to delete transactions",
             variant: "destructive",
           });
-          
-          // Kullanıcıyı giriş sayfasına yönlendir
-          setTimeout(() => {
-            window.location.href = '/login';
-          }, 1500);
+          setTimeout(() => window.location.href = '/login', 1500);
           return;
         }
+
+        console.log("Current user:", auth.currentUser.uid);
         
-        // Token'ı tazeleyelim ve doğrulayalım
-        const token = await auth.currentUser.getIdToken(true);
+        // Yeni bir token al, zorla yenileme
+        await auth.currentUser.getIdToken(true);
+        const freshToken = await auth.currentUser.getIdToken(false);
         
-        // Token kontrolü
-        if (!token) {
-          throw new Error('Failed to get authentication token');
+        if (!freshToken) {
+          throw new Error('Could not get authentication token');
         }
         
-        console.log(`Token length: ${token.length}, First 10: ${token.substring(0, 10)}..., Last 10: ${token.substring(token.length - 10)}`);
+        console.log("Got fresh token, length:", freshToken.length);
         
         const response = await fetch(`/api/transactions/${id}`, {
           method: 'DELETE',
           headers: {
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${freshToken}`
           }
         });
         
-        const data = await response.json();
+        // Parse the response even if not OK
+        let responseData;
+        try {
+          responseData = await response.json();
+        } catch (e) {
+          responseData = { error: 'Could not parse server response' };
+        }
         
-        // Handle different response scenarios
         if (!response.ok) {
-          // Check for session expiration
-          if (data.code === 'auth/session-expired' || data.shouldRefresh) {
+          console.error("Delete failed:", response.status, responseData);
+          
+          // Handle authentication errors
+          if (response.status === 401) {
             toast({
-              title: "Session expired",
-              description: "We're refreshing the page, please try again afterwards.",
+              title: "Authentication error",
+              description: responseData.details || "Your session has expired, please log in again",
               variant: "destructive",
             });
             
-            // Wait a moment before refreshing
-            setTimeout(() => {
-              window.location.reload();
-            }, 2000);
+            // Clear token from localStorage to ensure fresh login
+            localStorage.removeItem('auth-token');
+            localStorage.setItem('isLoggedIn', 'false');
+            
+            setTimeout(() => window.location.href = '/login', 2000);
             return;
           }
           
-          // Handle other errors
-          throw new Error(data.error || 'An error occurred while deleting the transaction');
+          throw new Error(responseData.error || `Error deleting transaction (${response.status})`);
         }
         
-        // Success case
         toast({
-          title: "Transaction deleted",
-          description: "Transaction was successfully deleted",
+          title: "Success",
+          description: "Transaction successfully deleted",
         });
         
-        // Refresh the list
+        // Update the list after deletion
         fetchTransactions();
       } catch (error: any) {
         console.error('Transaction deletion error:', error);
