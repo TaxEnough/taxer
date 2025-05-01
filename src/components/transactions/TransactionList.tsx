@@ -15,8 +15,7 @@ import { Edit, Trash2 } from 'lucide-react';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import Link from 'next/link';
 import { useToast } from '@/components/ui/use-toast';
-import { getAuthTokenFromClient, removeAuthTokenFromClient } from '@/lib/auth-client';
-import { auth } from '@/lib/firebase';
+import { getAuthTokenFromClient } from '@/lib/auth-client';
 
 // Transaction data type from API
 type ApiTransaction = {
@@ -104,41 +103,57 @@ export default function TransactionList() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this transaction?')) {
+    if (!window.confirm('Bu işlemi silmek istediğinizden emin misiniz?')) {
       return;
     }
     
     setIsDeleting(true);
     
     try {
-      // Simple fetch with cookies - let the browser handle auth
+      console.log('İşlem siliniyor:', id);
+      
+      // Fetch API ile silme işlemi
       const response = await fetch(`/api/transactions/${id}`, {
         method: 'DELETE',
+        credentials: 'include', // Cookie'leri dahil et
         headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include' // Important: include cookies
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getAuthTokenFromClient() || ''}`
+        }
       });
       
-      // Handle response
+      // Yanıtı kontrol et
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Failed to delete transaction' }));
-        throw new Error(error.error || `Failed to delete (status ${response.status})`);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Silme hatası:', response.status, errorData);
+        
+        if (response.status === 401) {
+          toast({
+            title: "Kimlik Doğrulama Hatası",
+            description: "Oturum süreniz dolmuş olabilir. Lütfen tekrar giriş yapın.",
+            variant: "destructive",
+          });
+          return;
+        }
+        
+        throw new Error(errorData.error || `Silme hatası (${response.status})`);
       }
       
-      // Update UI directly
-      setTransactions(transactions.filter(t => t.id !== id));
+      // UI'yi güncelle
+      setTransactions(prevTransactions => 
+        prevTransactions.filter(item => item.id !== id)
+      );
       
-      // Show success message
+      // Başarı mesajı göster
       toast({
-        title: "Success",
-        description: "Transaction successfully deleted",
+        title: "Başarılı",
+        description: "İşlem başarıyla silindi",
       });
     } catch (error) {
-      console.error('Delete error:', error);
+      console.error('Silme işlemi hatası:', error);
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to delete transaction",
+        title: "Hata",
+        description: error instanceof Error ? error.message : "İşlem silinirken bir hata oluştu",
         variant: "destructive",
       });
     } finally {
@@ -199,6 +214,7 @@ export default function TransactionList() {
                     variant="ghost" 
                     size="icon"
                     onClick={() => handleDelete(transaction.id)}
+                    disabled={isDeleting}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>

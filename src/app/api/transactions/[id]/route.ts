@@ -211,88 +211,53 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    // Try to get user ID through session cookie first
-    let userId: string | null = null;
+    let userId = null;
     
-    // Extract token from Authorization header as fallback
-    const authHeader = request.headers.get('authorization');
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const idToken = authHeader.split('Bearer ')[1];
-      
-      if (idToken && idToken !== 'undefined' && idToken.length > 20) {
-        try {
-          const decodedToken = await auth.verifyIdToken(idToken);
-          userId = decodedToken.uid;
-          console.log(`User authenticated via token: ${userId}`);
-        } catch (error) {
-          const tokenError = error as Error;
-          console.error('Token verification failed:', tokenError.message);
-          // Continue to try session cookie
-        }
-      }
-    }
+    // Öncelikle auth-token cookie'sini kontrol et
+    const authCookie = request.cookies.get('auth-token')?.value;
     
-    // If no user ID from token, try to get through session cookie
-    if (!userId) {
+    if (authCookie) {
       try {
-        // Get session cookie
-        const sessionCookie = request.cookies.get('session')?.value;
-        
-        if (sessionCookie) {
-          // Verify session cookie
-          const decodedClaims = await auth.verifySessionCookie(sessionCookie);
-          userId = decodedClaims.uid;
-          console.log(`User authenticated via session cookie: ${userId}`);
-        }
+        // Auth cookie'yi doğrula
+        const decodedToken = await auth.verifyIdToken(authCookie);
+        userId = decodedToken.uid;
+        console.log(`Silme işlemi: Cookie ile kimlik doğrulandı. Kullanıcı ID: ${userId}`);
       } catch (error) {
-        const cookieError = error as Error;
-        console.error('Session cookie verification failed:', cookieError.message);
+        console.error('Cookie token doğrulama hatası:', error);
       }
     }
     
-    // If still no userId, check Firebase session ID in cookies
+    // Cookie ile kimlik doğrulama başarısız olduysa, Authorization header'ı kontrol et
     if (!userId) {
-      try {
-        const firebaseToken = request.cookies.get('firebase-session-token')?.value;
-        if (firebaseToken) {
-          const decodedToken = await auth.verifyIdToken(firebaseToken);
-          userId = decodedToken.uid;
-          console.log(`User authenticated via firebase cookie: ${userId}`);
-        }
-      } catch (error) {
-        const fbError = error as Error;
-        console.error('Firebase cookie verification failed:', fbError.message);
-      }
-    }
-    
-    // Last attempt - try to get auth token from custom header
-    if (!userId) {
-      const customHeader = request.headers.get('x-auth-token');
-      if (customHeader) {
-        try {
-          const decodedToken = await auth.verifyIdToken(customHeader);
-          userId = decodedToken.uid;
-          console.log(`User authenticated via custom header: ${userId}`);
-        } catch (error) {
-          const headerError = error as Error;
-          console.error('Custom header verification failed:', headerError.message);
+      const authHeader = request.headers.get('authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.split('Bearer ')[1];
+        if (token && token.length > 20) {
+          try {
+            const decodedToken = await auth.verifyIdToken(token);
+            userId = decodedToken.uid;
+            console.log(`Silme işlemi: Bearer token ile kimlik doğrulandı. Kullanıcı ID: ${userId}`);
+          } catch (error) {
+            console.error('Bearer token doğrulama hatası:', error);
+          }
         }
       }
     }
     
-    // If still no userId, authentication failed
+    // Hala userId yoksa, kimlik doğrulama başarısız
     if (!userId) {
+      console.error('Silme işlemi için kimlik doğrulama başarısız');
       return NextResponse.json(
         { error: 'Authentication required. Please log in.' },
         { status: 401 }
       );
     }
     
-    // Get transaction ID from params
+    // İşlem ID'sini al
     const transactionId = params.id;
-    console.log(`Attempting to delete transaction ${transactionId} for user ${userId}`);
+    console.log(`İşlem siliniyor: ${transactionId}, Kullanıcı: ${userId}`);
     
-    // Simply try to delete without ownership verification for now
+    // İşlemi sil
     try {
       await db.collection('transactions').doc(transactionId).delete();
       
@@ -301,17 +266,14 @@ export async function DELETE(
         id: transactionId
       });
     } catch (error) {
-      const deleteError = error as Error;
-      console.error('Error deleting transaction:', deleteError.message);
+      console.error('İşlem silme hatası:', error);
       return NextResponse.json(
         { error: 'Failed to delete transaction' },
         { status: 500 }
       );
     }
   } catch (error) {
-    const serverError = error as Error;
-    console.error('Delete transaction error:', serverError.message);
-    
+    console.error('Silme API hatası:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
