@@ -213,46 +213,83 @@ export async function DELETE(
   try {
     // Get transaction ID from params
     const transactionId = params.id;
-    
     console.log(`Attempting to delete transaction: ${transactionId}`);
+
+    // Try to get user ID from request - without token verification
+    let userId = null;
     
-    // Find all users
-    try {
-      // Get all users
-      const usersSnapshot = await db.collection('users').get();
-      
-      // For each user, check if they have the transaction
-      for (const userDoc of usersSnapshot.docs) {
-        const userId = userDoc.id;
-        console.log(`Checking user ${userId} for transaction ${transactionId}`);
-        
-        // Check if this user has the transaction
-        const transactionRef = db.collection(`users/${userId}/transactions`).doc(transactionId);
-        const transactionDoc = await transactionRef.get();
-        
-        if (transactionDoc.exists) {
-          // Found it! Delete the transaction
-          await transactionRef.delete();
-          console.log(`Transaction ${transactionId} successfully deleted from user ${userId}`);
-          
-          return NextResponse.json({
-            message: 'Transaction successfully deleted',
-            id: transactionId,
-            userId: userId
-          });
+    // First try to get userId from cookies (but don't verify the token)
+    const authCookie = request.cookies.get('auth-token')?.value;
+    if (authCookie) {
+      try {
+        // Parse the JWT token without verifying (just to extract the userId)
+        const tokenParts = authCookie.split('.');
+        if (tokenParts.length === 3) {
+          const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
+          if (payload && payload.uid) {
+            userId = payload.uid;
+            console.log(`Extracted user ID from cookie: ${userId}`);
+          }
+        }
+      } catch (error) {
+        console.error('Error extracting user ID from cookie:', error);
+      }
+    }
+    
+    // If still no userId, try to get it from Authorization header
+    if (!userId) {
+      const authHeader = request.headers.get('authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        try {
+          const token = authHeader.split('Bearer ')[1];
+          const tokenParts = token.split('.');
+          if (tokenParts.length === 3) {
+            const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
+            if (payload && payload.uid) {
+              userId = payload.uid;
+              console.log(`Extracted user ID from header: ${userId}`);
+            }
+          }
+        } catch (error) {
+          console.error('Error extracting user ID from header:', error);
         }
       }
-      
-      // If we got here, we couldn't find the transaction in any user's collection
-      console.log(`Transaction ${transactionId} not found in any user collection`);
+    }
+    
+    // If we still don't have a userId, we can't proceed
+    if (!userId) {
+      console.log('Could not identify the user - deletion denied');
       return NextResponse.json(
-        { error: 'Transaction not found in any user collection' },
-        { status: 404 }
+        { error: 'Authentication required. Could not identify user.' },
+        { status: 401 }
       );
+    }
+    
+    // Now check if the user has this transaction
+    try {
+      const transactionRef = db.collection(`users/${userId}/transactions`).doc(transactionId);
+      const transactionDoc = await transactionRef.get();
+      
+      if (!transactionDoc.exists) {
+        console.log(`Transaction ${transactionId} not found for user ${userId}`);
+        return NextResponse.json(
+          { error: 'Transaction not found' },
+          { status: 404 }
+        );
+      }
+      
+      // Transaction found and belongs to this user - delete it
+      await transactionRef.delete();
+      console.log(`Transaction ${transactionId} successfully deleted for user ${userId}`);
+      
+      return NextResponse.json({
+        message: 'Transaction successfully deleted',
+        id: transactionId
+      });
     } catch (dbError) {
       console.error('Database error:', dbError);
       return NextResponse.json(
-        { error: 'Database error while searching for transaction' },
+        { error: 'Database error while deleting transaction' },
         { status: 500 }
       );
     }
