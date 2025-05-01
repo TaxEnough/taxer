@@ -152,6 +152,22 @@ const TransactionList = () => {
         headers['Authorization'] = `Bearer ${token}`;
       }
       
+      // Ek yedek header'lar
+      const userInfoStr = localStorage.getItem('user-info');
+      if (userInfoStr) {
+        headers['x-user-info'] = userInfoStr;
+      }
+      
+      const isLoggedIn = localStorage.getItem('isLoggedIn');
+      if (isLoggedIn) {
+        headers['x-logged-in'] = isLoggedIn;
+      }
+      
+      const userId = user?.id;
+      if (userId) {
+        headers['x-user-id'] = userId;
+      }
+      
       const response = await fetch(`/api/transactions/${transactionToDelete}`, {
         method: 'DELETE',
         headers,

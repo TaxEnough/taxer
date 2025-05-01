@@ -206,99 +206,161 @@ export async function PUT(
   }
 }
 
-// Safe way to get userId without token verification issues
-async function getUserIdSafely(request: NextRequest): Promise<string | null> {
-  // Try from session cookie
+// Enhanced user ID extraction with extensive error logging
+async function extractUserId(request: NextRequest): Promise<{ userId: string | null; source: string | null; error?: string }> {
+  console.log('🔍 Beginning user authentication check');
+  
+  // 1. Try to get from cookies - session cookie
   try {
     const sessionCookie = request.cookies.get('session')?.value;
     if (sessionCookie) {
+      console.log('🍪 Found session cookie, attempting to verify');
       try {
         const decodedClaims = await auth.verifySessionCookie(sessionCookie);
-        return decodedClaims.uid;
+        console.log('✅ Session cookie verification successful');
+        return { userId: decodedClaims.uid, source: 'session-cookie' };
       } catch (e) {
-        console.log('Session cookie verification failed, but continuing with other methods');
+        console.log('❌ Session cookie verification failed:', e instanceof Error ? e.message : 'Unknown error');
       }
+    } else {
+      console.log('❓ No session cookie found');
     }
   } catch (error) {
-    console.error('Error getting user from session cookie:', error);
+    console.error('❌ Error processing session cookie:', error instanceof Error ? error.message : 'Unknown error');
   }
   
-  // Try from auth-token cookie with safe parsing
+  // 2. Try to get from cookies - auth-token cookie
   try {
     const authCookie = request.cookies.get('auth-token')?.value;
     if (authCookie) {
+      console.log('🍪 Found auth-token cookie, attempting to verify');
       try {
-        // Try formal verification first
         const decodedToken = await auth.verifyIdToken(authCookie);
-        if (decodedToken && decodedToken.uid) {
-          return decodedToken.uid;
-        }
-      } catch (verifyError) {
-        // If formal verification fails, try to extract uid from token payload
+        console.log('✅ Auth-token cookie verification successful');
+        return { userId: decodedToken.uid, source: 'auth-token-cookie' };
+      } catch (e) {
+        console.log('❌ Auth-token cookie verification failed:', e instanceof Error ? e.message : 'Unknown error');
+        
+        // Try to extract user ID from token payload if verification fails
         try {
           if (authCookie && authCookie.split('.').length === 3) {
+            console.log('🔑 Attempting to parse token payload directly');
             const payload = JSON.parse(
               Buffer.from(authCookie.split('.')[1], 'base64').toString()
             );
             if (payload && payload.user_id) {
-              return payload.user_id;
+              console.log('✅ Extracted user_id from token payload');
+              return { userId: payload.user_id, source: 'auth-token-payload' };
             }
             if (payload && payload.uid) {
-              return payload.uid;
+              console.log('✅ Extracted uid from token payload');
+              return { userId: payload.uid, source: 'auth-token-payload' };
             }
             if (payload && payload.sub) {
-              return payload.sub;
+              console.log('✅ Extracted sub from token payload');
+              return { userId: payload.sub, source: 'auth-token-payload' };
             }
+            console.log('❌ Could not find user identifier in token payload');
+          } else {
+            console.log('❌ Token does not have valid JWT format');
           }
         } catch (parseError) {
-          console.error('Token parsing error:', parseError);
+          console.error('❌ Token parsing error:', parseError instanceof Error ? parseError.message : 'Unknown error');
         }
       }
+    } else {
+      console.log('❓ No auth-token cookie found');
     }
   } catch (error) {
-    console.error('Error getting user from auth-token cookie:', error);
+    console.error('❌ Error processing auth-token cookie:', error instanceof Error ? error.message : 'Unknown error');
   }
   
-  // Try from Authorization header as last resort
+  // 3. Try to get from Authorization header
   try {
     const authHeader = request.headers.get('authorization');
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.split('Bearer ')[1];
+      console.log('🔑 Found Authorization header with Bearer token, attempting to verify');
+      
       if (token) {
         try {
-          // Try formal verification first
           const decodedToken = await auth.verifyIdToken(token);
-          if (decodedToken && decodedToken.uid) {
-            return decodedToken.uid;
-          }
-        } catch (verifyError) {
-          // If formal verification fails, try to extract uid from token payload
+          console.log('✅ Authorization header token verification successful');
+          return { userId: decodedToken.uid, source: 'authorization-header' };
+        } catch (e) {
+          console.log('❌ Authorization header token verification failed:', e instanceof Error ? e.message : 'Unknown error');
+          
+          // Try to extract user ID from token payload if verification fails
           try {
             if (token && token.split('.').length === 3) {
+              console.log('🔑 Attempting to parse token payload directly');
               const payload = JSON.parse(
                 Buffer.from(token.split('.')[1], 'base64').toString()
               );
               if (payload && payload.user_id) {
-                return payload.user_id;
+                console.log('✅ Extracted user_id from token payload');
+                return { userId: payload.user_id, source: 'auth-header-payload' };
               }
               if (payload && payload.uid) {
-                return payload.uid;
+                console.log('✅ Extracted uid from token payload');
+                return { userId: payload.uid, source: 'auth-header-payload' };
               }
               if (payload && payload.sub) {
-                return payload.sub;
+                console.log('✅ Extracted sub from token payload');
+                return { userId: payload.sub, source: 'auth-header-payload' };
               }
+              console.log('❌ Could not find user identifier in token payload');
+            } else {
+              console.log('❌ Token does not have valid JWT format');
             }
           } catch (parseError) {
-            console.error('Token parsing error:', parseError);
+            console.error('❌ Token parsing error:', parseError instanceof Error ? parseError.message : 'Unknown error');
           }
         }
       }
+    } else {
+      console.log('❓ No Authorization header with Bearer token found');
     }
   } catch (error) {
-    console.error('Error getting user from authorization header:', error);
+    console.error('❌ Error processing Authorization header:', error instanceof Error ? error.message : 'Unknown error');
   }
   
-  return null;
+  // 4. Try to get from X-User-ID header (custom fallback)
+  try {
+    const xUserId = request.headers.get('x-user-id');
+    if (xUserId) {
+      console.log('🔑 Found X-User-ID header, using as fallback');
+      return { userId: xUserId, source: 'x-user-id-header' };
+    } else {
+      console.log('❓ No X-User-ID header found');
+    }
+  } catch (error) {
+    console.error('❌ Error processing X-User-ID header:', error instanceof Error ? error.message : 'Unknown error');
+  }
+  
+  // 5. Last resort: Check localStorage data sent in a custom header
+  try {
+    const userInfoHeader = request.headers.get('x-user-info');
+    if (userInfoHeader) {
+      try {
+        console.log('🔑 Found X-User-Info header, attempting to parse');
+        const userInfo = JSON.parse(userInfoHeader);
+        if (userInfo && userInfo.id) {
+          console.log('✅ Extracted user ID from X-User-Info header');
+          return { userId: userInfo.id, source: 'x-user-info-header' };
+        }
+      } catch (e) {
+        console.error('❌ Error parsing X-User-Info header:', e instanceof Error ? e.message : 'Unknown error');
+      }
+    } else {
+      console.log('❓ No X-User-Info header found');
+    }
+  } catch (error) {
+    console.error('❌ Error processing X-User-Info header:', error instanceof Error ? error.message : 'Unknown error');
+  }
+  
+  console.log('❌ All authentication methods failed, unable to identify user');
+  return { userId: null, source: null, error: 'Could not identify user after trying all authentication methods' };
 }
 
 // Delete transaction endpoint
@@ -308,28 +370,29 @@ export async function DELETE(
 ) {
   // Get transaction ID from params
   const transactionId = params.id;
-  console.log(`Attempting to delete transaction: ${transactionId}`);
+  console.log(`🗑️ Attempting to delete transaction: ${transactionId}`);
   
   try {
-    // Get the user ID safely with multiple fallbacks
-    const userId = await getUserIdSafely(request);
+    // Get the user ID with enhanced extraction
+    const { userId, source, error } = await extractUserId(request);
     
     if (!userId) {
-      console.log('Could not identify user - deletion denied');
+      console.log(`❌ Authentication failed: ${error || 'No user ID found'}`);
       return NextResponse.json(
-        { error: 'Authentication required to delete transaction' },
+        { error: 'Authentication required to delete transaction', details: error },
         { status: 401 }
       );
     }
     
-    console.log(`Authenticated user: ${userId}, attempting to delete their transaction: ${transactionId}`);
+    console.log(`✅ User authenticated via ${source}: ${userId}`);
+    console.log(`🔍 Checking if transaction ${transactionId} belongs to user ${userId}`);
     
     // Check if this transaction belongs to the user
     const transactionRef = db.collection(`users/${userId}/transactions`).doc(transactionId);
     const transactionDoc = await transactionRef.get();
     
     if (!transactionDoc.exists) {
-      console.log(`Transaction ${transactionId} not found for user ${userId}`);
+      console.log(`❌ Transaction ${transactionId} not found for user ${userId}`);
       return NextResponse.json(
         { error: 'Transaction not found' },
         { status: 404 }
@@ -338,16 +401,16 @@ export async function DELETE(
     
     // Transaction belongs to this user, delete it
     await transactionRef.delete();
-    console.log(`Transaction ${transactionId} successfully deleted for user ${userId}`);
+    console.log(`✅ Transaction ${transactionId} successfully deleted for user ${userId}`);
     
     return NextResponse.json({
       message: 'Transaction successfully deleted',
       id: transactionId
     });
   } catch (error) {
-    console.error('Delete API error:', error);
+    console.error('❌ Delete API error:', error instanceof Error ? error.message : 'Unknown error', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
