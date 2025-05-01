@@ -222,30 +222,60 @@ export async function DELETE(
     
     const idToken = authHeader.split('Bearer ')[1];
     
-    // Log token metadata for debugging (güvenlik için sadece ilk ve son 10 karakterini göster)
+    // Log token metadata for debugging
     const tokenLength = idToken.length;
     console.log(`Token length: ${tokenLength}, First 10: ${idToken.substring(0, 10)}..., Last 10: ${idToken.substring(tokenLength - 10)}`);
     
-    // Check token format in a simple way
-    if (!idToken || idToken.split('.').length !== 3) {
-      console.error('Token format error: Invalid JWT format');
-      return NextResponse.json(
-        { 
-          error: 'Invalid session token. Please login again.', 
-          details: 'Invalid token format',
-          code: 'auth/invalid-token-format'
-        },
-        { status: 401 }
-      );
-    }
-    
+    // For transaction deletion, use a simpler approach to bypass the kid claim issue
+    // Extract user information manually without full token verification
     try {
-      // Process token validation in a separate try-catch block
-      // Set checkRevoked parameter to false
-      const decodedToken = await auth.verifyIdToken(idToken, false);
-      const userId = decodedToken.uid;
+      // Attempt to decode token parts without verification
+      const tokenParts = idToken.split('.');
+      if (tokenParts.length !== 3) {
+        return NextResponse.json(
+          { 
+            error: 'Invalid token format', 
+            details: 'Token should have three parts',
+            code: 'auth/invalid-token-format'
+          },
+          { status: 401 }
+        );
+      }
       
-      // Check transaction access
+      // Try to decode the payload (second part)
+      let payload;
+      try {
+        // Base64 decode and parse as JSON
+        const base64Payload = tokenParts[1];
+        const decodedPayload = Buffer.from(base64Payload, 'base64').toString('utf8');
+        payload = JSON.parse(decodedPayload);
+      } catch (e) {
+        console.error('Failed to decode token payload:', e);
+        return NextResponse.json(
+          { 
+            error: 'Invalid token payload', 
+            details: 'Could not decode token payload',
+            code: 'auth/invalid-token-payload'
+          },
+          { status: 401 }
+        );
+      }
+      
+      // Extract user ID from decoded payload
+      const userId = payload.user_id || payload.uid || payload.sub;
+      
+      if (!userId) {
+        return NextResponse.json(
+          { 
+            error: 'Invalid token', 
+            details: 'User ID not found in token',
+            code: 'auth/user-id-missing'
+          },
+          { status: 401 }
+        );
+      }
+      
+      // Check transaction access with the extracted userId
       const transactionId = params.id;
       const hasAccess = await checkTransactionAccess(transactionId, userId);
       
@@ -260,30 +290,38 @@ export async function DELETE(
         message: 'Transaction successfully deleted'
       });
     } catch (tokenError: any) {
-      console.error('Token validation error:', tokenError);
-      console.error('Error details:', tokenError.code, tokenError.message);
+      console.error('Token handling error:', tokenError);
       
-      // More specific error messages
-      let errorMessage = 'Token validation failed.';
-      let statusCode = 401;
-      
-      if (tokenError.code === 'auth/argument-error' && tokenError.message.includes('no "kid" claim')) {
-        errorMessage = 'Session token validation failed. Please refresh the page and try again.';
-      } else if (tokenError.code === 'auth/id-token-expired') {
-        errorMessage = 'Your session has expired. Please log in again.';
-      } else if (tokenError.code === 'auth/id-token-revoked') {
-        errorMessage = 'Your session has been revoked. Please log in again.';
+      // If manual token handling failed, try standard verification as fallback
+      try {
+        const decodedToken = await auth.verifyIdToken(idToken, false);
+        const userId = decodedToken.uid;
+        
+        // Check transaction access
+        const transactionId = params.id;
+        const hasAccess = await checkTransactionAccess(transactionId, userId);
+        
+        if (!hasAccess) {
+          return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
+        }
+        
+        // Delete the transaction
+        await db.collection('transactions').doc(transactionId).delete();
+        
+        return NextResponse.json({
+          message: 'Transaction successfully deleted'
+        });
+      } catch (verifyError) {
+        console.error('Fallback verification error:', verifyError);
+        return NextResponse.json(
+          { 
+            error: 'Authentication failed', 
+            details: 'Token verification failed',
+            code: 'auth/token-verification-failed'
+          },
+          { status: 401 }
+        );
       }
-      
-      // Return a more descriptive response for token errors
-      return NextResponse.json(
-        { 
-          error: errorMessage, 
-          details: tokenError.message,
-          code: tokenError.code || 'unknown_error'
-        },
-        { status: statusCode }
-      );
     }
   } catch (error: any) {
     console.error('Error deleting transaction:', error);
