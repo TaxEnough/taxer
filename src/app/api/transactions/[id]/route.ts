@@ -211,10 +211,9 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    // Get and validate token
+    // Extract token from Authorization header
     const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.error('Auth header missing or invalid format');
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
@@ -223,92 +222,72 @@ export async function DELETE(
     
     const idToken = authHeader.split('Bearer ')[1];
     
-    // Check if token is valid format
+    // Basic validation of token format
     if (!idToken || idToken === 'undefined' || idToken.length < 20) {
-      console.error(`Invalid token received: ${typeof idToken === 'string' ? idToken.substring(0, 10) + '...' : 'not a string'}`);
       return NextResponse.json(
-        { 
-          error: 'Invalid authentication token', 
-          details: 'Please log in again to refresh your session',
-          code: 'auth/invalid-token'
-        },
+        { error: 'Invalid authentication token' },
         { status: 401 }
       );
     }
     
-    // Log token metadata for debugging
-    const tokenLength = idToken.length;
-    const firstChars = idToken.substring(0, 10);
-    const lastChars = idToken.substring(tokenLength - 10);
-    console.log(`Token debug: length=${tokenLength}, first=${firstChars}, last=${lastChars}`);
+    // Log token info for debugging
+    console.log(`Processing delete for transaction ${params.id}`);
+    console.log(`Token length: ${idToken.length}`);
     
-    // Always use try/catch for token verification
-    let userId;
     try {
-      // Verify the token with Firebase Admin SDK
+      // Verify token with minimal options
       const decodedToken = await auth.verifyIdToken(idToken, false);
-      userId = decodedToken.uid;
-      console.log(`Successfully verified token for user: ${userId}`);
+      const userId = decodedToken.uid;
       
-      if (!userId) {
-        throw new Error('Token verification succeeded but no user ID was found');
+      // Get transaction ID from params
+      const transactionId = params.id;
+      
+      // Check if user has access to this transaction
+      const transactionRef = db.collection('transactions').doc(transactionId);
+      const transactionDoc = await transactionRef.get();
+      
+      if (!transactionDoc.exists) {
+        return NextResponse.json(
+          { error: 'Transaction not found' },
+          { status: 404 }
+        );
       }
-    } catch (tokenError: any) {
-      // Specific error handling based on error type
-      console.error('Token verification failed:', tokenError);
       
-      const errorMessage = tokenError.message || 'Unknown token error';
-      const errorCode = tokenError.code || 'auth/token-verification-failed';
+      const transactionData = transactionDoc.data();
       
-      // More specific error messages based on error types
-      let errorDetails = 'Your session has expired. Please log in again.';
-      
-      if (errorMessage.includes('Firebase ID token has expired')) {
-        errorDetails = 'Your login session has expired. Please log in again to continue.';
-      } else if (errorMessage.includes('Decoding Firebase ID token failed')) {
-        errorDetails = 'Invalid authentication token. Please log in again.';
+      // Verify transaction belongs to user
+      if (transactionData?.userId !== userId) {
+        return NextResponse.json(
+          { error: 'You do not have permission to delete this transaction' },
+          { status: 403 }
+        );
       }
+      
+      // Delete the transaction
+      await transactionRef.delete();
+      
+      // Return success response
+      return NextResponse.json({
+        message: 'Transaction successfully deleted',
+        id: transactionId
+      });
+      
+    } catch (verifyError: any) {
+      console.error('Token verification error:', verifyError);
       
       return NextResponse.json(
         { 
-          error: 'Authentication failed', 
-          details: errorDetails,
-          code: errorCode,
-          message: errorMessage
+          error: 'Authentication failed',
+          message: verifyError.message
         },
         { status: 401 }
       );
     }
-    
-    // Handle transaction deletion with the verified userId
-    const transactionId = params.id;
-    
-    // Check transaction access
-    const hasAccess = await checkTransactionAccess(transactionId, userId);
-    if (!hasAccess) {
-      return NextResponse.json(
-        { 
-          error: 'Transaction not found',
-          details: 'You do not have access to this transaction or it does not exist'
-        }, 
-        { status: 404 }
-      );
-    }
-    
-    // Delete the transaction
-    await db.collection('transactions').doc(transactionId).delete();
-    
-    return NextResponse.json({
-      message: 'Transaction successfully deleted',
-      transactionId
-    });
   } catch (error: any) {
-    console.error('Error deleting transaction:', error);
+    console.error('Delete transaction error:', error);
+    
     return NextResponse.json(
-      { 
-        error: 'An error occurred while deleting the transaction',
-        details: error.message || 'Unknown error'
-      },
+      { error: 'Failed to delete transaction' },
       { status: 500 }
     );
   }

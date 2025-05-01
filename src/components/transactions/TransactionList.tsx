@@ -107,78 +107,58 @@ export default function TransactionList() {
     if (window.confirm('Are you sure you want to delete this transaction?')) {
       setIsDeleting(true);
       try {
-        // Kullanıcı oturum açtı mı kontrol et
-        if (!auth.currentUser) {
+        // Get the current user's token directly from Firebase
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
           toast({
-            title: "Authentication required",
-            description: "You need to be logged in to delete transactions",
+            title: "Authentication Error",
+            description: "Please log in to delete transactions.",
             variant: "destructive",
           });
-          setTimeout(() => window.location.href = '/login', 1500);
           return;
         }
-
-        console.log("Current user:", auth.currentUser.uid);
         
-        // Yeni bir token al, zorla yenileme
-        await auth.currentUser.getIdToken(true);
-        const freshToken = await auth.currentUser.getIdToken(false);
+        // Force token refresh to ensure we have a fresh token
+        await currentUser.reload();
+        const token = await currentUser.getIdToken(true);
         
-        if (!freshToken) {
+        if (!token) {
           throw new Error('Could not get authentication token');
         }
         
-        console.log("Got fresh token, length:", freshToken.length);
-        
+        // Make the DELETE request
         const response = await fetch(`/api/transactions/${id}`, {
           method: 'DELETE',
           headers: {
-            'Authorization': `Bearer ${freshToken}`
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
           }
         });
         
-        // Parse the response even if not OK
-        let responseData;
-        try {
-          responseData = await response.json();
-        } catch (e) {
-          responseData = { error: 'Could not parse server response' };
-        }
-        
+        // Handle the response
         if (!response.ok) {
-          console.error("Delete failed:", response.status, responseData);
-          
-          // Handle authentication errors
-          if (response.status === 401) {
-            toast({
-              title: "Authentication error",
-              description: responseData.details || "Your session has expired, please log in again",
-              variant: "destructive",
-            });
-            
-            // Clear token from localStorage to ensure fresh login
-            localStorage.removeItem('auth-token');
-            localStorage.setItem('isLoggedIn', 'false');
-            
-            setTimeout(() => window.location.href = '/login', 2000);
-            return;
+          let errorData;
+          try {
+            errorData = await response.json();
+          } catch (e) {
+            throw new Error(`Failed to delete transaction: ${response.status}`);
           }
           
-          throw new Error(responseData.error || `Error deleting transaction (${response.status})`);
+          throw new Error(errorData.error || 'Failed to delete transaction');
         }
+        
+        // Success - update UI
+        setTransactions(transactions.filter(t => t.id !== id));
         
         toast({
           title: "Success",
           description: "Transaction successfully deleted",
         });
-        
-        // Update the list after deletion
-        fetchTransactions();
       } catch (error: any) {
-        console.error('Transaction deletion error:', error);
+        console.error('Error deleting transaction:', error);
         toast({
           title: "Error",
-          description: error.message || "An error occurred while deleting the transaction",
+          description: error.message || "Failed to delete transaction",
           variant: "destructive",
         });
       } finally {
