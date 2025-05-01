@@ -104,66 +104,45 @@ export default function TransactionList() {
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this transaction?')) {
-      setIsDeleting(true);
-      try {
-        // Get the current user's token directly from Firebase
-        const currentUser = auth.currentUser;
-        if (!currentUser) {
-          toast({
-            title: "Authentication Error",
-            description: "Please log in to delete transactions.",
-            variant: "destructive",
-          });
-          return;
-        }
-        
-        // Force token refresh to ensure we have a fresh token
-        await currentUser.reload();
-        const token = await currentUser.getIdToken(true);
-        
-        if (!token) {
-          throw new Error('Could not get authentication token');
-        }
-        
-        // Make the DELETE request
-        const response = await fetch(`/api/transactions/${id}`, {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        // Handle the response
-        if (!response.ok) {
-          let errorData;
-          try {
-            errorData = await response.json();
-          } catch (e) {
-            throw new Error(`Failed to delete transaction: ${response.status}`);
-          }
-          
-          throw new Error(errorData.error || 'Failed to delete transaction');
-        }
-        
-        // Success - update UI
-        setTransactions(transactions.filter(t => t.id !== id));
-        
-        toast({
-          title: "Success",
-          description: "Transaction successfully deleted",
-        });
-      } catch (error: any) {
-        console.error('Error deleting transaction:', error);
-        toast({
-          title: "Error",
-          description: error.message || "Failed to delete transaction",
-          variant: "destructive",
-        });
-      } finally {
-        setIsDeleting(false);
+    if (!window.confirm('Are you sure you want to delete this transaction?')) {
+      return;
+    }
+    
+    setIsDeleting(true);
+    
+    try {
+      // Simple fetch with cookies - let the browser handle auth
+      const response = await fetch(`/api/transactions/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include' // Important: include cookies
+      });
+      
+      // Handle response
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Failed to delete transaction' }));
+        throw new Error(error.error || `Failed to delete (status ${response.status})`);
       }
+      
+      // Update UI directly
+      setTransactions(transactions.filter(t => t.id !== id));
+      
+      // Show success message
+      toast({
+        title: "Success",
+        description: "Transaction successfully deleted",
+      });
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete transaction",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
