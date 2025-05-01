@@ -1,155 +1,140 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useEffect, useState } from "react";
 import {
   Table,
-  TableBody,
   TableCaption,
-  TableCell,
-  TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { Edit, Trash2 } from 'lucide-react';
-import { formatDate, formatCurrency } from '@/lib/utils';
-import Link from 'next/link';
-import { useToast } from '@/components/ui/use-toast';
-import { getAuthTokenFromClient } from '@/lib/auth-client';
+  TableHead,
+  TableBody,
+  TableCell,
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { TransactionDialog } from "./TransactionDialog";
+import { useToast } from "@/components/ui/use-toast";
+import { useAuth } from "@/lib/auth-context";
+import { SpinnerCircular } from "spinners-react";
+import Link from "next/link";
+import { formatCurrency, formatDate } from "@/lib/utils";
+import { AiFillEdit, AiFillDelete } from "react-icons/ai";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 
-// Transaction data type from API
-type ApiTransaction = {
-  id: string;
-  stock: string;
-  buyDate: string;
-  buyPrice: number;
-  sellDate: string;
-  sellPrice: number;
-  quantity: number;
-  profit: number;
-  type: string;
-  tradingFees: number;
-  note: string;
-  createdAt: any;
-  updatedAt: any;
-};
-
-// Transaction type used in component
-type Transaction = {
-  id: string;
+// Transaction type interface
+export interface Transaction {
+  id?: string;
   ticker: string;
-  date: string;
-  transactionType: string;
+  type: 'buy' | 'sell' | 'dividend';
   shares: number;
   price: number;
-  fees: number;
+  amount: number;
+  date: string;
+  fee?: number;
   notes?: string;
-  profit?: number;
-};
+  createdAt?: string;
+  updatedAt?: string;
+}
 
-export default function TransactionList() {
+export const TransactionList = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [transactionToDelete, setTransactionToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const { toast } = useToast();
+  const { user } = useAuth();
 
   useEffect(() => {
-    fetchTransactions();
-  }, []);
+    if (user) {
+      fetchTransactions();
+    } else {
+      setLoading(false);
+      setTransactions([]);
+    }
+  }, [user]);
 
   const fetchTransactions = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const token = getAuthTokenFromClient();
-      
-      const response = await fetch('/api/transactions', {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
+      const response = await fetch('/api/transactions');
       if (!response.ok) {
-        throw new Error('Failed to load transactions');
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
-      // Get API response
-      const apiData: ApiTransaction[] = await response.json();
-      
-      // Transform API data to component format
-      const formattedTransactions: Transaction[] = apiData.map(item => ({
-        id: item.id,
-        ticker: item.stock || '',
-        date: item.sellDate || item.buyDate || '',
-        transactionType: 'BUY', // Buy type as default
-        shares: item.quantity || 0,
-        price: item.sellPrice || item.buyPrice || 0,
-        fees: item.tradingFees || 0,
-        notes: item.note || '',
-        profit: item.profit || 0
-      }));
-      
-      setTransactions(formattedTransactions);
+      const data = await response.json();
+      // Sort by date (newest first)
+      const sortedData = data.sort((a: Transaction, b: Transaction) => 
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+      setTransactions(sortedData);
     } catch (error) {
-      console.error('Transaction loading error:', error);
+      console.error("Error fetching transactions:", error);
       toast({
-        title: 'Error',
-        description: 'An error occurred while loading transactions.',
-        variant: 'destructive',
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to load transactions",
+        variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this transaction?')) {
-      return;
-    }
+  const handleEdit = (transaction: Transaction) => {
+    setSelectedTransaction(transaction);
+    setIsDialogOpen(true);
+  };
+
+  const handleDeleteClick = (transactionId: string) => {
+    setTransactionToDelete(transactionId);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!transactionToDelete) return;
     
     setIsDeleting(true);
-    
     try {
-      console.log('Deleting transaction:', id);
-      
-      // Simple delete request - no auth token needed anymore
-      const response = await fetch(`/api/transactions/${id}`, {
+      // Include credentials for cookies to be sent
+      const response = await fetch(`/api/transactions/${transactionToDelete}`, {
         method: 'DELETE',
-        credentials: 'include', // Include cookies
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        credentials: 'include', // Important: sends cookies with the request
       });
       
-      // Check response
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Delete error:', response.status, errorData);
-        
         if (response.status === 401) {
           toast({
             title: "Authentication Error",
-            description: "Your session may have expired. Please log in again.",
+            description: "Please log in again to continue",
             variant: "destructive",
           });
           return;
         }
         
-        throw new Error(errorData.error || `Delete error (${response.status})`);
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to delete transaction");
       }
       
-      // Update UI
-      setTransactions(prevTransactions => 
-        prevTransactions.filter(item => item.id !== id)
+      // Successfully deleted
+      setTransactions(
+        transactions.filter((t) => t.id !== transactionToDelete)
       );
       
-      // Show success message
       toast({
         title: "Success",
-        description: "Transaction successfully deleted",
+        description: "Transaction deleted successfully",
       });
     } catch (error) {
-      console.error('Delete operation error:', error);
+      console.error("Failed to delete transaction:", error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to delete transaction",
@@ -157,72 +142,143 @@ export default function TransactionList() {
       });
     } finally {
       setIsDeleting(false);
+      setDeleteConfirmOpen(false);
+      setTransactionToDelete(null);
     }
+  };
+
+  const handleTransactionSaved = (updatedTransaction: Transaction) => {
+    fetchTransactions();
+    setIsDialogOpen(false);
+    setSelectedTransaction(null);
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-10">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary-500"></div>
+      <div className="flex justify-center my-8">
+        <SpinnerCircular color="#3b82f6" secondaryColor="#e2e8f0" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="text-center my-8">
+        <p className="mb-4">Please sign in to view your transactions.</p>
+        <Link href="/signin">
+          <Button>Sign In</Button>
+        </Link>
       </div>
     );
   }
 
   if (transactions.length === 0) {
-    return <div className="text-center py-8">No transactions found.</div>;
+    return (
+      <div className="text-center my-8">
+        <p className="mb-4">No transactions found. Add your first transaction to get started.</p>
+        <TransactionDialog onTransactionSaved={handleTransactionSaved} />
+      </div>
+    );
   }
 
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableCaption>Transaction list</TableCaption>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Date</TableHead>
-            <TableHead>Symbol</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead className="text-right">Quantity</TableHead>
-            <TableHead className="text-right">Price</TableHead>
-            <TableHead className="text-right">Total</TableHead>
-            <TableHead className="text-right">Fees</TableHead>
-            <TableHead className="text-center">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {transactions.map((transaction) => (
-            <TableRow key={transaction.id}>
-              <TableCell>{formatDate(transaction.date ? new Date(transaction.date) : null)}</TableCell>
-              <TableCell className="font-medium">{transaction.ticker}</TableCell>
-              <TableCell>
-                <span className="px-2 py-1 text-xs font-medium rounded-md bg-green-50 text-green-600">
-                  Buy
-                </span>
-              </TableCell>
-              <TableCell className="text-right">{transaction.shares}</TableCell>
-              <TableCell className="text-right">{formatCurrency(transaction.price)}</TableCell>
-              <TableCell className="text-right">{formatCurrency(transaction.price * transaction.shares)}</TableCell>
-              <TableCell className="text-right">{formatCurrency(transaction.fees)}</TableCell>
-              <TableCell>
-                <div className="flex justify-center space-x-2">
-                  <Button variant="ghost" size="icon" asChild>
-                    <Link href={`/transactions/edit/${transaction.id}`}>
-                      <Edit className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    onClick={() => handleDelete(transaction.id)}
-                    disabled={isDeleting}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </TableCell>
+    <div>
+      <div className="mb-4 flex justify-between items-center">
+        <h2 className="text-xl font-bold">Your Transactions</h2>
+        <TransactionDialog onTransactionSaved={handleTransactionSaved} />
+      </div>
+
+      <div className="overflow-x-auto">
+        <Table>
+          <TableCaption>
+            Your transaction history
+          </TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Ticker</TableHead>
+              <TableHead className="text-right">Shares</TableHead>
+              <TableHead className="text-right">Price</TableHead>
+              <TableHead className="text-right">Amount</TableHead>
+              <TableHead className="text-right">Fee</TableHead>
+              <TableHead>Actions</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {transactions.map((transaction) => (
+              <TableRow key={transaction.id}>
+                <TableCell>{formatDate(transaction.date)}</TableCell>
+                <TableCell className={
+                  transaction.type === 'buy' 
+                    ? 'text-green-600 font-medium' 
+                    : transaction.type === 'sell' 
+                      ? 'text-red-600 font-medium'
+                      : 'text-blue-600 font-medium'
+                }>
+                  {transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}
+                </TableCell>
+                <TableCell className="font-medium">{transaction.ticker}</TableCell>
+                <TableCell className="text-right">{transaction.shares}</TableCell>
+                <TableCell className="text-right">{formatCurrency(transaction.price)}</TableCell>
+                <TableCell className="text-right font-medium">{formatCurrency(transaction.amount)}</TableCell>
+                <TableCell className="text-right">{transaction.fee ? formatCurrency(transaction.fee) : '-'}</TableCell>
+                <TableCell>
+                  <div className="flex space-x-2">
+                    <Button 
+                      variant="outline" 
+                      size="icon"
+                      onClick={() => handleEdit(transaction)}
+                    >
+                      <AiFillEdit className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="icon"
+                      onClick={() => handleDeleteClick(transaction.id!)}
+                    >
+                      <AiFillDelete className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this transaction? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDelete} 
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? 
+                <SpinnerCircular size={16} color="#ffffff" secondaryColor="transparent" />
+                : 'Delete'
+              }
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {selectedTransaction && (
+        <TransactionDialog
+          transaction={selectedTransaction}
+          isOpen={isDialogOpen}
+          onOpenChange={setIsDialogOpen}
+          onTransactionSaved={handleTransactionSaved}
+        />
+      )}
     </div>
   );
-} 
+}; 

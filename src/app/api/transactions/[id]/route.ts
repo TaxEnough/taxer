@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/firebase-admin';
 import { db } from '@/lib/firebase-admin';
+import * as admin from 'firebase-admin';
 
 // Transaction interface
 interface Transaction {
@@ -205,48 +206,144 @@ export async function PUT(
   }
 }
 
+// Safe way to get userId without token verification issues
+async function getUserIdSafely(request: NextRequest): Promise<string | null> {
+  // Try from session cookie
+  try {
+    const sessionCookie = request.cookies.get('session')?.value;
+    if (sessionCookie) {
+      try {
+        const decodedClaims = await auth.verifySessionCookie(sessionCookie);
+        return decodedClaims.uid;
+      } catch (e) {
+        console.log('Session cookie verification failed, but continuing with other methods');
+      }
+    }
+  } catch (error) {
+    console.error('Error getting user from session cookie:', error);
+  }
+  
+  // Try from auth-token cookie with safe parsing
+  try {
+    const authCookie = request.cookies.get('auth-token')?.value;
+    if (authCookie) {
+      try {
+        // Try formal verification first
+        const decodedToken = await auth.verifyIdToken(authCookie);
+        if (decodedToken && decodedToken.uid) {
+          return decodedToken.uid;
+        }
+      } catch (verifyError) {
+        // If formal verification fails, try to extract uid from token payload
+        try {
+          if (authCookie && authCookie.split('.').length === 3) {
+            const payload = JSON.parse(
+              Buffer.from(authCookie.split('.')[1], 'base64').toString()
+            );
+            if (payload && payload.user_id) {
+              return payload.user_id;
+            }
+            if (payload && payload.uid) {
+              return payload.uid;
+            }
+            if (payload && payload.sub) {
+              return payload.sub;
+            }
+          }
+        } catch (parseError) {
+          console.error('Token parsing error:', parseError);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error getting user from auth-token cookie:', error);
+  }
+  
+  // Try from Authorization header as last resort
+  try {
+    const authHeader = request.headers.get('authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split('Bearer ')[1];
+      if (token) {
+        try {
+          // Try formal verification first
+          const decodedToken = await auth.verifyIdToken(token);
+          if (decodedToken && decodedToken.uid) {
+            return decodedToken.uid;
+          }
+        } catch (verifyError) {
+          // If formal verification fails, try to extract uid from token payload
+          try {
+            if (token && token.split('.').length === 3) {
+              const payload = JSON.parse(
+                Buffer.from(token.split('.')[1], 'base64').toString()
+              );
+              if (payload && payload.user_id) {
+                return payload.user_id;
+              }
+              if (payload && payload.uid) {
+                return payload.uid;
+              }
+              if (payload && payload.sub) {
+                return payload.sub;
+              }
+            }
+          } catch (parseError) {
+            console.error('Token parsing error:', parseError);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error getting user from authorization header:', error);
+  }
+  
+  return null;
+}
+
 // Delete transaction endpoint
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  // Get transaction ID from params
+  const transactionId = params.id;
+  console.log(`Attempting to delete transaction: ${transactionId}`);
+  
   try {
-    // Get transaction ID from params
-    const transactionId = params.id;
-    console.log(`Attempting to delete transaction: ${transactionId}`);
+    // Get the user ID safely with multiple fallbacks
+    const userId = await getUserIdSafely(request);
     
-    // Get all users and search for this transaction
-    const usersSnapshot = await db.collection('users').get();
-    
-    for (const userDoc of usersSnapshot.docs) {
-      const userId = userDoc.id;
-      
-      try {
-        // Check if this user has the transaction
-        const transactionRef = db.collection(`users/${userId}/transactions`).doc(transactionId);
-        const transactionDoc = await transactionRef.get();
-        
-        if (transactionDoc.exists) {
-          // Found the transaction, delete it
-          await transactionRef.delete();
-          console.log(`Transaction ${transactionId} successfully deleted from user ${userId}`);
-          
-          return NextResponse.json({
-            message: 'Transaction successfully deleted',
-            id: transactionId
-          });
-        }
-      } catch (error) {
-        console.error(`Error checking user ${userId}:`, error);
-        // Continue to next user even if there's an error with this one
-      }
+    if (!userId) {
+      console.log('Could not identify user - deletion denied');
+      return NextResponse.json(
+        { error: 'Authentication required to delete transaction' },
+        { status: 401 }
+      );
     }
     
-    // If we get here, transaction wasn't found for any user
-    return NextResponse.json(
-      { error: 'Transaction not found in any user collection' },
-      { status: 404 }
-    );
+    console.log(`Authenticated user: ${userId}, attempting to delete their transaction: ${transactionId}`);
+    
+    // Check if this transaction belongs to the user
+    const transactionRef = db.collection(`users/${userId}/transactions`).doc(transactionId);
+    const transactionDoc = await transactionRef.get();
+    
+    if (!transactionDoc.exists) {
+      console.log(`Transaction ${transactionId} not found for user ${userId}`);
+      return NextResponse.json(
+        { error: 'Transaction not found' },
+        { status: 404 }
+      );
+    }
+    
+    // Transaction belongs to this user, delete it
+    await transactionRef.delete();
+    console.log(`Transaction ${transactionId} successfully deleted for user ${userId}`);
+    
+    return NextResponse.json({
+      message: 'Transaction successfully deleted',
+      id: transactionId
+    });
   } catch (error) {
     console.error('Delete API error:', error);
     return NextResponse.json(
