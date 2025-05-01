@@ -11,11 +11,21 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Edit, Trash2 } from 'lucide-react';
+import { Edit, Trash2, AlertTriangle } from 'lucide-react';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import Link from 'next/link';
 import { useToast } from '@/components/ui/use-toast';
 import { getAuthTokenFromClient } from '@/lib/auth-client';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // Transaction data type from API
 type ApiTransaction = {
@@ -50,6 +60,8 @@ type Transaction = {
 export default function TransactionList() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -101,14 +113,16 @@ export default function TransactionList() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Bu işlemi silmek istediğinize emin misiniz?')) {
-      return;
-    }
+  const openDeleteConfirm = (id: string) => {
+    setDeleteId(id);
+    setConfirmOpen(true);
+  };
 
+  const handleDeleteConfirmed = async () => {
+    if (!deleteId) return;
+    
     try {
-      // Token kontrolünü kaldırıyoruz, doğrudan istek yapılıyor
-      const response = await fetch(`/api/transactions/${id}`, {
+      const response = await fetch(`/api/transactions/${deleteId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json'
@@ -116,35 +130,37 @@ export default function TransactionList() {
       });
 
       if (!response.ok) {
-        // Hata durumunu işle
-        let errorDetails = 'İşlem silinirken bir hata oluştu';
+        let errorDetails = 'Error deleting transaction';
         try {
           const errorData = await response.json();
           errorDetails = errorData.details || errorData.error || errorDetails;
-          console.error('İşlem silme hatası:', errorData);
+          console.error('Transaction deletion error:', errorData);
         } catch (e) {
-          console.error('Hata yanıtı ayrıştırılamadı:', e);
+          console.error('Could not parse error response:', e);
         }
         
         throw new Error(errorDetails);
       }
 
-      // Başarılı silme durumunda UI güncelleme
+      // Update UI after successful deletion
       setTransactions((prevTransactions) => 
-        prevTransactions.filter((transaction) => transaction.id !== id)
+        prevTransactions.filter((transaction) => transaction.id !== deleteId)
       );
 
       toast({
-        title: 'Başarılı',
-        description: 'İşlem başarıyla silindi.',
+        title: "Success",
+        description: "Transaction has been successfully deleted.",
       });
     } catch (error: any) {
-      console.error('İşlem silme hatası:', error);
+      console.error('Transaction deletion error:', error);
       toast({
-        title: 'Hata',
-        description: error.message || 'İşlem silinirken bir hata oluştu.',
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete transaction",
         variant: 'destructive',
       });
+    } finally {
+      setConfirmOpen(false);
+      setDeleteId(null);
     }
   };
 
@@ -200,7 +216,7 @@ export default function TransactionList() {
                   <Button 
                     variant="ghost" 
                     size="icon"
-                    onClick={() => handleDelete(transaction.id)}
+                    onClick={() => openDeleteConfirm(transaction.id)}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -210,6 +226,32 @@ export default function TransactionList() {
           ))}
         </TableBody>
       </Table>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              Delete Transaction
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this transaction? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-gray-200 bg-white text-gray-700 hover:bg-gray-50">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              className="bg-red-600 text-white hover:bg-red-700 focus:ring-red-500"
+              onClick={handleDeleteConfirmed}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 } 
