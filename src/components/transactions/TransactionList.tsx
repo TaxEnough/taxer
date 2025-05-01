@@ -32,6 +32,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useAuth } from "@/context/AuthContext";
+import { getAuthTokenFromClient } from "@/lib/auth-client";
 
 // Transaction type interface
 export interface Transaction {
@@ -58,47 +60,60 @@ const TransactionList = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
   
-  // Basit bir auth kontrolü
-  const [user, setUser] = useState<any>(null);
+  // Auth context kullanımı
+  const { user, loading: authLoading } = useAuth();
   
+  // Sayfa yüklendiğinde verileri getir
   useEffect(() => {
-    // localStorage'dan auth bilgisini kontrol et
-    const checkAuth = async () => {
-      try {
-        const token = localStorage.getItem('authToken');
-        if (token) {
-          // Kullanıcı giriş yapmış kabul edilir
-          setUser({ uid: 'authenticated-user' });
+    if (!authLoading) {
+      if (user) {
+        console.log("Kullanıcı oturumu açık, işlemler getiriliyor");
+        fetchTransactions();
+      } else {
+        // Yedek kimlik doğrulama kontrolü
+        const token = getAuthTokenFromClient();
+        const isLoggedInFlag = localStorage.getItem('isLoggedIn') === 'true';
+        
+        if (token || isLoggedInFlag) {
+          console.log("AuthContext kullanıcı yok ama token/flag var, işlemler getiriliyor");
+          fetchTransactions();
+        } else {
+          console.log("Oturum açılmamış durumu");
+          setLoading(false);
         }
-      } catch (error) {
-        console.error("Auth error:", error);
       }
-    };
-    
-    checkAuth();
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      fetchTransactions();
-    } else {
-      setLoading(false);
-      setTransactions([]);
     }
-  }, [user]);
+  }, [user, authLoading]);
 
   const fetchTransactions = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/transactions');
+      // Kimlik bilgilerini ekleyerek istek yap
+      const token = getAuthTokenFromClient();
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json'
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch('/api/transactions', {
+        headers,
+        credentials: 'include' // Çerezleri de gönder
+      });
+      
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
+      
       const data = await response.json();
+      
       // Sort by date (newest first)
       const sortedData = data.sort((a: Transaction, b: Transaction) => 
         new Date(b.date).getTime() - new Date(a.date).getTime()
       );
+      
       setTransactions(sortedData);
     } catch (error) {
       console.error("Error fetching transactions:", error);
@@ -127,10 +142,20 @@ const TransactionList = () => {
     
     setIsDeleting(true);
     try {
-      // Include credentials for cookies to be sent
+      // Kimlik bilgilerini ekleyerek istek yap
+      const token = getAuthTokenFromClient();
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json'
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const response = await fetch(`/api/transactions/${transactionToDelete}`, {
         method: 'DELETE',
-        credentials: 'include', // Important: sends cookies with the request
+        headers,
+        credentials: 'include', // Çerezleri de gönder
       });
       
       if (!response.ok) {
@@ -176,7 +201,7 @@ const TransactionList = () => {
     setSelectedTransaction(null);
   };
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <div className="flex justify-center my-8">
         <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500"></div>
@@ -184,11 +209,14 @@ const TransactionList = () => {
     );
   }
 
-  if (!user) {
+  // Kimlik doğrulama kontrolü - context veya yedek yöntemler ile kontrol
+  const isUserAuthenticated = !!user || localStorage.getItem('isLoggedIn') === 'true' || !!getAuthTokenFromClient();
+
+  if (!isUserAuthenticated) {
     return (
       <div className="text-center my-8">
         <p className="mb-4">Please sign in to view your transactions.</p>
-        <Link href="/signin">
+        <Link href="/login">
           <Button>Sign In</Button>
         </Link>
       </div>
