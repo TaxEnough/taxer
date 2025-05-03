@@ -82,7 +82,9 @@ export default function BlogDetailPage({ post }: { post: BlogPost }) {
           <h1 className="text-3xl font-extrabold text-gray-900 mb-4">
             {post.title}
           </h1>
-          <p className="text-xl text-gray-600 mb-6">{post.summary}</p>
+          <p className="text-xl text-gray-600 mb-6" 
+             dangerouslySetInnerHTML={{ __html: post.summary }}>
+          </p>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between text-sm text-gray-500 gap-4">
             <div className="flex items-center">
               <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-semibold mr-2">

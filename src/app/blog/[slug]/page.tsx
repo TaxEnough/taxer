@@ -160,7 +160,9 @@ export default async function BlogPostPage({ params }: BlogParams) {
               </div>
               
               <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">{post.title}</h1>
-              <p className="text-xl text-gray-600 mb-6">{post.summary}</p>
+              <p className="text-xl text-gray-600 mb-6" 
+                 dangerouslySetInnerHTML={{ __html: post.summary }}>
+              </p>
               
               {post.tags && post.tags.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-6">

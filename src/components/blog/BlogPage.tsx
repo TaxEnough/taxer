@@ -206,7 +206,9 @@ export default function BlogPage() {
               
               <div className="p-4 flex-grow flex flex-col">
                 <h2 className="text-xl font-semibold mb-2 text-gray-900">{post.title}</h2>
-                <p className="text-gray-600 mb-4 line-clamp-3 flex-grow">{post.summary}</p>
+                <div className="text-gray-600 mb-4 line-clamp-3 flex-grow"
+                     dangerouslySetInnerHTML={{ __html: post.summary }}>
+                </div>
                 
                 <div className="flex flex-wrap gap-2 mb-4">
                   {post.tags && post.tags.map((tag) => (
