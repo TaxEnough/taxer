@@ -16,7 +16,7 @@ const nextConfig = {
         has: [
           {
             type: 'host',
-            value: 'blog.siteadi.com',
+            value: 'blog.taxenough.com',
           },
         ],
         destination: '/blog/:path*',

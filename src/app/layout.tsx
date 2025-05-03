@@ -8,8 +8,8 @@ import React, { Suspense } from 'react'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Tax Enough | Your Tax and Investment Tools Assistant',
-  description: 'Calculate your tax obligations from stock investments in the US quickly and accurately.',
+  title: 'TaxEnough | Tax and Investment Calculator for US Investors',
+  description: 'Simplify your US investment tax calculations with TaxEnough. Quick and accurate tools for capital gains, dividends, and more.',
   icons: {
     icon: [
       {
@@ -56,7 +56,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en-US">
       <body className={inter.className}>
         <LoadingTransition />
         <Providers>
