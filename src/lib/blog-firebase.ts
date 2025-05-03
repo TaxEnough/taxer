@@ -31,6 +31,8 @@ export interface BlogPost {
   tags?: string[];
   isPublished: boolean;
   imageUrl?: string;
+  readTime?: number;
+  tagString?: string;
 }
 
 // Firebase'den gelen verileri BlogPost tipine dönüştür
@@ -48,7 +50,9 @@ const convertBlogPost = (doc: DocumentData): BlogPost => {
     slug: data.slug || '',
     tags: data.tags || [],
     isPublished: data.isPublished !== undefined ? data.isPublished : true,
-    imageUrl: data.imageUrl || undefined
+    imageUrl: data.imageUrl || undefined,
+    readTime: data.readTime || undefined,
+    tagString: data.tagString || undefined
   };
 };
 

@@ -350,6 +350,9 @@ export default function AdminBlogPage() {
       // Düzenleme modunu kapat
       setEditingPost(null);
       setError(null);
+      
+      // Başarı mesajı göster
+      alert('Blog yazısı başarıyla güncellendi');
     } catch (err: any) {
       console.error('Blog yazısı güncellenirken hata:', err);
       setError(err.message || 'Blog yazısı güncellenirken bir hata oluştu');
