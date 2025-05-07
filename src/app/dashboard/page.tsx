@@ -21,10 +21,10 @@ interface TradeData {
   transactionDate: string;
   totalAmount: number;
   commissionFees: number;
-  buyPrice?: number;  // Alım fiyatı eklendi
-  buyDate?: string;   // Alım tarihi eklendi
-  sellPrice?: number; // Satım fiyatı eklendi
-  sellDate?: string;  // Satım tarihi eklendi
+  buyPrice?: number;  // Purchase price added
+  buyDate?: string;   // Purchase date added
+  sellPrice?: number; // Selling price added
+  sellDate?: string;  // Selling date added
 }
 
 // Stock tipini buraya da ekle
@@ -219,14 +219,14 @@ export default function DashboardPage() {
       sellingPrice: item.sellPrice || item.pricePerShare || 0,
       sharesSold: item.numberOfShares || 0,
       tradingFees: item.commissionFees || 0,
-      holdingPeriod: hesaplaHoldingPeriod(item.buyDate || item.transactionDate, item.sellDate || item.transactionDate),
+      holdingPeriod: calculateHoldingPeriod(item.buyDate || item.transactionDate, item.sellDate || item.transactionDate),
     }));
     setCalculatorStocks(stocks);
     alert('Data successfully transferred to the tax calculator');
   };
 
   // Alış ve satış tarihinden ay farkını hesapla
-  function hesaplaHoldingPeriod(buyDateStr?: string, sellDateStr?: string) {
+  function calculateHoldingPeriod(buyDateStr?: string, sellDateStr?: string) {
     if (!buyDateStr || !sellDateStr) return 0;
     
     try {
@@ -256,15 +256,15 @@ export default function DashboardPage() {
         sellDate = new Date(sellDateStr);
       }
       
-      // Geçerli tarihler mi kontrol et
+      // Check if dates are valid
       if (isNaN(buyDate.getTime()) || isNaN(sellDate.getTime())) {
-        console.error("Geçersiz tarih formatı:", buyDateStr, sellDateStr);
+        console.error("Invalid date format:", buyDateStr, sellDateStr);
         return 0;
       }
       
       return (sellDate.getFullYear() - buyDate.getFullYear()) * 12 + (sellDate.getMonth() - buyDate.getMonth());
     } catch (error) {
-      console.error("Tarih dönüştürme hatası:", error);
+      console.error("Date conversion error:", error);
       return 0;
     }
   }
@@ -292,7 +292,7 @@ TSLA,Sell,7,200.50,2023-03-01,235.75,2023-07-15,1650.25,7.99`;
     URL.revokeObjectURL(url);
   };
 
-  // Sayfa yüklendiğinde localStorage'a isLoggedIn değerini ayarla
+  // Set isLoggedIn value in localStorage when page loads
   useEffect(() => {
     if (typeof window !== 'undefined') {
       console.log('Dashboard page loaded, setting localStorage isLoggedIn=true');
@@ -303,7 +303,7 @@ TSLA,Sell,7,200.50,2023-03-01,235.75,2023-07-15,1650.25,7.99`;
   useEffect(() => {
     console.log('DashboardPage useEffect running, loading:', loading, 'user:', user);
     
-    // Token varsa yükleme durumunu sonlandır
+    // End loading state if token exists
     const token = getAuthTokenFromClient();
     if (token) {
       console.log('Token found, loading page');
@@ -311,7 +311,7 @@ TSLA,Sell,7,200.50,2023-03-01,235.75,2023-07-15,1650.25,7.99`;
       return;
     }
     
-    // Token yoksa normal kontrol mekanizmasını çalıştır
+    // Run normal control mechanism if no token
     if (!loading) {
       if (!user) {
         console.log('User is not logged in, redirecting to login page');
@@ -323,7 +323,7 @@ TSLA,Sell,7,200.50,2023-03-01,235.75,2023-07-15,1650.25,7.99`;
     }
   }, [user, loading, router]);
 
-  // Token var mı kontrol et ve varsa sayfayı göster
+  // Check if token exists and show page
   if (loading && pageLoading && !getAuthTokenFromClient()) {
     return (
       <>
@@ -339,7 +339,7 @@ TSLA,Sell,7,200.50,2023-03-01,235.75,2023-07-15,1650.25,7.99`;
     );
   }
 
-  // Token var ama user yok, kullanıcı bilgilerini geçici olarak oluştur
+  // Token exists but no user, create temporary user info
   const userName = user?.name || 'User';
 
   return (
