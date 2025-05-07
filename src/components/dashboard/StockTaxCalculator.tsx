@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 // Define Stock type
 interface Stock {
@@ -36,12 +36,20 @@ interface TaxBracket {
     threshold: number;
 }
 
-export default function StockTaxCalculator() {
-    const [stocks, setStocks] = useState<Stock[]>([
-        { id: '1', symbol: '', purchasePrice: 0, sellingPrice: 0, sharesSold: 0, tradingFees: 0, holdingPeriod: 0 }
-    ]);
+interface StockTaxCalculatorProps {
+    initialStocks?: Stock[];
+}
+
+export default function StockTaxCalculator({ initialStocks }: StockTaxCalculatorProps) {
+    const [stocks, setStocks] = useState<Stock[]>(initialStocks && initialStocks.length > 0 ? initialStocks : [{ id: '1', symbol: '', purchasePrice: 0, sellingPrice: 0, sharesSold: 0, tradingFees: 0, holdingPeriod: 0 }]);
     const [totalIncome, setTotalIncome] = useState<number>(0);
     const [results, setResults] = useState<Results | null>(null);
+
+    useEffect(() => {
+        if (initialStocks && initialStocks.length > 0) {
+            setStocks(initialStocks);
+        }
+    }, [initialStocks]);
 
     // Add stock
     const addStock = () => {

@@ -23,6 +23,19 @@ interface TradeData {
   commissionFees: number;
 }
 
+// Stock tipini buraya da ekle
+interface Stock {
+  id: string;
+  symbol: string;
+  purchasePrice: number;
+  sellingPrice: number;
+  sharesSold: number;
+  tradingFees: number;
+  holdingPeriod: number;
+  gainLoss?: number;
+  isShortTerm?: boolean;
+}
+
 export default function DashboardPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -36,6 +49,9 @@ export default function DashboardPage() {
   
   // Add this new state for the collapsible panel
   const [isTradeHistoryOpen, setIsTradeHistoryOpen] = useState(false);
+  
+  // Stock tipini buraya da ekle
+  const [calculatorStocks, setCalculatorStocks] = useState<Stock[]>([]);
   
   // CSV Dosyası işleme
   const processCSV = async (file: File) => {
@@ -172,22 +188,36 @@ export default function DashboardPage() {
 
   // İşlenen verileri hesap makinesine aktar
   const transferToCalculator = () => {
-    // En az bir veri olduğunu kontrol et
     if (!processedData.length) {
       alert('No data to transfer');
       return;
     }
-    
-    // İşlem türü 'Sell' olanları bul
     const sellTransactions = processedData.filter(data => data.transactionType === 'Sell');
-    
     if (sellTransactions.length === 0) {
       alert('No sell transactions found to transfer');
       return;
     }
-    
+    // SELL işlemlerini Stock formatına çevir
+    const stocks: Stock[] = sellTransactions.map((item, idx) => ({
+      id: `${item.ticker}-${idx}-${Date.now()}`,
+      symbol: item.ticker,
+      purchasePrice: item.pricePerShare || 0,
+      sellingPrice: item.pricePerShare || 0,
+      sharesSold: item.numberOfShares || 0,
+      tradingFees: item.commissionFees || 0,
+      holdingPeriod: hesaplaHoldingPeriod(item.transactionDate, item.transactionDate),
+    }));
+    setCalculatorStocks(stocks);
     alert('Data successfully transferred to the tax calculator');
   };
+
+  // Alış ve satış tarihinden ay farkını hesapla
+  function hesaplaHoldingPeriod(buyDateStr?: string, sellDateStr?: string) {
+    if (!buyDateStr || !sellDateStr) return 0;
+    const buyDate = new Date(buyDateStr);
+    const sellDate = new Date(sellDateStr);
+    return (sellDate.getFullYear() - buyDate.getFullYear()) * 12 + (sellDate.getMonth() - buyDate.getMonth());
+  }
 
   // Handle CSV sample download
   const handleDownloadSample = () => {
@@ -299,7 +329,7 @@ GOOGL,Buy,2023-03-10,2,2450.75,4901.50,7.99`;
               
               <div className="mt-6">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-medium text-gray-900 mb-4">Trading History Converter</h2>
+                <h2 className="text-lg font-medium text-gray-900 mb-4">Trading History Converter</h2>
                   <button
                     onClick={() => setIsTradeHistoryOpen(!isTradeHistoryOpen)}
                     className="text-sm text-blue-600 hover:text-blue-800 flex items-center"
@@ -416,7 +446,7 @@ GOOGL,Buy,2023-03-10,2,2450.75,4901.50,7.99`;
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                               </svg>
-                            </p>
+                          </p>
                           </div>
                         )}
                       </div>
@@ -469,7 +499,7 @@ GOOGL,Buy,2023-03-10,2,2450.75,4901.50,7.99`;
             
             {/* Right Panel */}
             <div className="w-full lg:w-2/3">
-              <StockTaxCalculator />
+              <StockTaxCalculator initialStocks={calculatorStocks} />
             </div>
           </div>
         </div>
