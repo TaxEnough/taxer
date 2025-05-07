@@ -21,6 +21,10 @@ interface TradeData {
   transactionDate: string;
   totalAmount: number;
   commissionFees: number;
+  buyPrice?: number;  // Alım fiyatı eklendi
+  buyDate?: string;   // Alım tarihi eklendi
+  sellPrice?: number; // Satım fiyatı eklendi
+  sellDate?: string;  // Satım tarihi eklendi
 }
 
 // Stock tipini buraya da ekle
@@ -120,12 +124,18 @@ export default function DashboardPage() {
     
     // Olası sütun eşleştirmeleri
     const tickerColumn = findColumn(headers, ['ticker', 'symbol', 'stock', 'hisse']);
-    const typeColumn = findColumn(headers, ['type', 'transaction', 'işlem', 'alım', 'satım', 'buy', 'sell']);
-    const sharesColumn = findColumn(headers, ['shares', 'number', 'adet', 'miktar', 'quantity']);
-    const priceColumn = findColumn(headers, ['price', 'fiyat', 'value', 'değer']);
-    const dateColumn = findColumn(headers, ['date', 'tarih', 'time', 'zaman']);
-    const totalColumn = findColumn(headers, ['total', 'toplam', 'amount', 'tutar']);
-    const feesColumn = findColumn(headers, ['fee', 'commission', 'ücret', 'komisyon']);
+    const typeColumn = findColumn(headers, ['type', 'transaction', 'işlem', 'alım', 'satım', 'buy', 'sell', 'transaction type']);
+    const sharesColumn = findColumn(headers, ['shares', 'number', 'adet', 'miktar', 'quantity', 'number of shares']);
+    const priceColumn = findColumn(headers, ['price', 'fiyat', 'value', 'değer', 'price per share']);
+    const dateColumn = findColumn(headers, ['date', 'tarih', 'time', 'zaman', 'transaction date']);
+    const totalColumn = findColumn(headers, ['total', 'toplam', 'amount', 'tutar', 'total amount']);
+    const feesColumn = findColumn(headers, ['fee', 'commission', 'ücret', 'komisyon', 'commission/fees']);
+    
+    // Yeni eklenen alanlar için sütunları bul
+    const buyPriceColumn = findColumn(headers, ['buy price', 'alım fiyatı', 'alim fiyati']);
+    const buyDateColumn = findColumn(headers, ['buy date', 'alım tarihi', 'alim tarihi']);
+    const sellPriceColumn = findColumn(headers, ['sell price', 'satım fiyatı', 'satim fiyati']);
+    const sellDateColumn = findColumn(headers, ['sell date', 'satım tarihi', 'satim tarihi']);
     
     // En azından ticker, işlem türü, miktar ve fiyat bilgisine ihtiyacımız var
     if (!tickerColumn || !typeColumn || !sharesColumn || !priceColumn) {
@@ -154,7 +164,11 @@ export default function DashboardPage() {
           pricePerShare: parseFloat(String(row[priceColumn])) || 0,
           transactionDate: dateColumn ? String(row[dateColumn]) : '',
           totalAmount: totalColumn ? parseFloat(String(row[totalColumn])) || 0 : 0,
-          commissionFees: feesColumn ? parseFloat(String(row[feesColumn])) || 0 : 0
+          commissionFees: feesColumn ? parseFloat(String(row[feesColumn])) || 0 : 0,
+          buyPrice: buyPriceColumn ? parseFloat(String(row[buyPriceColumn])) || 0 : 0,
+          buyDate: buyDateColumn ? String(row[buyDateColumn]) : '',
+          sellPrice: sellPriceColumn ? parseFloat(String(row[sellPriceColumn])) || 0 : 0,
+          sellDate: sellDateColumn ? String(row[sellDateColumn]) : ''
         });
       }
     });
@@ -201,11 +215,11 @@ export default function DashboardPage() {
     const stocks: Stock[] = sellTransactions.map((item, idx) => ({
       id: `${item.ticker}-${idx}-${Date.now()}`,
       symbol: item.ticker,
-      purchasePrice: item.pricePerShare || 0,
-      sellingPrice: item.pricePerShare || 0,
+      purchasePrice: item.buyPrice || item.pricePerShare || 0,
+      sellingPrice: item.sellPrice || item.pricePerShare || 0,
       sharesSold: item.numberOfShares || 0,
       tradingFees: item.commissionFees || 0,
-      holdingPeriod: hesaplaHoldingPeriod(item.transactionDate, item.transactionDate),
+      holdingPeriod: hesaplaHoldingPeriod(item.buyDate || item.transactionDate, item.sellDate || item.transactionDate),
     }));
     setCalculatorStocks(stocks);
     alert('Data successfully transferred to the tax calculator');
@@ -214,17 +228,31 @@ export default function DashboardPage() {
   // Alış ve satış tarihinden ay farkını hesapla
   function hesaplaHoldingPeriod(buyDateStr?: string, sellDateStr?: string) {
     if (!buyDateStr || !sellDateStr) return 0;
-    const buyDate = new Date(buyDateStr);
-    const sellDate = new Date(sellDateStr);
-    return (sellDate.getFullYear() - buyDate.getFullYear()) * 12 + (sellDate.getMonth() - buyDate.getMonth());
+    
+    try {
+      const buyDate = new Date(buyDateStr);
+      const sellDate = new Date(sellDateStr);
+      
+      // Geçerli tarihler mi kontrol et
+      if (isNaN(buyDate.getTime()) || isNaN(sellDate.getTime())) {
+        return 0;
+      }
+      
+      return (sellDate.getFullYear() - buyDate.getFullYear()) * 12 + (sellDate.getMonth() - buyDate.getMonth());
+    } catch (error) {
+      console.error("Tarih dönüştürme hatası:", error);
+      return 0;
+    }
   }
 
   // Handle CSV sample download
   const handleDownloadSample = () => {
-    const sampleCSVContent = `Symbol,Transaction Type,Date,Shares,Price,Total Amount,Fees
-AAPL,Buy,2023-01-15,10,150.25,1502.50,7.99
-MSFT,Sell,2023-07-20,5,320.45,1602.25,7.99
-GOOGL,Buy,2023-03-10,2,2450.75,4901.50,7.99`;
+    const sampleCSVContent = `Symbol,Transaction Type,Number of Shares,Price Per Share,Transaction Date,Total Amount,Commission/Fees,Buy Price,Buy Date,Sell Price,Sell Date
+AAPL,Buy,10,150.25,2023-01-15,1502.50,7.99,150.25,2023-01-15,,
+AAPL,Sell,5,180.75,2023-06-20,903.75,7.99,150.25,2023-01-15,180.75,2023-06-20
+MSFT,Buy,8,270.50,2023-02-10,2164.00,7.99,270.50,2023-02-10,,
+MSFT,Sell,4,320.45,2023-08-15,1281.80,7.99,270.50,2023-02-10,320.45,2023-08-15
+GOOGL,Buy,2,2450.75,2023-03-10,4901.50,7.99,2450.75,2023-03-10,,`;
 
     const blob = new Blob([sampleCSVContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -421,6 +449,10 @@ GOOGL,Buy,2023-03-10,2,2450.75,4901.50,7.99`;
                               <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Shares</th>
                               <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Price</th>
                               <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Date</th>
+                              <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Buy Price</th>
+                              <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Buy Date</th>
+                              <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Sell Price</th>
+                              <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Sell Date</th>
                               <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Total</th>
                               <th className="px-2 py-1 text-left text-xs font-medium text-gray-500">Fees</th>
                             </tr>
@@ -433,6 +465,10 @@ GOOGL,Buy,2023-03-10,2,2450.75,4901.50,7.99`;
                                 <td className="px-2 py-1">{item.numberOfShares}</td>
                                 <td className="px-2 py-1">${item.pricePerShare.toFixed(2)}</td>
                                 <td className="px-2 py-1">{item.transactionDate}</td>
+                                <td className="px-2 py-1">${item.buyPrice ? item.buyPrice.toFixed(2) : '0.00'}</td>
+                                <td className="px-2 py-1">{item.buyDate || '-'}</td>
+                                <td className="px-2 py-1">${item.sellPrice ? item.sellPrice.toFixed(2) : '0.00'}</td>
+                                <td className="px-2 py-1">{item.sellDate || '-'}</td>
                                 <td className="px-2 py-1">${item.totalAmount ? item.totalAmount.toFixed(2) : (item.numberOfShares * item.pricePerShare).toFixed(2)}</td>
                                 <td className="px-2 py-1">${item.commissionFees ? item.commissionFees.toFixed(2) : '0.00'}</td>
                               </tr>
