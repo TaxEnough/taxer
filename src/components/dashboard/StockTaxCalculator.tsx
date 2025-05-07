@@ -47,7 +47,21 @@ export default function StockTaxCalculator({ initialStocks }: StockTaxCalculator
 
     useEffect(() => {
         if (initialStocks && initialStocks.length > 0) {
-            setStocks(initialStocks);
+            // Aktarılan hisseler için gainLoss değerlerini hesapla
+            const calculatedStocks = initialStocks.map(stock => {
+                // Kar/zarar hesaplaması
+                const gainLoss = (stock.sellingPrice - stock.purchasePrice) * stock.sharesSold - stock.tradingFees;
+                const isShortTerm = stock.holdingPeriod < 12;
+                
+                // Hesaplanan değerlerle yeni nesne döndür
+                return {
+                    ...stock,
+                    gainLoss: gainLoss,
+                    isShortTerm: isShortTerm
+                };
+            });
+            
+            setStocks(calculatedStocks);
         }
     }, [initialStocks]);
 
