@@ -13,6 +13,10 @@ interface TradeData {
   transactionDate: string;
   totalAmount: number;
   commissionFees: number;
+  buyPrice?: number;
+  buyDate?: string;
+  sellPrice?: number;
+  sellDate?: string;
 }
 
 interface ColumnMapping {
@@ -23,6 +27,10 @@ interface ColumnMapping {
   transactionDate: string;
   totalAmount: string;
   commissionFees: string;
+  buyPrice: string;
+  buyDate: string;
+  sellPrice: string;
+  sellDate: string;
 }
 
 interface TradeHistoryUploaderProps {
@@ -41,7 +49,11 @@ const TradeHistoryUploader: React.FC<TradeHistoryUploaderProps> = ({ onDataProce
     pricePerShare: '',
     transactionDate: '',
     totalAmount: '',
-    commissionFees: ''
+    commissionFees: '',
+    buyPrice: '',
+    buyDate: '',
+    sellPrice: '',
+    sellDate: ''
   });
 
   // Standart sütun adları (varyasyonları içerir)
@@ -52,7 +64,11 @@ const TradeHistoryUploader: React.FC<TradeHistoryUploaderProps> = ({ onDataProce
     pricePerShare: ['price per share', 'price', 'share price', 'unit price', 'birim fiyat', 'fiyat', 'hisse fiyatı'],
     transactionDate: ['transaction date', 'date', 'trade date', 'tarih', 'işlem tarihi'],
     totalAmount: ['total amount', 'total', 'value', 'toplam tutar', 'toplam', 'değer'],
-    commissionFees: ['commission/fees', 'commission', 'fees', 'komisyon', 'ücret', 'komisyon/ücret']
+    commissionFees: ['commission/fees', 'commission', 'fees', 'komisyon', 'ücret', 'komisyon/ücret'],
+    buyPrice: ['buy price', 'alış fiyatı', 'alim fiyati', 'purchase price', 'alış', 'alım fiyat'],
+    buyDate: ['buy date', 'alış tarihi', 'alim tarihi', 'purchase date', 'alım tarih'],
+    sellPrice: ['sell price', 'satış fiyatı', 'satim fiyati', 'satım fiyat', 'satış'],
+    sellDate: ['sell date', 'satış tarihi', 'satim tarihi', 'satım tarih']
   };
 
   // Dosyayı ilk işleme ve sütunları otomatik eşleştirme
@@ -68,7 +84,11 @@ const TradeHistoryUploader: React.FC<TradeHistoryUploaderProps> = ({ onDataProce
       pricePerShare: '',
       transactionDate: '',
       totalAmount: '',
-      commissionFees: ''
+      commissionFees: '',
+      buyPrice: '',
+      buyDate: '',
+      sellPrice: '',
+      sellDate: ''
     };
     
     // Her başlık için potansiyel eşleşme bul
@@ -148,7 +168,7 @@ const TradeHistoryUploader: React.FC<TradeHistoryUploaderProps> = ({ onDataProce
   // Veriyi son haline getir ve ilet
   const processMappedData = () => {
     // Tüm gerekli alanlar eşleştirildi mi kontrol et
-    const requiredFields: (keyof ColumnMapping)[] = ['ticker', 'transactionType', 'numberOfShares', 'pricePerShare'];
+    const requiredFields: (keyof ColumnMapping)[] = ['ticker', 'transactionType', 'numberOfShares'];
     const missingFields = requiredFields.filter(field => !columnMapping[field]);
     
     if (missingFields.length > 0) {
@@ -249,18 +269,40 @@ const TradeHistoryUploader: React.FC<TradeHistoryUploaderProps> = ({ onDataProce
             commissionFees = parseFloatSafe(row[columnMapping.commissionFees]);
           }
           
-          // Ticker özel olarak boş bırakılmışsa varsayılan bir değer ata
-          const finalTicker = ticker || `Stock${index + 1}`;
+          // Yeni eklenen alanlar
+          let buyPrice = 0;
+          if (columnMapping.buyPrice && row[columnMapping.buyPrice] != null) {
+            buyPrice = parseFloatSafe(row[columnMapping.buyPrice]);
+          }
           
-          // Veriyi ekle
+          let buyDate = '';
+          if (columnMapping.buyDate && row[columnMapping.buyDate] != null) {
+            buyDate = String(row[columnMapping.buyDate]);
+          }
+          
+          let sellPrice = 0;
+          if (columnMapping.sellPrice && row[columnMapping.sellPrice] != null) {
+            sellPrice = parseFloatSafe(row[columnMapping.sellPrice]);
+          }
+          
+          let sellDate = '';
+          if (columnMapping.sellDate && row[columnMapping.sellDate] != null) {
+            sellDate = String(row[columnMapping.sellDate]);
+          }
+          
+          // Veri nesnesine ekle
           processedData.push({
-            ticker: finalTicker,
+            ticker,
             transactionType: standardType,
-            numberOfShares: numberOfShares,
-            pricePerShare: pricePerShare,
-            transactionDate: transactionDate,
-            totalAmount: totalAmount,
-            commissionFees: commissionFees
+            numberOfShares,
+            pricePerShare,
+            transactionDate,
+            totalAmount,
+            commissionFees,
+            buyPrice,
+            buyDate,
+            sellPrice,
+            sellDate
           });
         } else {
           invalidRows++;
@@ -327,7 +369,11 @@ const TradeHistoryUploader: React.FC<TradeHistoryUploaderProps> = ({ onDataProce
       pricePerShare: '',
       transactionDate: '',
       totalAmount: '',
-      commissionFees: ''
+      commissionFees: '',
+      buyPrice: '',
+      buyDate: '',
+      sellPrice: '',
+      sellDate: ''
     });
 
     if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
@@ -409,7 +455,7 @@ const TradeHistoryUploader: React.FC<TradeHistoryUploaderProps> = ({ onDataProce
                   We've automatically mapped your columns. Please verify or adjust if needed.
                 </p>
                 <p className="text-sm font-medium text-gray-800 mb-3">
-                  Required fields: <span className="text-primary-600">Symbol, Transaction Type, Number of Shares, Price Per Share</span>
+                  Required fields: <span className="text-primary-600">Symbol, Transaction Type, Number of Shares, Buy Price, Buy Date, Sell Price, Sell Date</span>
                 </p>
                 
                 <div className="p-3 sm:p-4 bg-blue-50 border border-blue-100 rounded-md mb-5">
@@ -469,10 +515,10 @@ const TradeHistoryUploader: React.FC<TradeHistoryUploaderProps> = ({ onDataProce
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Price Per Share <span className="text-red-500">*</span></label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Buy Price <span className="text-red-500">*</span></label>
                     <select 
-                      value={columnMapping.pricePerShare} 
-                      onChange={(e) => handleMappingChange('pricePerShare', e.target.value)}
+                      value={columnMapping.buyPrice} 
+                      onChange={(e) => handleMappingChange('buyPrice', e.target.value)}
                       className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
                     >
                       <option value="">-- Select --</option>
@@ -485,10 +531,10 @@ const TradeHistoryUploader: React.FC<TradeHistoryUploaderProps> = ({ onDataProce
                 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Date (Optional)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Buy Date <span className="text-red-500">*</span></label>
                     <select 
-                      value={columnMapping.transactionDate} 
-                      onChange={(e) => handleMappingChange('transactionDate', e.target.value)}
+                      value={columnMapping.buyDate} 
+                      onChange={(e) => handleMappingChange('buyDate', e.target.value)}
                       className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
                     >
                       <option value="">-- Select --</option>
@@ -499,10 +545,10 @@ const TradeHistoryUploader: React.FC<TradeHistoryUploaderProps> = ({ onDataProce
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount (Optional)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Sell Price <span className="text-red-500">*</span></label>
                     <select 
-                      value={columnMapping.totalAmount} 
-                      onChange={(e) => handleMappingChange('totalAmount', e.target.value)}
+                      value={columnMapping.sellPrice} 
+                      onChange={(e) => handleMappingChange('sellPrice', e.target.value)}
                       className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
                     >
                       <option value="">-- Select --</option>
@@ -513,10 +559,24 @@ const TradeHistoryUploader: React.FC<TradeHistoryUploaderProps> = ({ onDataProce
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Commission/Fees (Optional)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Sell Date <span className="text-red-500">*</span></label>
                     <select 
-                      value={columnMapping.commissionFees} 
-                      onChange={(e) => handleMappingChange('commissionFees', e.target.value)}
+                      value={columnMapping.sellDate} 
+                      onChange={(e) => handleMappingChange('sellDate', e.target.value)}
+                      className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                    >
+                      <option value="">-- Select --</option>
+                      {headers.map((header, index) => (
+                        <option key={index} value={header}>{header}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Price Per Share <span className="text-red-500">*</span></label>
+                    <select 
+                      value={columnMapping.pricePerShare} 
+                      onChange={(e) => handleMappingChange('pricePerShare', e.target.value)}
                       className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
                     >
                       <option value="">-- Select --</option>

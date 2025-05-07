@@ -230,11 +230,35 @@ export default function DashboardPage() {
     if (!buyDateStr || !sellDateStr) return 0;
     
     try {
-      const buyDate = new Date(buyDateStr);
-      const sellDate = new Date(sellDateStr);
+      // Tarih formatını kontrol et ve uygun şekilde dönüştür
+      let buyDate: Date;
+      let sellDate: Date;
+      
+      // Tarih formatını algılamaya çalış
+      if (buyDateStr.includes('-')) {
+        // ISO format (YYYY-MM-DD)
+        buyDate = new Date(buyDateStr);
+      } else if (buyDateStr.includes('/')) {
+        // US format (MM/DD/YYYY)
+        const [month, day, year] = buyDateStr.split('/').map(Number);
+        buyDate = new Date(year, month - 1, day);
+      } else {
+        // Diğer formatlar için doğrudan dene
+        buyDate = new Date(buyDateStr);
+      }
+      
+      if (sellDateStr.includes('-')) {
+        sellDate = new Date(sellDateStr);
+      } else if (sellDateStr.includes('/')) {
+        const [month, day, year] = sellDateStr.split('/').map(Number);
+        sellDate = new Date(year, month - 1, day);
+      } else {
+        sellDate = new Date(sellDateStr);
+      }
       
       // Geçerli tarihler mi kontrol et
       if (isNaN(buyDate.getTime()) || isNaN(sellDate.getTime())) {
+        console.error("Geçersiz tarih formatı:", buyDateStr, sellDateStr);
         return 0;
       }
       
@@ -247,12 +271,15 @@ export default function DashboardPage() {
 
   // Handle CSV sample download
   const handleDownloadSample = () => {
-    const sampleCSVContent = `Symbol,Transaction Type,Number of Shares,Price Per Share,Transaction Date,Total Amount,Commission/Fees,Buy Price,Buy Date,Sell Price,Sell Date
-AAPL,Buy,10,150.25,2023-01-15,1502.50,7.99,150.25,2023-01-15,,
-AAPL,Sell,5,180.75,2023-06-20,903.75,7.99,150.25,2023-01-15,180.75,2023-06-20
-MSFT,Buy,8,270.50,2023-02-10,2164.00,7.99,270.50,2023-02-10,,
-MSFT,Sell,4,320.45,2023-08-15,1281.80,7.99,270.50,2023-02-10,320.45,2023-08-15
-GOOGL,Buy,2,2450.75,2023-03-10,4901.50,7.99,2450.75,2023-03-10,,`;
+    const sampleCSVContent = `Symbol,Transaction Type,Number of Shares,Buy Price,Buy Date,Sell Price,Sell Date,Total Amount,Commission/Fees
+AAPL,Buy,10,150.25,2023-01-15,,,1502.50,7.99
+AAPL,Sell,5,150.25,2023-01-15,180.75,2023-06-20,903.75,7.99
+MSFT,Buy,8,270.50,2023-02-10,,,2164.00,7.99
+MSFT,Sell,4,270.50,2023-02-10,320.45,2023-08-15,1281.80,7.99
+GOOGL,Buy,2,2450.75,2023-03-10,,,4901.50,7.99
+GOOG,Sell,1,2500.00,2023-02-01,2750.50,2023-05-10,2750.50,9.99
+TSLA,Buy,15,200.50,2023-03-01,,,3007.50,7.99
+TSLA,Sell,7,200.50,2023-03-01,235.75,2023-07-15,1650.25,7.99`;
 
     const blob = new Blob([sampleCSVContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
