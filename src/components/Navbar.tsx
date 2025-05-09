@@ -8,6 +8,14 @@ import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
+// Kullanıcı arayüzünü doğrudan Navbar içinde tanımlayarak tip uyumluluğunu sağlıyoruz
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  accountStatus?: 'free' | 'basic' | 'premium';
+}
+
 export default function Navbar() {
   const { user, logout } = useAuth();
   const pathName = usePathname();
