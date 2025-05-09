@@ -95,6 +95,10 @@ function redirectToPricing(request: NextRequest) {
 // Middleware'in çalışacağı route'ları belirleme
 export const config = {
   matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico|images|.*\\.png$).*)',
+    '/dashboard/:path*',
+    '/transactions/:path*',
+    '/reports/:path*',
+    '/login',
+    '/register'
   ],
 }; 

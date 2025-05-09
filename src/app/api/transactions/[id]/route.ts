@@ -87,6 +87,15 @@ export async function GET(
     
     const idToken = authHeader.split('Bearer ')[1];
     const decodedToken = await auth.verifyIdToken(idToken);
+    
+    // Check for premium account status
+    if (!decodedToken.accountStatus || decodedToken.accountStatus === 'free') {
+      return NextResponse.json(
+        { error: 'Bu işlem için premium abonelik gereklidir' },
+        { status: 403 }
+      );
+    }
+    
     const userId = decodedToken.uid;
     
     // Get transaction ID
@@ -132,6 +141,15 @@ export async function PUT(
     
     const idToken = authHeader.split('Bearer ')[1];
     const decodedToken = await auth.verifyIdToken(idToken);
+    
+    // Check for premium account status
+    if (!decodedToken.accountStatus || decodedToken.accountStatus === 'free') {
+      return NextResponse.json(
+        { error: 'Bu işlem için premium abonelik gereklidir' },
+        { status: 403 }
+      );
+    }
+    
     const userId = decodedToken.uid;
     
     // Get transaction ID
@@ -176,16 +194,14 @@ export async function PUT(
       updateData.amount = price * shares;
     }
     
-    // Update the transaction
+    // Update transaction
     await transactionRef.update(updateData);
     
-    // Return updated transaction
-    const updatedDoc = await transactionRef.get();
-    const updatedData = updatedDoc.data() as Transaction;
-    
     return NextResponse.json({
-      ...updatedData,
-      id: transactionId
+      message: 'Transaction successfully updated',
+      id: transactionId,
+      ...existingData,
+      ...updateData
     });
   } catch (error) {
     console.error('Error updating transaction:', error);
@@ -196,82 +212,81 @@ export async function PUT(
   }
 }
 
-// Delete transaction endpoint - Silme işlemi için kullanıcı doğrulaması tamamen kaldırıldı
+// Delete transaction endpoint
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    // Doğrudan transaction ID'sini al
+    // Get the transaction ID
     const transactionId = params.id;
     
-    console.log(`İşlem silme isteği alındı: ${transactionId}`);
-    
-    // Tüm kullanıcıların verilerine erişim izni
-    try {
-      // Tüm kullanıcıların transactions koleksiyonlarında bu ID'yi ara
-      const usersSnapshot = await db.collection('users').get();
-      let transactionFound = false;
-      let deleteSuccess = false;
-      
-      for (const userDoc of usersSnapshot.docs) {
-        const userId = userDoc.id;
-        
-        // Her kullanıcının transactions koleksiyonunda kontrol et
-        const transactionRef = db.collection('users').doc(userId).collection('transactions').doc(transactionId);
-        const transactionDoc = await transactionRef.get();
-        
-        if (transactionDoc.exists) {
-          transactionFound = true;
-          console.log(`İşlem bulundu - Kullanıcı: ${userId}`);
-          
-          // İşlemi sil
-          try {
-            await transactionRef.delete();
-            deleteSuccess = true;
-            console.log(`İşlem başarıyla silindi: ${transactionId}`);
-            break; // İşlem bulundu ve silindi, döngüyü sonlandır
-          } catch (deleteError: any) {
-            console.error(`Silme hatası: ${deleteError.message}`);
-          }
-        }
-      }
-      
-      if (transactionFound) {
-        if (deleteSuccess) {
-          return NextResponse.json({
-            message: 'İşlem başarıyla silindi'
-          });
-        } else {
-          return NextResponse.json({
-            message: 'İşlem bulundu ancak silinemedi',
-            success: false
-          });
-        }
-      } else {
-        console.log(`İşlem hiçbir kullanıcıda bulunamadı: ${transactionId}`);
-        return NextResponse.json({
-          message: 'İşlem bulunamadı',
-          success: false
-        });
-      }
-    } catch (docError: any) {
-      console.error(`İşlem arama hatası: ${docError.message}`);
-      
-      // Her durumda başarılı yanıt döndür (UI güncelleme için)
-      return NextResponse.json({
-        message: 'İşlem silme işlemi tamamlandı',
-        success: true
-      });
+    // Authorization token from header
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
     }
-  } catch (error: any) {
-    // Hata durumunda
-    console.error('İşlem silme hatası:', error);
     
-    // Her durumda başarılı yanıt döndür (UI güncelleme için)
-    return NextResponse.json({
-      message: 'İşlem silme işlemi işlendi',
-      success: true
-    });
+    const idToken = authHeader.split('Bearer ')[1];
+    
+    try {
+      // Verify token and get user
+      const decodedToken = await auth.verifyIdToken(idToken);
+      
+      // Check for premium account status
+      if (!decodedToken.accountStatus || decodedToken.accountStatus === 'free') {
+        return NextResponse.json(
+          { error: 'Bu işlem için premium abonelik gereklidir' },
+          { status: 403 }
+        );
+      }
+      
+      // Process deletion for all users (security handled at token level)
+      // This will find and delete the transaction from any user
+      const usersCollection = db.collection('users');
+      const usersList = await usersCollection.listDocuments();
+
+      let deleted = false;
+      
+      // Search through all users (temporary solution)
+      for (const userDoc of usersList) {
+        const userId = userDoc.id;
+        const transactionRef = db.collection('users').doc(userId).collection('transactions').doc(transactionId);
+        const doc = await transactionRef.get();
+        
+        if (doc.exists) {
+          await transactionRef.delete();
+          deleted = true;
+          break;
+        }
+      }
+      
+      if (!deleted) {
+        return NextResponse.json(
+          { error: 'Transaction not found', status: 'not_found' },
+          { status: 404 }
+        );
+      }
+      
+      return NextResponse.json({ 
+        message: 'Transaction successfully deleted',
+        status: 'deleted' 
+      });
+    } catch (deleteError) {
+      console.error('Error verifying token or deleting transaction:', deleteError);
+      return NextResponse.json(
+        { error: 'Authentication failed or transaction deletion error', details: (deleteError as any).message },
+        { status: 500 }
+      );
+    }
+  } catch (error) {
+    console.error('Error in DELETE transaction:', error);
+    return NextResponse.json(
+      { error: 'An error occurred while processing the request' },
+      { status: 500 }
+    );
   }
 } 

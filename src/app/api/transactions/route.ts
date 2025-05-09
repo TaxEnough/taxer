@@ -73,6 +73,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
     
+    // Kullanıcının abonelik durumunu kontrol et
+    if (!decodedToken.accountStatus || decodedToken.accountStatus === 'free') {
+      return NextResponse.json({ error: 'Bu işlem için premium abonelik gereklidir' }, { status: 403 });
+    }
+    
     const userId = decodedToken.uid;
     
     // İşlemleri getir
@@ -153,6 +158,11 @@ export async function POST(request: NextRequest) {
     const decodedToken = await verifyToken(token);
     if (!decodedToken || !decodedToken.uid) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    }
+    
+    // Kullanıcının abonelik durumunu kontrol et
+    if (!decodedToken.accountStatus || decodedToken.accountStatus === 'free') {
+      return NextResponse.json({ error: 'Bu işlem için premium abonelik gereklidir' }, { status: 403 });
     }
     
     const userId = decodedToken.uid;

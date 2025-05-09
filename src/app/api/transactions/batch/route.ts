@@ -19,6 +19,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Geçersiz token' }, { status: 401 });
     }
     
+    // Kullanıcının abonelik durumunu kontrol et
+    if (!decodedToken.accountStatus || decodedToken.accountStatus === 'free') {
+      return NextResponse.json({ error: 'Bu işlem için premium abonelik gereklidir' }, { status: 403 });
+    }
+    
     const userId = decodedToken.uid;
     
     // İstek gövdesini al
