@@ -13,6 +13,7 @@ const COOKIE_NAME = 'auth-token';
 const premiumRoutes = ['/dashboard', '/transactions', '/reports'];
 
 export function middleware(request: NextRequest) {
+  console.log('Middleware executing for path:', request.nextUrl.pathname);
   const { pathname } = request.nextUrl;
 
   // If on login or register page and token exists, redirect to dashboard
@@ -43,6 +44,7 @@ export function middleware(request: NextRequest) {
   
   // If not a premium page, continue
   if (!isPremiumRoute) {
+    console.log('Not a premium route, continuing');
     return NextResponse.next();
   }
 
@@ -50,34 +52,40 @@ export function middleware(request: NextRequest) {
   const authToken = request.cookies.get(COOKIE_NAME)?.value;
   if (!authToken) {
     // If no token, redirect to login
+    console.log('No token for premium route, redirecting to login');
     return redirectToLogin(request);
   }
 
   // Verify token
   const payload = verifyToken(authToken);
+  console.log('Token payload:', payload);
   
   // Check user information
   if (!payload || !payload.userId) {
+    console.log('Invalid token payload, redirecting to login');
     return redirectToLogin(request);
   }
   
   // Check subscription status
   const accountStatus = payload.accountStatus;
+  console.log('User account status:', accountStatus);
   
   // If accountStatus doesn't exist or is 'free'
   if (!accountStatus || accountStatus === 'free') {
-    console.log('Free account attempting to access premium route, redirecting to 404');
-    // Redirect to 404 page for free users trying to access premium content
-    return NextResponse.rewrite(new URL('/404', request.url));
+    console.log('Free account attempting to access premium route:', pathname);
+    // Hard redirect to 404 for free users
+    return NextResponse.redirect(new URL('/404', request.url));
   }
   
   // If 'basic' or 'premium', continue
   if (accountStatus === 'basic' || accountStatus === 'premium') {
+    console.log('User has subscription, allowing access to premium route');
     return NextResponse.next();
   }
   
   // Default: redirect to 404
-  return NextResponse.rewrite(new URL('/404', request.url));
+  console.log('Default case - redirecting to 404');
+  return NextResponse.redirect(new URL('/404', request.url));
 }
 
 // Helper function to redirect to login
