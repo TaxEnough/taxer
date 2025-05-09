@@ -25,16 +25,34 @@ export default function Navbar() {
     const checkSubscription = async () => {
       if (user && user.id) {
         try {
+          // Kullanıcının abonelik durumunu kontrol et
+          // 1. Önce user nesnesindeki accountStatus'e bakıyoruz (token'dan gelir)
+          if (user.accountStatus === 'basic' || user.accountStatus === 'premium') {
+            console.log('Navbar: Premium üyelik bulundu:', user.accountStatus);
+            setHasSubscription(true);
+            return;
+          }
+
+          // 2. Firestore'dan kontrol et (sadece accountStatus bulunamazsa)
           const userRef = doc(db, 'users', user.id);
           const userSnap = await getDoc(userRef);
           
           if (userSnap.exists()) {
             const userData = userSnap.data();
-            // User has an active subscription if subscription status is 'active'
-            setHasSubscription(userData.subscriptionStatus === 'active');
-          } else {
-            setHasSubscription(false);
+            
+            // Firestore'da subscriptionStatus veya accountStatus kontrolü
+            if (userData.subscriptionStatus === 'active' || 
+                userData.accountStatus === 'basic' || 
+                userData.accountStatus === 'premium') {
+              console.log('Navbar: Firestore\'dan premium üyelik bulundu');
+              setHasSubscription(true);
+              return;
+            }
           }
+          
+          // Hiçbir premium üyelik özelliği bulunamadı
+          console.log('Navbar: Premium üyelik bulunamadı');
+          setHasSubscription(false);
         } catch (error) {
           console.error("Error checking subscription:", error);
           setHasSubscription(false);
@@ -43,7 +61,7 @@ export default function Navbar() {
         setHasSubscription(false);
       }
     };
-    
+  
     checkSubscription();
   }, [user]);
 
@@ -62,7 +80,7 @@ export default function Navbar() {
       window.removeEventListener('scroll', handleScroll);
     };
   }, []);
-
+    
   // Get display name when user changes
   useEffect(() => {
     if (user && user.name) {
@@ -74,7 +92,7 @@ export default function Navbar() {
       setDisplayName("User");
     }
   }, [user]);
-
+  
   // Function to toggle mobile menu
   const toggleMobileMenu = () => {
     setMobileMenuOpen(!mobileMenuOpen);
@@ -84,18 +102,18 @@ export default function Navbar() {
   const toggleProfileMenu = () => {
     setProfileMenuOpen(!profileMenuOpen);
   };
-
+  
   // Function to handle link click (closing menus)
   const handleLinkClick = () => {
     setMobileMenuOpen(false);
     setProfileMenuOpen(false);
   };
-
+  
   // Function to check if a link is active
   const isLinkActive = (href: string) => {
     return pathName === href;
   };
-
+  
   // Function to handle logout
   const handleLogout = async () => {
     try {
@@ -105,7 +123,7 @@ export default function Navbar() {
       console.error('Logout error:', error);
     }
   };
-
+  
   // Function to get display name
   const getDisplayName = () => {
     if (displayName) return displayName;
@@ -117,18 +135,22 @@ export default function Navbar() {
     return 'User';
   };
 
-  // Modify the mobile menu links to conditionally show Pricing
+  // Modify the mobile menu links to conditionally show premium links
   const mobileMenuLinks = [
     { name: 'Home', href: '/' },
     { name: 'About', href: '/about' },
-    { name: 'Dashboard', href: '/dashboard' },
-    { name: 'Transactions', href: '/transactions' },
-    { name: 'Reports', href: '/reports' },
+    // Premium sayfaları sadece aboneliği olan kullanıcılara göster
+    ...(hasSubscription ? [
+      { name: 'Dashboard', href: '/dashboard' },
+      { name: 'Transactions', href: '/transactions' },
+      { name: 'Reports', href: '/reports' }
+    ] : []),
     { name: 'Blog', href: '/blog' },
-    ...(hasSubscription ? [] : [{ name: 'Pricing', href: '/pricing' }]),
+    // Fiyatlandırma sayfasını herkese göster, abonelere bile faydalı olabilir (upgrade seçenekleri için)
+    { name: 'Pricing', href: '/pricing' },
     { name: 'Support', href: '/support' },
   ];
-
+  
   return (
     <nav className={`bg-white fixed w-full z-20 top-0 left-0 shadow-sm ${scrolled ? 'shadow-md' : ''}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -164,7 +186,8 @@ export default function Navbar() {
               >
                 About
               </Link>
-              {user && (
+              {/* Premium sayfaları sadece aboneliği olan kullanıcılara göster */}
+              {user && hasSubscription && (
                 <>
                   <Link
                     href="/dashboard"
@@ -202,7 +225,7 @@ export default function Navbar() {
                 </>
               )}
               <Link
-                href="/blog"
+                  href="/blog"
                 className={`${
                   isLinkActive('/blog') 
                     ? 'border-primary-500 text-gray-900' 
@@ -212,20 +235,18 @@ export default function Navbar() {
               >
                 Blog
               </Link>
-              {/* Only show Pricing link if user does not have an active subscription */}
-              {!hasSubscription && (
-                <Link
-                  href="/pricing"
-                  className={`${
-                    isLinkActive('/pricing') 
-                      ? 'border-primary-500 text-gray-900' 
-                      : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-                  } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
-                  onClick={handleLinkClick}
-                >
-                  Pricing
-                </Link>
-              )}
+              {/* Pricing linkini herkese göster */}
+              <Link
+                href="/pricing"
+                className={`${
+                  isLinkActive('/pricing') 
+                    ? 'border-primary-500 text-gray-900' 
+                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
+                onClick={handleLinkClick}
+              >
+                Pricing
+              </Link>
               <Link
                 href="/support"
                 className={`${
@@ -239,7 +260,7 @@ export default function Navbar() {
               </Link>
             </div>
           </div>
-
+          
           {/* User menu or login/register buttons */}
           <div className="hidden sm:ml-6 sm:flex sm:items-center">
             {user ? (
@@ -259,7 +280,7 @@ export default function Navbar() {
                   </button>
                 </div>
                 {profileMenuOpen && (
-                  <div
+                  <div 
                     className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 focus:outline-none"
                     role="menu"
                     aria-orientation="vertical"
@@ -307,7 +328,7 @@ export default function Navbar() {
               </div>
             )}
           </div>
-
+          
           {/* Mobile menu button */}
           <div className="-mr-2 flex items-center sm:hidden">
             <button
@@ -342,7 +363,7 @@ export default function Navbar() {
           </div>
         </div>
       </div>
-
+      
       {/* Mobile menu, show/hide based on menu state */}
       <div className={`${mobileMenuOpen ? 'block' : 'hidden'} sm:hidden`}>
         <div className="pt-2 pb-3 space-y-1">
@@ -368,7 +389,8 @@ export default function Navbar() {
           >
             About
           </Link>
-          {user && (
+          {/* Premium sayfaları sadece aboneliği olan kullanıcılara göster */}
+          {user && hasSubscription && (
             <>
               <Link
                 href="/dashboard"
@@ -416,20 +438,18 @@ export default function Navbar() {
           >
             Blog
           </Link>
-          {/* Only show Pricing link if user does not have an active subscription */}
-          {!hasSubscription && (
-            <Link
-              href="/pricing"
-              className={`${
-                isLinkActive('/pricing') 
-                  ? 'bg-primary-50 border-primary-500 text-primary-700' 
-                  : 'border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800'
-              } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
-              onClick={handleLinkClick}
-            >
-              Pricing
-            </Link>
-          )}
+          {/* Pricing linkini herkese göster */}
+          <Link
+            href="/pricing"
+            className={`${
+              isLinkActive('/pricing') 
+                ? 'bg-primary-50 border-primary-500 text-primary-700' 
+              : 'border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800'
+            } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
+            onClick={handleLinkClick}
+          >
+            Pricing
+          </Link>
           <Link
             href="/support"
             className={`${
@@ -443,36 +463,36 @@ export default function Navbar() {
           </Link>
         </div>
         <div className="pt-4 pb-3 border-t border-gray-200">
-          {user ? (
+        {user ? (
             <>
-              <div className="flex items-center px-4">
-                <div className="flex-shrink-0">
+            <div className="flex items-center px-4">
+              <div className="flex-shrink-0">
                   <div className="h-10 w-10 rounded-full bg-primary-500 flex items-center justify-center text-white font-medium">
-                    {getDisplayName().charAt(0).toUpperCase()}
-                  </div>
-                </div>
-                <div className="ml-3">
-                  <div className="text-base font-medium text-gray-800">{getDisplayName()}</div>
-                  <div className="text-sm font-medium text-gray-500">{user.email || 'No email available'}</div>
+                  {getDisplayName().charAt(0).toUpperCase()}
                 </div>
               </div>
-              <div className="mt-3 space-y-1">
+              <div className="ml-3">
+                  <div className="text-base font-medium text-gray-800">{getDisplayName()}</div>
+                  <div className="text-sm font-medium text-gray-500">{user.email || 'No email available'}</div>
+              </div>
+            </div>
+            <div className="mt-3 space-y-1">
                 <Link
-                  href="/profile"
+                href="/profile"
                   className="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"
                   onClick={handleLinkClick}
-                >
+              >
                   Profile
                 </Link>
                 <button
                   className="block w-full text-left px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"
-                  onClick={handleLogout}
-                >
-                  Logout
+                onClick={handleLogout}
+              >
+                Logout
                 </button>
-              </div>
+            </div>
             </>
-          ) : (
+        ) : (
             <div className="mt-3 space-y-1">
               <Link
                 href="/login"
@@ -490,8 +510,8 @@ export default function Navbar() {
               </Link>
             </div>
           )}
-        </div>
+          </div>
       </div>
     </nav>
   );
-}
+} 
