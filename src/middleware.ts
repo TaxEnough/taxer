@@ -3,140 +3,98 @@ import type { NextRequest } from 'next/server';
 import { verifyToken } from '@/lib/auth';
 
 // Korumalı rotalar
-const protectedRoutes = ['/dashboard', '/profile', '/transactions', '/reports', '/admin/blog'];
-// Paralı üyelik gerektiren rotalar
-const paidMemberRoutes = ['/dashboard', '/transactions', '/reports'];
-// Kimlik doğrulama gerektirmeyen rotalar
+const protectedRoutes = ['/dashboard', '/profile', '/transactions', '/reports'];
+// Kimlik doğrulama gerektiren rotalar
 const authRoutes = ['/login', '/register'];
-// Blog rotaları (herkese açık)
-const publicBlogRoutes = ['/blog'];
 // Cookie adı
 const COOKIE_NAME = 'auth-token';
 
+// Premium sayfalar listesi
+const premiumRoutes = ['/dashboard', '/transactions', '/reports'];
+
 export function middleware(request: NextRequest) {
-  // Log middleware'in hangi yol için çalıştığını
-  console.log('Middleware çalıştırıldı:', request.nextUrl.pathname);
-  
-  // Alt alan adı (subdomain) kontrolü
-  const host = request.headers.get('host') || '';
-  const isBlogSubdomain = host.startsWith('blog.');
-  
-  // Eğer blog alt alan adından geliyorsa ve blog sayfalarına erişiyorsa, izin ver
-  if (isBlogSubdomain) {
-    console.log('Blog alt alan adından erişim:', request.nextUrl.pathname);
-    
-    // blog.siteadi.com/yazı-başlığı şeklindeki istekleri /blog/yazı-başlığı olarak yönlendir
-    const url = new URL(`/blog${request.nextUrl.pathname}`, request.url);
-    return NextResponse.rewrite(url);
-  }
-  
-  // Cookie kontrolü - hem cookie doğrudan hem de Authorization header'dan kontrol et
-  const token = request.cookies.get(COOKIE_NAME)?.value;
-  const authHeader = request.headers.get('Authorization');
-  const headerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
-  
-  // Geçerli token
-  const validToken = token || headerToken;
-  
-  console.log('Cookie varlık kontrolü:', token ? 'var' : 'yok');
-  console.log('Header token kontrolü:', headerToken ? 'var' : 'yok');
-  
   const { pathname } = request.nextUrl;
-  
-  // Blog sayfalarına herkese açık erişim izni ver
-  if (publicBlogRoutes.some(route => pathname.startsWith(route))) {
-    console.log('Blog sayfasına erişim izni verildi');
-    return NextResponse.next();
-  }
-  
-  // Admin blog sayfalarına sadece giriş yapmış kullanıcılar erişebilir
-  if (pathname.startsWith('/admin/blog') && !validToken) {
-    console.log('Admin blog sayfasına erişim engellendi, login sayfasına yönlendiriliyor');
-    const url = new URL('/login', request.url);
-    url.searchParams.set('returnUrl', pathname);
-    return NextResponse.redirect(url);
-  }
-  
-  // Korumalı bir sayfaya erişmeye çalışıyorsa ve token yoksa, giriş sayfasına yönlendir
-  if (protectedRoutes.some(route => pathname.startsWith(route)) && !validToken) {
-    console.log('Korumalı rota erişimi engellendi, login sayfasına yönlendiriliyor');
-    const url = new URL('/login', request.url);
-    
-    // Yönlendirme sonrası dönülecek url'i ekle
-    url.searchParams.set('returnUrl', pathname);
-    
-    return NextResponse.redirect(url);
-  }
-  
-  // Paralı üyelik gerektiren sayfalara erişimi kontrol et
-  if (paidMemberRoutes.some(route => pathname.startsWith(route))) {
-    // Token varsa kullanıcı doğrulanmış demektir
-    if (validToken) {
-      try {
-        // Token'dan kullanıcı bilgisini al
-        const decoded = verifyToken(validToken);
-        
-        if (!decoded || !decoded.userId) {
-          console.log('Geçersiz token, login sayfasına yönlendiriliyor');
-          const url = new URL('/login', request.url);
-          url.searchParams.set('returnUrl', pathname);
-          return NextResponse.redirect(url);
-        }
-        
-        // Kullanıcının hesap durumunu kontrol et
-        const accountStatus = decoded.accountStatus || 'free';
-        
-        // Ücretsiz kullanıcıları her zaman pricing sayfasına yönlendir
-        if (accountStatus === 'free') {
-          console.log('Ücretsiz kullanıcı, premium içeriğe erişim engellendi');
-          return NextResponse.redirect(new URL('/pricing', request.url));
-        }
-        
-        // Basic ve premium üyelikler için erişime izin ver
-        console.log('Ücretli üye, erişime izin verildi');
-        return NextResponse.next();
-      } catch (error) {
-        console.error('Token doğrulama hatası:', error);
-        const url = new URL('/login', request.url);
-        url.searchParams.set('returnUrl', pathname);
-        return NextResponse.redirect(url);
+
+  // Eğer login veya register sayfasındaysa ve zaten token varsa, dashboard'a yönlendir
+  if (authRoutes.some(route => pathname.startsWith(route))) {
+    const token = request.cookies.get(COOKIE_NAME)?.value;
+    if (token) {
+      const user = verifyToken(token);
+      if (user && user.userId) {
+        console.log('Zaten oturum açıldı, dashboard\'a yönlendiriliyor');
+        return NextResponse.redirect(new URL('/dashboard', request.url));
       }
-    } else {
-      // Token yoksa zaten login sayfasına yönlendirilecek
-      console.log('Premium içerik için token yok, login sayfasına yönlendiriliyor');
+    }
+  }
+
+  // Eğer korumalı bir rotaya erişiliyorsa ve token yoksa, login'e yönlendir
+  if (protectedRoutes.some(route => pathname.startsWith(route))) {
+    const token = request.cookies.get(COOKIE_NAME)?.value;
+    if (!token) {
+      console.log('Token yok, login\'e yönlendiriliyor');
       const url = new URL('/login', request.url);
-      url.searchParams.set('returnUrl', pathname);
+      url.searchParams.set('redirect', pathname);
       return NextResponse.redirect(url);
     }
   }
   
-  // Giriş ve kayıt sayfalarına erişmeye çalışıyorsa ve zaten token varsa, dashboard'a yönlendir
-  if (authRoutes.some(route => pathname === route) && validToken) {
-    console.log('Kullanıcı zaten giriş yapmış, dashboard sayfasına yönlendiriliyor');
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+  // Premium sayfa kontrolü
+  const isPremiumRoute = premiumRoutes.some(route => pathname.startsWith(route));
+  
+  // Eğer premium sayfa değilse devam et
+  if (!isPremiumRoute) {
+    return NextResponse.next();
+  }
+
+  // Token kontrolü
+  const authToken = request.cookies.get(COOKIE_NAME)?.value;
+  if (!authToken) {
+    // Token yoksa login sayfasına yönlendir
+    return redirectToLogin(request);
+  }
+
+  // Token doğrulama
+  const payload = verifyToken(authToken);
+  
+  // Kullanıcı bilgilerini kontrol et
+  if (!payload || !payload.userId) {
+    return redirectToLogin(request);
   }
   
-  // Diğer durumlarda normal erişime izin ver
-  return NextResponse.next();
+  // Abonelik durumunu kontrol et
+  const accountStatus = payload.accountStatus;
+  
+  // Eğer accountStatus yoksa veya 'free' ise
+  if (!accountStatus || accountStatus === 'free') {
+    // Fiyatlandırma sayfasına yönlendir
+    return redirectToPricing(request);
+  }
+  
+  // Eğer 'basic' veya 'premium' ise devam et
+  if (accountStatus === 'basic' || accountStatus === 'premium') {
+    return NextResponse.next();
+  }
+  
+  // Varsayılan olarak fiyatlandırma sayfasına yönlendir
+  return redirectToPricing(request);
 }
 
-// Middleware'in çalışacağı rotaları belirt
+// Login sayfasına yönlendirme yardımcı fonksiyonu
+function redirectToLogin(request: NextRequest) {
+  const loginUrl = new URL('/login', request.url);
+  loginUrl.searchParams.set('redirect', request.nextUrl.pathname);
+  return NextResponse.redirect(loginUrl);
+}
+
+// Fiyatlandırma sayfasına yönlendirme yardımcı fonksiyonu
+function redirectToPricing(request: NextRequest) {
+  const pricingUrl = new URL('/pricing', request.url);
+  return NextResponse.redirect(pricingUrl);
+}
+
+// Middleware'in çalışacağı route'ları belirleme
 export const config = {
   matcher: [
-    /*
-     * Aşağıdaki rotalar için middleware çalışacak:
-     * - /dashboard, /profile, /transactions, /reports ve alt rotaları
-     * - /login ve /register
-     * - /blog ve alt rotaları
-     * - /admin/blog ve alt rotaları
-     */
-    '/dashboard/:path*',
-    '/profile/:path*',
-    '/transactions/:path*',
-    '/reports/:path*',
-    '/login',
-    '/register',
-    '/blog/:path*',
-    '/admin/blog/:path*',
+    '/((?!api|_next/static|_next/image|favicon.ico|images|.*\\.png$).*)',
   ],
 }; 
