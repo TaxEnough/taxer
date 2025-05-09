@@ -475,141 +475,154 @@ export default function TransactionsPage() {
   }
 
   return (
-    <>
+    <div className="bg-gray-50 min-h-screen">
       <Navbar />
-      <div className="bg-gray-50 min-h-screen">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="bg-white shadow-sm rounded-lg p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h1 className="text-2xl font-bold text-gray-900">Transactions</h1>
-              <div className="flex space-x-2">
-                <Button
-                  onClick={() => setShowUploadPanel(!showUploadPanel)}
-                  variant="outline"
-                  className="flex items-center"
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  CSV/Excel Upload
-                </Button>
-                <Button asChild>
-                  <Link href="/transactions/new" className="flex items-center">
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Transaction
-                  </Link>
-                </Button>
-              </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {/* Premium Content Notice */}
+        <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-6 shadow-sm">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-indigo-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
             </div>
-
-            {/* Upload panel - shown conditionally */}
-            {showUploadPanel && (
-              <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-5">
-                <div className="flex justify-between items-start mb-4">
-                  <h2 className="text-lg font-medium text-gray-900">Import Transactions</h2>
-                  <button 
-                    onClick={() => setShowUploadPanel(false)}
-                    className="text-gray-500 hover:text-gray-700"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-                
-                {!isFileLoaded ? (
-                  <div 
-                    className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center"
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      if (e.dataTransfer.files?.length) {
-                        setFile(e.dataTransfer.files[0]);
-                        // Process file logic would go here
-                      }
-                    }}
-                    onDragOver={(e) => e.preventDefault()}
-                  >
-                    <div className="mx-auto flex justify-center">
-                      <FileText className="h-10 w-10 text-gray-400" />
-                    </div>
-                    <p className="mt-2 text-sm font-medium text-gray-900">
-                      Drag and drop your CSV or Excel file here
-                    </p>
-                    <p className="mt-1 text-xs text-gray-500">
-                      Supported formats: CSV, XLSX, XLS
-                    </p>
-                    <input
-                      type="file"
-                      accept=".csv,.xlsx,.xls"
-                      onChange={handleFileChange}
-                      className="hidden"
-                      id="file-upload"
-                    />
-                    <label htmlFor="file-upload">
-                      <div className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 cursor-pointer">
-                        Select File
-                      </div>
-                    </label>
-                  </div>
-                ) : (
-                  <div>
-                    {/* File loaded view would go here */}
-                    <p>File processing interface would appear here</p>
-                  </div>
-                )}
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-indigo-800">Premium Feature</h3>
+              <div className="mt-1 text-sm text-indigo-600">
+                <p>The Transactions page is available only to users with an active subscription. Free users can upgrade their account on the pricing page.</p>
               </div>
-            )}
-
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0 bg-primary-100 rounded-md p-3">
-                    <svg className="h-6 w-6 text-primary-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
-                  </div>
-                  <div className="ml-5">
-                    <h3 className="text-lg font-medium text-gray-900">Transactions</h3>
-                    <p className="text-gray-500 text-sm">Total: {transactionCount}</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0 bg-green-100 rounded-md p-3">
-                    <svg className="h-6 w-6 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <div className="ml-5">
-                    <h3 className="text-lg font-medium text-gray-900">Profit</h3>
-                    <p className="text-gray-500 text-sm">Calculate in Reports</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0 bg-red-100 rounded-md p-3">
-                    <svg className="h-6 w-6 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                  </div>
-                  <div className="ml-5">
-                    <h3 className="text-lg font-medium text-gray-900">Tax Estimate</h3>
-                    <p className="text-gray-500 text-sm">View in Reports</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Transaction List */}
-            <div className="bg-white rounded-lg">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Transaction History</h2>
-              <TransactionList />
             </div>
           </div>
         </div>
+        
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Transactions</h1>
+          <div className="flex space-x-2">
+            <Button
+              onClick={() => setShowUploadPanel(!showUploadPanel)}
+              variant="outline"
+              className="flex items-center"
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              CSV/Excel Upload
+            </Button>
+            <Button asChild>
+              <Link href="/transactions/new" className="flex items-center">
+                <Plus className="mr-2 h-4 w-4" />
+                New Transaction
+              </Link>
+            </Button>
+          </div>
+        </div>
+
+        {/* Upload panel - shown conditionally */}
+        {showUploadPanel && (
+          <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-5">
+            <div className="flex justify-between items-start mb-4">
+              <h2 className="text-lg font-medium text-gray-900">Import Transactions</h2>
+              <button 
+                onClick={() => setShowUploadPanel(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            {!isFileLoaded ? (
+              <div 
+                className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center"
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (e.dataTransfer.files?.length) {
+                    setFile(e.dataTransfer.files[0]);
+                    // Process file logic would go here
+                  }
+                }}
+                onDragOver={(e) => e.preventDefault()}
+              >
+                <div className="mx-auto flex justify-center">
+                  <FileText className="h-10 w-10 text-gray-400" />
+                </div>
+                <p className="mt-2 text-sm font-medium text-gray-900">
+                  Drag and drop your CSV or Excel file here
+                </p>
+                <p className="mt-1 text-xs text-gray-500">
+                  Supported formats: CSV, XLSX, XLS
+                </p>
+                <input
+                  type="file"
+                  accept=".csv,.xlsx,.xls"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  id="file-upload"
+                />
+                <label htmlFor="file-upload">
+                  <div className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 cursor-pointer">
+                    Select File
+                  </div>
+                </label>
+              </div>
+            ) : (
+              <div>
+                {/* File loaded view would go here */}
+                <p>File processing interface would appear here</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
+            <div className="flex items-center">
+              <div className="flex-shrink-0 bg-primary-100 rounded-md p-3">
+                <svg className="h-6 w-6 text-primary-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <div className="ml-5">
+                <h3 className="text-lg font-medium text-gray-900">Transactions</h3>
+                <p className="text-gray-500 text-sm">Total: {transactionCount}</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
+            <div className="flex items-center">
+              <div className="flex-shrink-0 bg-green-100 rounded-md p-3">
+                <svg className="h-6 w-6 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="ml-5">
+                <h3 className="text-lg font-medium text-gray-900">Profit</h3>
+                <p className="text-gray-500 text-sm">Calculate in Reports</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
+            <div className="flex items-center">
+              <div className="flex-shrink-0 bg-red-100 rounded-md p-3">
+                <svg className="h-6 w-6 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+              <div className="ml-5">
+                <h3 className="text-lg font-medium text-gray-900">Tax Estimate</h3>
+                <p className="text-gray-500 text-sm">View in Reports</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Transaction List */}
+        <div className="bg-white rounded-lg">
+          <h2 className="text-lg font-medium text-gray-900 mb-4">Transaction History</h2>
+          <TransactionList />
+        </div>
       </div>
       <Footer />
-    </>
+    </div>
   );
 } 

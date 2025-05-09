@@ -248,16 +248,26 @@ export default function ProfilePage() {
                 Manage your personal information and account settings here.
               </p>
             </div>
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center">
-                <div className="h-10 w-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">
-                  {name.charAt(0).toUpperCase()}
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-700">{name}</p>
-                  <p className="text-xs text-gray-500">{email}</p>
-                </div>
+            
+            {/* Subscription Status */}
+            <div className="bg-gray-50 px-4 py-2 rounded-md border border-gray-200">
+              <div className="text-sm font-medium text-gray-700">Subscription</div>
+              <div className={`text-base font-bold ${
+                subscriptionData.plan === 'Premium' ? 'text-purple-600' : 
+                subscriptionData.plan === 'Basic' ? 'text-blue-600' : 'text-gray-500'
+              }`}>
+                {isLoadingSubscription ? 'Loading...' : subscriptionData.plan}
               </div>
+              {(subscriptionData.plan === 'Free Plan') && (
+                <div className="mt-1 text-xs text-red-500">
+                  Upgrade to access dashboard, transactions, and reports!
+                </div>
+              )}
+              {(subscriptionData.plan === 'Basic' || subscriptionData.plan === 'Premium') && (
+                <div className="mt-1 text-xs text-green-500">
+                  Full access to all premium features!
+                </div>
+              )}
             </div>
           </div>
           
@@ -360,10 +370,10 @@ export default function ProfilePage() {
                       <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
                     </div>
                   ) : (
-                    <div className="bg-gray-50 p-4 rounded-md">
+                  <div className="bg-gray-50 p-4 rounded-md">
                       <dl className="grid grid-cols-1 gap-x-4 gap-y-6">
-                        <div>
-                          <dt className="text-sm font-medium text-gray-500">Current Plan</dt>
+                      <div>
+                        <dt className="text-sm font-medium text-gray-500">Current Plan</dt>
                           <dd className="mt-1 text-sm">
                             <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                               subscriptionData.plan === 'Free Plan' 
@@ -373,29 +383,29 @@ export default function ProfilePage() {
                               {subscriptionData.plan}
                             </span>
                           </dd>
-                        </div>
+                      </div>
                         {subscriptionData.status === 'Active' && (
-                          <div>
-                            <dt className="text-sm font-medium text-gray-500">Renewal Date</dt>
+                      <div>
+                        <dt className="text-sm font-medium text-gray-500">Renewal Date</dt>
                             <dd className="mt-1 text-sm text-gray-900">{subscriptionData.renewalDate}</dd>
-                          </div>
+                      </div>
                         )}
-                      </dl>
-                    </div>
+                    </dl>
+                  </div>
                   )}
                   
                   {subscriptionData.status === 'Active' && (
-                    <div className="mt-6 flex space-x-4">
+                  <div className="mt-6 flex space-x-4">
                       <button 
                         onClick={() => router.push('/pricing')}
                         className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                       >
-                        Change Plan
-                      </button>
-                      <button className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50">
-                        Cancel Subscription
-                      </button>
-                    </div>
+                      Change Plan
+                    </button>
+                    <button className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50">
+                      Cancel Subscription
+                    </button>
+                  </div>
                   )}
                   
                   {subscriptionData.status !== 'Active' && (
