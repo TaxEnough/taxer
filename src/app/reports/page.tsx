@@ -502,274 +502,79 @@ export default function Reports() {
                                 Individual Tax Return
                               </p>
                             </div>
-      <div className="min-h-screen bg-gray-100">
-        <header className="bg-white shadow">
-          <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-            <h1 className="text-3xl font-bold text-gray-900">Reports</h1>
-            
-            {/* Year filter */}
-            <div className="flex items-center space-x-2">
-              <label htmlFor="yearFilter" className="text-sm font-medium text-gray-700">Year:</label>
-              <select
-                id="yearFilter"
-                value={yearFilter}
-                onChange={(e) => setYearFilter(e.target.value)}
-                className="block w-28 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"
-              >
-                <option value="2023">2023</option>
-                <option value="2024">2024</option>
-              </select>
-            </div>
-          </div>
-          
-          {/* Tabs */}
-          <div className="border-b border-gray-200">
-            <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-8" aria-label="Tabs">
-              <button
-                onClick={() => setActiveTab('overview')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'overview'
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Tax Summary
-              </button>
-              <button
-                onClick={() => setActiveTab('forms')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'forms'
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Tax Forms
-              </button>
-              <button
-                onClick={() => setActiveTab('analytics')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'analytics'
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Analytics and Charts
-              </button>
-            </nav>
-          </div>
-        </header>
-        
-        <main>
-          <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-            {loading ? (
-              <div className="flex justify-center items-center h-64">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
-              </div>
-            ) : error ? (
-              <div className="bg-red-50 p-4 rounded-md">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-red-800">Error</h3>
-                    <div className="mt-2 text-sm text-red-700">
-                      <p>{error}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <>
-                {activeTab === 'overview' && (
-                  <div className="bg-white shadow overflow-hidden sm:rounded-lg mb-6">
-                    <div className="px-4 py-5 sm:px-6">
-                      <h3 className="text-lg leading-6 font-medium text-gray-900">
-                        Tax Summary - {yearFilter}
-                      </h3>
-                      <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                        Annual capital gains tax summary
-                      </p>
-                    </div>
-                    <div className="border-t border-gray-200">
-                      <dl>
-                        <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                          <dt className="text-sm font-medium text-gray-500">
-                            Short-Term Gains
-                          </dt>
-                          <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                            ${taxSummary.shortTermGains.toFixed(2)}
-                          </dd>
-                        </div>
-                        <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                          <dt className="text-sm font-medium text-gray-500">
-                            Short-Term Tax
-                          </dt>
-                          <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                            ${taxSummary.shortTermTax.toFixed(2)}
-                          </dd>
-                        </div>
-                        <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                          <dt className="text-sm font-medium text-gray-500">
-                            Long-Term Gains
-                          </dt>
-                          <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                            ${taxSummary.longTermGains.toFixed(2)}
-                          </dd>
-                        </div>
-                        <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                          <dt className="text-sm font-medium text-gray-500">
-                            Long-Term Tax
-                          </dt>
-                          <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                            ${taxSummary.longTermTax.toFixed(2)}
-                          </dd>
-                        </div>
-                        <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                          <dt className="text-sm font-medium text-gray-500">
-                            Total Gains
-                          </dt>
-                          <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                            ${taxSummary.totalGains.toFixed(2)}
-                          </dd>
-                        </div>
-                        <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                          <dt className="text-sm font-medium text-gray-500">
-                            Total Tax
-                          </dt>
-                          <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2 font-bold">
-                            ${taxSummary.totalTax.toFixed(2)}
-                          </dd>
-                        </div>
-                        <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                          <dt className="text-sm font-medium text-gray-500">
-                            Effective Tax Rate
-                          </dt>
-                          <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                            %{taxSummary.taxRate.toFixed(2)}
-                          </dd>
-                        </div>
-                      </dl>
-                    </div>
-                  </div>
-                )}
+                            <div className="px-4 py-4 sm:px-6">
+                              <p className="text-sm text-gray-500 mb-3">
+                                Form 1040 is the federal income tax return.
+                              </p>
+                              <a
+                                href="https://www.irs.gov/pub/irs-pdf/f1040.pdf"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                              >
+                                IRS Form 1040
+                              </a>
+                            </div>
+                          </div>
 
-                {activeTab === 'forms' && (
-                  <div className="bg-white shadow sm:rounded-lg">
-                    <div className="px-4 py-5 sm:p-6">
-                      <h3 className="text-lg leading-6 font-medium text-gray-900">
-                        Tax Forms - {yearFilter}
-                      </h3>
-                      <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
-                        <div className="bg-white overflow-hidden shadow rounded-lg divide-y divide-gray-200">
-                          <div className="px-4 py-5 sm:px-6">
-                            <h3 className="text-lg leading-6 font-medium text-gray-900">Form 1040</h3>
-                            <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                              Individual Tax Return
-                            </p>
+                          <div className="bg-white overflow-hidden shadow rounded-lg divide-y divide-gray-200">
+                            <div className="px-4 py-5 sm:px-6">
+                              <h3 className="text-lg leading-6 font-medium text-gray-900">Schedule D</h3>
+                              <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                                Capital Gains and Losses
+                              </p>
+                            </div>
+                            <div className="px-4 py-4 sm:px-6">
+                              <p className="text-sm text-gray-500 mb-3">
+                                Schedule D reports gains and losses from the sale of capital assets.
+                              </p>
+                              <a
+                                href="https://www.irs.gov/forms-pubs/about-schedule-d-form-1040"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                              >
+                                IRS Schedule D
+                              </a>
+                            </div>
                           </div>
-                          <div className="px-4 py-4 sm:px-6">
-                            <p className="text-sm text-gray-500 mb-3">
-                              Form 1040 is the federal income tax return.
-                            </p>
-                            <a
-                              href="https://www.irs.gov/pub/irs-pdf/f1040.pdf"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                            >
-                              IRS Form 1040
-                            </a>
-                          </div>
-                        </div>
 
-                        <div className="bg-white overflow-hidden shadow rounded-lg divide-y divide-gray-200">
-                          <div className="px-4 py-5 sm:px-6">
-                            <h3 className="text-lg leading-6 font-medium text-gray-900">Schedule D</h3>
-                            <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                              Capital Gains and Losses
-                            </p>
-                          </div>
-                          <div className="px-4 py-4 sm:px-6">
-                            <p className="text-sm text-gray-500 mb-3">
-                              Schedule D reports gains and losses from the sale of capital assets.
-                            </p>
-                            <a
-                              href="https://www.irs.gov/forms-pubs/about-schedule-d-form-1040"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                            >
-                              IRS Schedule D
-                            </a>
-                          </div>
-                        </div>
-
-                        <div className="bg-white overflow-hidden shadow rounded-lg divide-y divide-gray-200">
-                          <div className="px-4 py-5 sm:px-6">
-                            <h3 className="text-lg leading-6 font-medium text-gray-900">Form 8949</h3>
-                            <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                              Sales of Capital Assets
-                            </p>
-                          </div>
-                          <div className="px-4 py-4 sm:px-6">
-                            <p className="text-sm text-gray-500 mb-3">
-                              Form 8949 details sales or exchanges of capital assets.
-                            </p>
-                            <a
-                              href="https://www.irs.gov/pub/irs-pdf/f8949.pdf"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                            >
-                              IRS Form 8949
-                            </a>
+                          <div className="bg-white overflow-hidden shadow rounded-lg divide-y divide-gray-200">
+                            <div className="px-4 py-5 sm:px-6">
+                              <h3 className="text-lg leading-6 font-medium text-gray-900">Form 8949</h3>
+                              <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                                Sales of Capital Assets
+                              </p>
+                            </div>
+                            <div className="px-4 py-4 sm:px-6">
+                              <p className="text-sm text-gray-500 mb-3">
+                                Form 8949 details sales or exchanges of capital assets.
+                              </p>
+                              <a
+                                href="https://www.irs.gov/pub/irs-pdf/f8949.pdf"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                              >
+                                IRS Form 8949
+                              </a>
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                )}
-                
-                {activeTab === 'analytics' && (
-                  <div className="space-y-6">
-                    <div className="bg-white shadow sm:rounded-lg">
-                      <div className="px-4 py-5 sm:p-6">
-                        <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                          Monthly Gains and Tax Analysis - {yearFilter}
-                        </h3>
-                        <div className="h-80">
-                          <Bar 
-                            data={barChartData}
-                            options={{
-                              responsive: true,
-                              maintainAspectRatio: false,
-                              plugins: {
-                                legend: {
-                                  position: 'top' as const,
-                                },
-                                title: {
-                                  display: true,
-                                  text: 'Monthly Gains and Tax Distribution',
-                                },
-                              },
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="bg-white shadow sm:rounded-lg">
-                      <div className="px-4 py-5 sm:p-6">
-                        <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                          Tax Distribution - {yearFilter}
-                        </h3>
-                        <div className="h-80 flex justify-center">
-                          <div style={{ width: '50%', height: '100%' }}>
-                            <Pie 
-                              data={pieChartData}
+                  )}
+                  
+                  {activeTab === 'analytics' && (
+                    <div className="space-y-6">
+                      <div className="bg-white shadow sm:rounded-lg">
+                        <div className="px-4 py-5 sm:p-6">
+                          <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+                            Monthly Gains and Tax Analysis - {yearFilter}
+                          </h3>
+                          <div className="h-80">
+                            <Bar 
+                              data={barChartData}
                               options={{
                                 responsive: true,
                                 maintainAspectRatio: false,
@@ -779,7 +584,7 @@ export default function Reports() {
                                   },
                                   title: {
                                     display: true,
-                                    text: 'Short vs Long Term Tax Distribution',
+                                    text: 'Monthly Gains and Tax Distribution',
                                   },
                                 },
                               }}
@@ -787,54 +592,82 @@ export default function Reports() {
                           </div>
                         </div>
                       </div>
-                    </div>
-                    
-                    <div className="bg-white shadow sm:rounded-lg">
-                      <div className="px-4 py-5 sm:p-6">
-                        <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                          Tax Optimization Suggestions
-                        </h3>
-                        <div className="bg-green-50 p-4 rounded-md mb-4">
-                          <div className="flex">
-                            <div className="flex-shrink-0">
-                              <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                              </svg>
-                            </div>
-                            <div className="ml-3">
-                              <h3 className="text-sm font-medium text-green-800">Tax Harvesting Suggestion</h3>
-                              <div className="mt-2 text-sm text-green-700">
-                                <p>You can sell your ABC stock for a $320 loss to offset some of your tax liability this year.</p>
-                              </div>
+                      
+                      <div className="bg-white shadow sm:rounded-lg">
+                        <div className="px-4 py-5 sm:p-6">
+                          <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+                            Tax Distribution - {yearFilter}
+                          </h3>
+                          <div className="h-80 flex justify-center">
+                            <div style={{ width: '50%', height: '100%' }}>
+                              <Pie 
+                                data={pieChartData}
+                                options={{
+                                  responsive: true,
+                                  maintainAspectRatio: false,
+                                  plugins: {
+                                    legend: {
+                                      position: 'top' as const,
+                                    },
+                                    title: {
+                                      display: true,
+                                      text: 'Short vs Long Term Tax Distribution',
+                                    },
+                                  },
+                                }}
+                              />
                             </div>
                           </div>
                         </div>
-                        
-                        <div className="bg-blue-50 p-4 rounded-md">
-                          <div className="flex">
-                            <div className="flex-shrink-0">
-                              <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                              </svg>
+                      </div>
+                      
+                      <div className="bg-white shadow sm:rounded-lg">
+                        <div className="px-4 py-5 sm:p-6">
+                          <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+                            Tax Optimization Suggestions
+                          </h3>
+                          <div className="bg-green-50 p-4 rounded-md mb-4">
+                            <div className="flex">
+                              <div className="flex-shrink-0">
+                                <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
+                              </div>
+                              <div className="ml-3">
+                                <h3 className="text-sm font-medium text-green-800">Tax Harvesting Suggestion</h3>
+                                <div className="mt-2 text-sm text-green-700">
+                                  <p>You can sell your ABC stock for a $320 loss to offset some of your tax liability this year.</p>
+                                </div>
+                              </div>
                             </div>
-                            <div className="ml-3">
-                              <h3 className="text-sm font-medium text-blue-800">Long-Term Gain Strategy</h3>
-                              <div className="mt-2 text-sm text-blue-700">
-                                <p>If you hold your XYZ stock for 2 more months, it will qualify for long-term capital gains status and have a lower tax rate.</p>
+                          </div>
+                          
+                          <div className="bg-blue-50 p-4 rounded-md">
+                            <div className="flex">
+                              <div className="flex-shrink-0">
+                                <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                </svg>
+                              </div>
+                              <div className="ml-3">
+                                <h3 className="text-sm font-medium text-blue-800">Long-Term Gain Strategy</h3>
+                                <div className="mt-2 text-sm text-blue-700">
+                                  <p>If you hold your XYZ stock for 2 more months, it will qualify for long-term capital gains status and have a lower tax rate.</p>
+                                </div>
                               </div>
                             </div>
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </main>
+                  )}
+                </>
+              )}
+            </div>
+          </main>
+        </div>
       </div>
       <Footer />
-    </>
+    </div>
   );
 } 
