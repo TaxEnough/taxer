@@ -27,7 +27,7 @@ interface UserData {
   accountStatus?: 'free' | 'basic' | 'premium';
 }
 
-// Eski fonksiyon imzası geriye dönük uyumluluk için korundu
+// Token oluşturma fonksiyonu - kullanıcı bilgilerini ve abonelik durumunu içerir
 export function generateToken(userIdOrData: string | UserData, email?: string, name?: string, accountStatus?: 'free' | 'basic' | 'premium'): string {
   let payload: TokenPayload;
   
@@ -39,21 +39,37 @@ export function generateToken(userIdOrData: string | UserData, email?: string, n
       name: userIdOrData.name || undefined,
       accountStatus: userIdOrData.accountStatus || 'free'
     };
+    console.log('Token oluşturuluyor (nesne):', { 
+      userId: userIdOrData.uid, 
+      accountStatus: payload.accountStatus 
+    });
   } else {
-    // Eski kullanım şekli
+    // String ID verildiğinde
     payload = { userId: userIdOrData };
     if (email) payload.email = email;
     if (name) payload.name = name;
     payload.accountStatus = accountStatus || 'free';
+    console.log('Token oluşturuluyor (string):', { 
+      userId: userIdOrData, 
+      accountStatus: payload.accountStatus 
+    });
   }
   
-  return sign(payload, JWT_SECRET, { expiresIn: '7d' });
+  // Token oluştur ve dön
+  const token = sign(payload, JWT_SECRET, { expiresIn: '7d' });
+  return token;
 }
 
 export function verifyToken(token: string): TokenPayload | null {
   try {
-    return verify(token, JWT_SECRET) as TokenPayload;
+    const decoded = verify(token, JWT_SECRET) as TokenPayload;
+    console.log('Token doğrulandı:', {
+      userId: decoded.userId,
+      accountStatus: decoded.accountStatus || 'free'
+    });
+    return decoded;
   } catch (error) {
+    console.error('Token doğrulama hatası:', error);
     return null;
   }
 }

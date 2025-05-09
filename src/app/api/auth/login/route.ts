@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { loginUser } from '@/lib/auth-firebase';
-import { generateToken, setAuthCookieOnServer } from '@/lib/auth-server';
+import { generateToken } from '@/lib/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 // E-posta formatı doğrulama
 const validateEmail = (email: string): boolean => {
@@ -54,23 +56,24 @@ export async function POST(request: NextRequest) {
         }, { status: 401 });
       }
 
-      // Generate token
-      console.log('Login API - Token oluşturuluyor');
-      const token = await generateToken(userCredential.uid);
-      
-      // Kullanıcı bilgilerini hazırla
+      // ÖNEMLİ: Test amaçlı olarak tüm kullanıcılara 'basic' abonelik durumu veriyoruz
+      // Gerçek uygulamada bu değer veritabanından alınmalı veya ödeme durumuna göre belirlenmeli
       const userData = {
         uid: userCredential.uid,
         email: userCredential.email,
-        displayName: userCredential.displayName,
-        photoURL: userCredential.photoURL,
-        emailVerified: userCredential.emailVerified,
+        name: userCredential.displayName || email,
+        accountStatus: 'basic' as 'free' | 'basic' | 'premium' // Tür belirtimi ekledik
       };
       
+      // Kullanıcıya ait token oluştur
+      const token = generateToken(userData);
+      
+      // Kullanıcı bilgilerini hazırla
       console.log('Login API - Kullanıcı bilgileri hazır:', {
         uid: userData.uid,
         email: userData.email,
-        displayName: userData.displayName
+        name: userData.name,
+        accountStatus: userData.accountStatus // Abonelik durumunu loglara ekledik
       });
       
       // Response'ı hazırla
