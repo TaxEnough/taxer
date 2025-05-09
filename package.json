@@ -11,8 +11,6 @@
   "dependencies": {
     "@headlessui/react": "^2.2.0",
     "@prisma/client": "^6.5.0",
-    "@radix-ui/react-alert-dialog": "^1.1.11",
-    "@radix-ui/react-dialog": "^1.1.11",
     "@radix-ui/react-slot": "^1.2.0",
     "@stripe/stripe-js": "^7.2.0",
     "@types/node": "^20.11.5",
@@ -50,7 +48,6 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@tailwindcss/typography": "^0.5.10",
     "@types/js-cookie": "^3.0.6",
     "@types/nodemailer": "^6.4.17",
     "eslint": "^8.56.0",

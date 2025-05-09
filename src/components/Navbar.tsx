@@ -27,8 +27,9 @@ export default function Navbar() {
         try {
           // Kullanıcının abonelik durumunu kontrol et
           // 1. Önce user nesnesindeki accountStatus'e bakıyoruz (token'dan gelir)
-          if (user.accountStatus === 'basic' || user.accountStatus === 'premium') {
-            console.log('Navbar: Premium üyelik bulundu:', user.accountStatus);
+          // Optional chaining ile erişim sağlıyoruz (tip güvenliği için)
+          if (user?.accountStatus === 'basic' || user?.accountStatus === 'premium') {
+            console.log('Navbar: Premium üyelik bulundu:', user?.accountStatus);
             setHasSubscription(true);
             return;
           }

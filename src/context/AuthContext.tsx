@@ -11,6 +11,7 @@ interface User {
   id: string;
   email: string;
   name: string;
+  accountStatus: 'free' | 'basic' | 'premium';
 }
 
 interface AuthContextType {
@@ -197,6 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             id: data.id,
             email: data.email,
             name: data.name || data.email.split('@')[0],
+            accountStatus: (data.accountStatus || 'free') as 'free' | 'basic' | 'premium',
           };
           
           if (typeof window !== 'undefined') {
@@ -229,6 +231,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.log('Using local user info despite API verification failure');
             try {
               const fallbackUser = JSON.parse(userInfoStr);
+              // Ensure account status is properly typed
+              fallbackUser.accountStatus = (fallbackUser.accountStatus || 'free') as 'free' | 'basic' | 'premium';
               if (isMounted) {
                 setUser(fallbackUser);
                 setLoading(false);
@@ -291,20 +295,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!token) {
           console.log('No token found, creating from Firebase session');
           // Generate token here or set user info directly
-          const userInfo = {
+          const userFromFirebase = {
             id: firebaseUser.uid,
             email: firebaseUser.email || '',
             name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || '',
+            accountStatus: 'free' as 'free' | 'basic' | 'premium',
           };
           
-          setUser(userInfo);
+          setUser(userFromFirebase);
           
           // Save user info to localStorage
-          localStorage.setItem('user-info', JSON.stringify(userInfo));
+          localStorage.setItem('user-info', JSON.stringify(userFromFirebase));
           localStorage.setItem('isLoggedIn', 'true');
           
           if (typeof window !== 'undefined') {
-            window.__userInfo = userInfo;
+            window.__userInfo = userFromFirebase;
             window.__isAuthenticated = true;
           }
         }

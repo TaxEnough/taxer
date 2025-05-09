@@ -309,8 +309,199 @@ export default function Reports() {
   };
 
   return (
-    <>
+    <div className="min-h-screen bg-gray-50">
       <Navbar />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {/* Premium Content Notice */}
+        <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-6 shadow-sm">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-indigo-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-indigo-800">Premium Feature</h3>
+              <div className="mt-1 text-sm text-indigo-600">
+                <p>The Reports and Analytics page is available only to users with an active subscription. Free users can upgrade their account on the pricing page.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900">Tax Reports & Analytics</h1>
+          <p className="mt-2 text-gray-600">View tax summaries, generate forms, and analyze your investment performance.</p>
+        </div>
+        
+        <div className="min-h-screen bg-gray-100">
+          <header className="bg-white shadow">
+            <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+              <h1 className="text-3xl font-bold text-gray-900">Reports</h1>
+              
+              {/* Year filter */}
+              <div className="flex items-center space-x-2">
+                <label htmlFor="yearFilter" className="text-sm font-medium text-gray-700">Year:</label>
+                <select
+                  id="yearFilter"
+                  value={yearFilter}
+                  onChange={(e) => setYearFilter(e.target.value)}
+                  className="block w-28 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"
+                >
+                  <option value="2023">2023</option>
+                  <option value="2024">2024</option>
+                </select>
+              </div>
+            </div>
+            
+            {/* Tabs */}
+            <div className="border-b border-gray-200">
+              <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-8" aria-label="Tabs">
+                <button
+                  onClick={() => setActiveTab('overview')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'overview'
+                      ? 'border-primary-500 text-primary-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Tax Summary
+                </button>
+                <button
+                  onClick={() => setActiveTab('forms')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'forms'
+                      ? 'border-primary-500 text-primary-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Tax Forms
+                </button>
+                <button
+                  onClick={() => setActiveTab('analytics')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'analytics'
+                      ? 'border-primary-500 text-primary-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Analytics and Charts
+                </button>
+              </nav>
+            </div>
+          </header>
+          
+          <main>
+            <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+              {loading ? (
+                <div className="flex justify-center items-center h-64">
+                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
+                </div>
+              ) : error ? (
+                <div className="bg-red-50 p-4 rounded-md">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-red-800">Error</h3>
+                      <div className="mt-2 text-sm text-red-700">
+                        <p>{error}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {activeTab === 'overview' && (
+                    <div className="bg-white shadow overflow-hidden sm:rounded-lg mb-6">
+                      <div className="px-4 py-5 sm:px-6">
+                        <h3 className="text-lg leading-6 font-medium text-gray-900">
+                          Tax Summary - {yearFilter}
+                        </h3>
+                        <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                          Annual capital gains tax summary
+                        </p>
+                      </div>
+                      <div className="border-t border-gray-200">
+                        <dl>
+                          <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                            <dt className="text-sm font-medium text-gray-500">
+                              Short-Term Gains
+                            </dt>
+                            <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                              ${taxSummary.shortTermGains.toFixed(2)}
+                            </dd>
+                          </div>
+                          <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                            <dt className="text-sm font-medium text-gray-500">
+                              Short-Term Tax
+                            </dt>
+                            <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                              ${taxSummary.shortTermTax.toFixed(2)}
+                            </dd>
+                          </div>
+                          <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                            <dt className="text-sm font-medium text-gray-500">
+                              Long-Term Gains
+                            </dt>
+                            <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                              ${taxSummary.longTermGains.toFixed(2)}
+                            </dd>
+                          </div>
+                          <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                            <dt className="text-sm font-medium text-gray-500">
+                              Long-Term Tax
+                            </dt>
+                            <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                              ${taxSummary.longTermTax.toFixed(2)}
+                            </dd>
+                          </div>
+                          <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                            <dt className="text-sm font-medium text-gray-500">
+                              Total Gains
+                            </dt>
+                            <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                              ${taxSummary.totalGains.toFixed(2)}
+                            </dd>
+                          </div>
+                          <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                            <dt className="text-sm font-medium text-gray-500">
+                              Total Tax
+                            </dt>
+                            <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2 font-bold">
+                              ${taxSummary.totalTax.toFixed(2)}
+                            </dd>
+                          </div>
+                          <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                            <dt className="text-sm font-medium text-gray-500">
+                              Effective Tax Rate
+                            </dt>
+                            <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                              %{taxSummary.taxRate.toFixed(2)}
+                            </dd>
+                          </div>
+                        </dl>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'forms' && (
+                    <div className="bg-white shadow sm:rounded-lg">
+                      <div className="px-4 py-5 sm:p-6">
+                        <h3 className="text-lg leading-6 font-medium text-gray-900">
+                          Tax Forms - {yearFilter}
+                        </h3>
+                        <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
+                          <div className="bg-white overflow-hidden shadow rounded-lg divide-y divide-gray-200">
+                            <div className="px-4 py-5 sm:px-6">
+                              <h3 className="text-lg leading-6 font-medium text-gray-900">Form 1040</h3>
+                              <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                                Individual Tax Return
+                              </p>
+                            </div>
       <div className="min-h-screen bg-gray-100">
         <header className="bg-white shadow">
           <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 flex justify-between items-center">

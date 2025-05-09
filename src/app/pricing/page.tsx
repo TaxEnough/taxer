@@ -32,7 +32,7 @@ export default function Pricing() {
       savings: savings.toFixed(2)
     };
   };
-
+  
   const plans = [
     {
       name: 'Basic',
