@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
     // Authorization header'dan token'ı al
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Yetkilendirme başarısız' }, { status: 401 });
+      return NextResponse.json({ error: 'Authentication failed' }, { status: 401 });
     }
     
     const token = authHeader.split(' ')[1];
@@ -16,12 +16,12 @@ export async function POST(request: NextRequest) {
     // Token'ı doğrula
     const decodedToken = await verifyToken(token);
     if (!decodedToken || !decodedToken.uid) {
-      return NextResponse.json({ error: 'Geçersiz token' }, { status: 401 });
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
     
     // Kullanıcının abonelik durumunu kontrol et
     if (!decodedToken.accountStatus || decodedToken.accountStatus === 'free') {
-      return NextResponse.json({ error: 'Bu işlem için premium abonelik gereklidir' }, { status: 403 });
+      return NextResponse.json({ error: 'Premium subscription required for this operation' }, { status: 403 });
     }
     
     const userId = decodedToken.uid;
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     
     if (!Array.isArray(transactions) || transactions.length === 0) {
       return NextResponse.json(
-        { error: "Geçerli işlem verileri bulunamadı" },
+        { error: "No valid transaction data found" },
         { status: 400 }
       );
     }
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
           sellDate: transaction.date || new Date().toISOString().split('T')[0],
           sellPrice: parseFloat(transaction.price) || 0,
           quantity: parseFloat(transaction.shares) || 0,
-          type: transaction.type?.toLowerCase() === 'sell' ? 'Satış' : 'Alış',
+          type: transaction.type?.toLowerCase() === 'sell' ? 'Sale' : 'Purchase',
           tradingFees: parseFloat(transaction.fee) || 0,
           note: transaction.notes || '',
           createdAt: serverTimestamp(),
@@ -62,20 +62,20 @@ export async function POST(request: NextRequest) {
         await addDoc(transactionsRef, newTransaction);
         successCount++;
       } catch (err) {
-        console.error('İşlem eklenirken hata:', err);
+        console.error('Error adding transaction:', err);
         // Hata olsa bile diğer işlemleri eklemeye devam et
       }
     }
     
     return NextResponse.json({ 
-      message: "İşlemler başarıyla kaydedildi", 
+      message: "Transactions successfully saved", 
       count: successCount 
     }, { status: 201 });
     
   } catch (error) {
-    console.error("İşlem kaydetme hatası:", error);
+    console.error("Error saving transactions:", error);
     return NextResponse.json(
-      { error: "İşlemler kaydedilirken bir sorun oluştu" },
+      { error: "An error occurred while saving transactions" },
       { status: 500 }
     );
   }

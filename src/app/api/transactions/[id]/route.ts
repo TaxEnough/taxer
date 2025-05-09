@@ -91,7 +91,7 @@ export async function GET(
     // Check for premium account status
     if (!decodedToken.accountStatus || decodedToken.accountStatus === 'free') {
       return NextResponse.json(
-        { error: 'Bu işlem için premium abonelik gereklidir' },
+        { error: 'Premium subscription required for this operation' },
         { status: 403 }
       );
     }
@@ -145,7 +145,7 @@ export async function PUT(
     // Check for premium account status
     if (!decodedToken.accountStatus || decodedToken.accountStatus === 'free') {
       return NextResponse.json(
-        { error: 'Bu işlem için premium abonelik gereklidir' },
+        { error: 'Premium subscription required for this operation' },
         { status: 403 }
       );
     }
@@ -239,7 +239,7 @@ export async function DELETE(
       // Check for premium account status
       if (!decodedToken.accountStatus || decodedToken.accountStatus === 'free') {
         return NextResponse.json(
-          { error: 'Bu işlem için premium abonelik gereklidir' },
+          { error: 'Premium subscription required for this operation' },
           { status: 403 }
         );
       }

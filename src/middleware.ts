@@ -2,97 +2,99 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifyToken } from '@/lib/auth';
 
-// Korumalı rotalar
+// Protected routes
 const protectedRoutes = ['/dashboard', '/profile', '/transactions', '/reports'];
-// Kimlik doğrulama gerektiren rotalar
+// Authentication routes
 const authRoutes = ['/login', '/register'];
-// Cookie adı
+// Cookie name
 const COOKIE_NAME = 'auth-token';
 
-// Premium sayfalar listesi
+// Premium pages list
 const premiumRoutes = ['/dashboard', '/transactions', '/reports'];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Eğer login veya register sayfasındaysa ve zaten token varsa, dashboard'a yönlendir
+  // If on login or register page and token exists, redirect to dashboard
   if (authRoutes.some(route => pathname.startsWith(route))) {
     const token = request.cookies.get(COOKIE_NAME)?.value;
     if (token) {
       const user = verifyToken(token);
       if (user && user.userId) {
-        console.log('Zaten oturum açıldı, dashboard\'a yönlendiriliyor');
+        console.log('Already logged in, redirecting to dashboard');
         return NextResponse.redirect(new URL('/dashboard', request.url));
       }
     }
   }
 
-  // Eğer korumalı bir rotaya erişiliyorsa ve token yoksa, login'e yönlendir
+  // If accessing a protected route without token, redirect to login
   if (protectedRoutes.some(route => pathname.startsWith(route))) {
     const token = request.cookies.get(COOKIE_NAME)?.value;
     if (!token) {
-      console.log('Token yok, login\'e yönlendiriliyor');
+      console.log('No token, redirecting to login');
       const url = new URL('/login', request.url);
       url.searchParams.set('redirect', pathname);
       return NextResponse.redirect(url);
     }
   }
   
-  // Premium sayfa kontrolü
+  // Premium page check
   const isPremiumRoute = premiumRoutes.some(route => pathname.startsWith(route));
   
-  // Eğer premium sayfa değilse devam et
+  // If not a premium page, continue
   if (!isPremiumRoute) {
     return NextResponse.next();
   }
 
-  // Token kontrolü
+  // Token check
   const authToken = request.cookies.get(COOKIE_NAME)?.value;
   if (!authToken) {
-    // Token yoksa login sayfasına yönlendir
+    // If no token, redirect to login
     return redirectToLogin(request);
   }
 
-  // Token doğrulama
+  // Verify token
   const payload = verifyToken(authToken);
   
-  // Kullanıcı bilgilerini kontrol et
+  // Check user information
   if (!payload || !payload.userId) {
     return redirectToLogin(request);
   }
   
-  // Abonelik durumunu kontrol et
+  // Check subscription status
   const accountStatus = payload.accountStatus;
   
-  // Eğer accountStatus yoksa veya 'free' ise
+  // If accountStatus doesn't exist or is 'free'
   if (!accountStatus || accountStatus === 'free') {
-    // Fiyatlandırma sayfasına yönlendir
+    console.log('Free account attempting to access premium route, redirecting to pricing');
+    // Redirect to pricing page
     return redirectToPricing(request);
   }
   
-  // Eğer 'basic' veya 'premium' ise devam et
+  // If 'basic' or 'premium', continue
   if (accountStatus === 'basic' || accountStatus === 'premium') {
     return NextResponse.next();
   }
   
-  // Varsayılan olarak fiyatlandırma sayfasına yönlendir
+  // Default: redirect to pricing
   return redirectToPricing(request);
 }
 
-// Login sayfasına yönlendirme yardımcı fonksiyonu
+// Helper function to redirect to login
 function redirectToLogin(request: NextRequest) {
   const loginUrl = new URL('/login', request.url);
   loginUrl.searchParams.set('redirect', request.nextUrl.pathname);
   return NextResponse.redirect(loginUrl);
 }
 
-// Fiyatlandırma sayfasına yönlendirme yardımcı fonksiyonu
+// Helper function to redirect to pricing
 function redirectToPricing(request: NextRequest) {
+  console.log('Redirecting to pricing page from', request.nextUrl.pathname);
   const pricingUrl = new URL('/pricing', request.url);
   return NextResponse.redirect(pricingUrl);
 }
 
-// Middleware'in çalışacağı route'ları belirleme
+// Define routes where middleware should run
 export const config = {
   matcher: [
     '/dashboard/:path*',

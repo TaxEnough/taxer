@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
     
     // Kullanıcının abonelik durumunu kontrol et
     if (!decodedToken.accountStatus || decodedToken.accountStatus === 'free') {
-      return NextResponse.json({ error: 'Bu işlem için premium abonelik gereklidir' }, { status: 403 });
+      return NextResponse.json({ error: 'Premium subscription required for this operation' }, { status: 403 });
     }
     
     const userId = decodedToken.uid;
@@ -162,7 +162,7 @@ export async function POST(request: NextRequest) {
     
     // Kullanıcının abonelik durumunu kontrol et
     if (!decodedToken.accountStatus || decodedToken.accountStatus === 'free') {
-      return NextResponse.json({ error: 'Bu işlem için premium abonelik gereklidir' }, { status: 403 });
+      return NextResponse.json({ error: 'Premium subscription required for this operation' }, { status: 403 });
     }
     
     const userId = decodedToken.uid;
