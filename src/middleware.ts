@@ -4,6 +4,8 @@ import { verifyToken } from '@/lib/auth';
 
 // Korumalı rotalar
 const protectedRoutes = ['/dashboard', '/profile', '/transactions', '/reports', '/admin/blog'];
+// Paralı üyelik gerektiren rotalar
+const paidMemberRoutes = ['/dashboard', '/transactions', '/reports'];
 // Kimlik doğrulama gerektirmeyen rotalar
 const authRoutes = ['/login', '/register'];
 // Blog rotaları (herkese açık)
@@ -64,6 +66,36 @@ export function middleware(request: NextRequest) {
     url.searchParams.set('returnUrl', pathname);
     
     return NextResponse.redirect(url);
+  }
+  
+  // Paralı üyelik gerektiren sayfalara erişimi kontrol et
+  if (paidMemberRoutes.some(route => pathname.startsWith(route)) && validToken) {
+    try {
+      // Token'dan kullanıcı bilgisini al
+      const decoded = verifyToken(validToken);
+      
+      if (!decoded || !decoded.userId) {
+        console.log('Geçersiz token, login sayfasına yönlendiriliyor');
+        const url = new URL('/login', request.url);
+        url.searchParams.set('returnUrl', pathname);
+        return NextResponse.redirect(url);
+      }
+      
+      // Kullanıcının hesap durumunu kontrol et
+      // Not: accountStatus bilgisi JWT token içinde olmayabilir,
+      // gerçek bir uygulamada bunu veritabanından kontrol etmek gerekebilir
+      const accountStatus = decoded.accountStatus || 'free';
+      
+      if (accountStatus === 'free') {
+        console.log('Ücretsiz kullanıcı, premium içeriğe erişim engellendi');
+        return NextResponse.redirect(new URL('/pricing', request.url));
+      }
+    } catch (error) {
+      console.error('Token doğrulama hatası:', error);
+      const url = new URL('/login', request.url);
+      url.searchParams.set('returnUrl', pathname);
+      return NextResponse.redirect(url);
+    }
   }
   
   // Giriş ve kayıt sayfalarına erişmeye çalışıyorsa ve zaten token varsa, dashboard'a yönlendir

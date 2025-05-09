@@ -17,16 +17,18 @@ interface TokenPayload {
   userId: string;
   email?: string;
   name?: string;
+  accountStatus?: 'free' | 'basic' | 'premium';
 }
 
 interface UserData {
   uid: string;
   email?: string | null;
   name?: string | null;
+  accountStatus?: 'free' | 'basic' | 'premium';
 }
 
 // Eski fonksiyon imzası geriye dönük uyumluluk için korundu
-export function generateToken(userIdOrData: string | UserData, email?: string, name?: string): string {
+export function generateToken(userIdOrData: string | UserData, email?: string, name?: string, accountStatus?: 'free' | 'basic' | 'premium'): string {
   let payload: TokenPayload;
   
   // Eğer ilk parametre bir nesne ise, ondan veri al
@@ -34,13 +36,15 @@ export function generateToken(userIdOrData: string | UserData, email?: string, n
     payload = {
       userId: userIdOrData.uid,
       email: userIdOrData.email || undefined,
-      name: userIdOrData.name || undefined
+      name: userIdOrData.name || undefined,
+      accountStatus: userIdOrData.accountStatus || 'free'
     };
   } else {
     // Eski kullanım şekli
     payload = { userId: userIdOrData };
     if (email) payload.email = email;
     if (name) payload.name = name;
+    payload.accountStatus = accountStatus || 'free';
   }
   
   return sign(payload, JWT_SECRET, { expiresIn: '7d' });
