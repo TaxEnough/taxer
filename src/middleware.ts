@@ -66,9 +66,9 @@ export function middleware(request: NextRequest) {
   
   // If accountStatus doesn't exist or is 'free'
   if (!accountStatus || accountStatus === 'free') {
-    console.log('Free account attempting to access premium route, redirecting to pricing');
-    // Redirect to pricing page
-    return redirectToPricing(request);
+    console.log('Free account attempting to access premium route, redirecting to 404');
+    // Redirect to 404 page for free users trying to access premium content
+    return NextResponse.rewrite(new URL('/404', request.url));
   }
   
   // If 'basic' or 'premium', continue
@@ -76,8 +76,8 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
   
-  // Default: redirect to pricing
-  return redirectToPricing(request);
+  // Default: redirect to 404
+  return NextResponse.rewrite(new URL('/404', request.url));
 }
 
 // Helper function to redirect to login
@@ -85,13 +85,6 @@ function redirectToLogin(request: NextRequest) {
   const loginUrl = new URL('/login', request.url);
   loginUrl.searchParams.set('redirect', request.nextUrl.pathname);
   return NextResponse.redirect(loginUrl);
-}
-
-// Helper function to redirect to pricing
-function redirectToPricing(request: NextRequest) {
-  console.log('Redirecting to pricing page from', request.nextUrl.pathname);
-  const pricingUrl = new URL('/pricing', request.url);
-  return NextResponse.redirect(pricingUrl);
 }
 
 // Define routes where middleware should run

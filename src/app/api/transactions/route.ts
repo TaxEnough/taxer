@@ -3,10 +3,10 @@ import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where, doc, addDoc, updateDoc, deleteDoc, orderBy, serverTimestamp } from 'firebase/firestore';
 import { verifyToken } from '@/lib/auth-firebase';
 
-// API rotasını dinamik olarak işaretliyoruz
+// Mark API route as dynamic
 export const dynamic = 'force-dynamic';
 
-// İşlem arayüzü
+// Transaction interface
 interface Transaction {
   id?: string;
   stock: string;
@@ -23,7 +23,7 @@ interface Transaction {
   updatedAt?: any;
 }
 
-// İşlem ekleme/güncelleme için doğrulama
+// Transaction validation for add/update
 function validateTransaction(data: any): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
   
@@ -34,7 +34,7 @@ function validateTransaction(data: any): { valid: boolean; errors: string[] } {
   if (!data.sellPrice || isNaN(Number(data.sellPrice))) errors.push('Valid sale price is required');
   if (!data.quantity || isNaN(Number(data.quantity)) || Number(data.quantity) <= 0) errors.push('Valid quantity is required');
   
-  // Satış tarihinin alış tarihinden sonra olduğunu kontrol et
+  // Check if sale date is after purchase date
   const buyDate = new Date(data.buyDate);
   const sellDate = new Date(data.sellDate);
   
@@ -48,10 +48,10 @@ function validateTransaction(data: any): { valid: boolean; errors: string[] } {
   };
 }
 
-// İşlemleri getirme endpoint'i
+// Get transactions endpoint
 export async function GET(request: NextRequest) {
   try {
-    // Query parametrelerini al
+    // Get query parameters
     const { searchParams } = new URL(request.url);
     const stock = searchParams.get('stock');
     const type = searchParams.get('type');
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     const dateTo = searchParams.get('dateTo');
     const countOnly = searchParams.get('count') === 'true';
     
-    // Authorization header'dan token'ı al
+    // Get token from Authorization header
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json({ error: 'Authorization failed' }, { status: 401 });
@@ -67,26 +67,26 @@ export async function GET(request: NextRequest) {
     
     const token = authHeader.split(' ')[1];
     
-    // Token'ı doğrula
+    // Verify token
     const decodedToken = await verifyToken(token);
     if (!decodedToken || !decodedToken.uid) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
     
-    // Kullanıcının abonelik durumunu kontrol et
+    // Check user subscription status
     if (!decodedToken.accountStatus || decodedToken.accountStatus === 'free') {
       return NextResponse.json({ error: 'Premium subscription required for this operation' }, { status: 403 });
     }
     
     const userId = decodedToken.uid;
     
-    // İşlemleri getir
+    // Get transactions
     const transactionsRef = collection(db, 'users', userId, 'transactions');
     
-    // Filtreleri uygula
+    // Apply filters
     let transactionsQuery = query(transactionsRef, orderBy('sellDate', 'desc'));
     
-    // Firestore'da filtreleme yapılamıyorsa (client-side yapılır)
+    // If filtering can't be done in Firestore (done client-side)
     const transactionsSnap = await getDocs(transactionsQuery);
     
     if (transactionsSnap.empty) {
@@ -96,12 +96,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json([]);
     }
     
-    // Eğer sadece sayı isteniyorsa, sayısını döndür
+    // If only count is requested, return count
     if (countOnly) {
       return NextResponse.json({ count: transactionsSnap.size });
     }
     
-    // İşlemleri diziye dönüştür
+    // Convert transactions to array
     let transactions: Transaction[] = [];
     transactionsSnap.forEach(doc => {
       transactions.push({
@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
       });
     });
     
-    // Client-side filtreleme
+    // Client-side filtering
     if (stock) {
       transactions = transactions.filter(tx => tx.stock.toUpperCase() === stock.toUpperCase());
     }
@@ -126,7 +126,7 @@ export async function GET(request: NextRequest) {
     
     if (dateTo) {
       const toDate = new Date(dateTo);
-      toDate.setHours(23, 59, 59, 999); // Günün sonuna ayarla
+      toDate.setHours(23, 59, 59, 999); // Set to end of day
       transactions = transactions.filter(tx => new Date(tx.sellDate) <= toDate);
     }
     
@@ -140,13 +140,13 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Yeni işlem ekleme endpoint'i
+// Add new transaction endpoint
 export async function POST(request: NextRequest) {
   try {
-    // İstek gövdesini al
+    // Get request body
     const requestData = await request.json();
     
-    // Authorization header'dan token'ı al
+    // Get token from Authorization header
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json({ error: 'Authorization failed' }, { status: 401 });
@@ -154,20 +154,20 @@ export async function POST(request: NextRequest) {
     
     const token = authHeader.split(' ')[1];
     
-    // Token'ı doğrula
+    // Verify token
     const decodedToken = await verifyToken(token);
     if (!decodedToken || !decodedToken.uid) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
     
-    // Kullanıcının abonelik durumunu kontrol et
+    // Check user subscription status
     if (!decodedToken.accountStatus || decodedToken.accountStatus === 'free') {
       return NextResponse.json({ error: 'Premium subscription required for this operation' }, { status: 403 });
     }
     
     const userId = decodedToken.uid;
     
-    // Giriş doğrulama
+    // Validate input
     const validation = validateTransaction(requestData);
     if (!validation.valid) {
       return NextResponse.json({ 
@@ -176,16 +176,16 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
     
-    // Sayısal değerleri düzelt
+    // Fix numeric values
     const buyPrice = Number(requestData.buyPrice);
     const sellPrice = Number(requestData.sellPrice);
     const quantity = Number(requestData.quantity);
     const tradingFees = requestData.tradingFees ? Number(requestData.tradingFees) : 0;
     
-    // Kar/zarar hesaplama
+    // Calculate profit/loss
     const profit = (sellPrice - buyPrice) * quantity - tradingFees;
     
-    // İşlem tipini belirle (kısa/uzun vadeli)
+    // Determine transaction type (short/long term)
     const buyDateObj = new Date(requestData.buyDate);
     const sellDateObj = new Date(requestData.sellDate);
     const holdingPeriodMonths = (sellDateObj.getFullYear() - buyDateObj.getFullYear()) * 12 + 
@@ -193,7 +193,7 @@ export async function POST(request: NextRequest) {
     
     const type = holdingPeriodMonths >= 12 ? 'Long Term' : 'Short Term';
     
-    // Yeni işlem dokümanı
+    // New transaction document
     const newTransaction: Transaction = {
       stock: requestData.stock.toUpperCase(),
       buyDate: requestData.buyDate,
@@ -209,7 +209,7 @@ export async function POST(request: NextRequest) {
       updatedAt: serverTimestamp()
     };
     
-    // Firestore'a kaydet
+    // Save to Firestore
     const transactionsRef = collection(db, 'users', userId, 'transactions');
     const docRef = await addDoc(transactionsRef, newTransaction);
     

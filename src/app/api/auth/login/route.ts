@@ -4,33 +4,33 @@ import { generateToken } from '@/lib/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
-// E-posta formatı doğrulama
+// Email format validation
 const validateEmail = (email: string): boolean => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email);
 };
 
 export async function POST(request: NextRequest) {
-  console.log('Login API called - Endpoint başlangıcı');
+  console.log('Login API called - Endpoint started');
   
   try {
     const data = await request.json();
     const { email: emailInput, password } = data;
     
-    // Email değerini düzelt
+    // Clean email value
     let email = emailInput;
 
     if (!email || !password) {
-      console.log('Login API - Email veya şifre eksik');
+      console.log('Login API - Email or password missing');
       return NextResponse.json({
         success: false,
-        message: 'E-posta ve şifre gereklidir',
+        message: 'Email and password are required',
       }, { status: 400 });
     }
 
     // Check email format
     if (!validateEmail(email)) {
-      console.log('Login API - Geçersiz email formatı');
+      console.log('Login API - Invalid email format');
       return NextResponse.json(
         { error: 'Invalid email format. Please enter a valid email address.' },
         { status: 400 }
@@ -49,73 +49,100 @@ export async function POST(request: NextRequest) {
       const userCredential = await loginUser(email, password);
       
       if (!userCredential) {
-        console.log('Login API - Kullanıcı girişi başarısız');
+        console.log('Login API - User login failed');
         return NextResponse.json({
           success: false,
-          message: 'Kullanıcı girişi başarısız oldu',
+          message: 'Login failed',
         }, { status: 401 });
       }
 
-      // ÖNEMLİ: Test amaçlı olarak tüm kullanıcılara 'basic' abonelik durumu veriyoruz
-      // Gerçek uygulamada bu değer veritabanından alınmalı veya ödeme durumuna göre belirlenmeli
+      // Get user account status from Firestore
+      let accountStatus: 'free' | 'basic' | 'premium' = 'free'; // Default to free
+      
+      try {
+        console.log('Fetching user account status from Firestore');
+        // Get user document from Firestore
+        const userDocRef = doc(db, 'users', userCredential.uid);
+        const userDoc = await getDoc(userDocRef);
+        
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          // Check if user has a valid subscription status
+          if (userData.accountStatus && 
+             (userData.accountStatus === 'basic' || 
+              userData.accountStatus === 'premium')) {
+            accountStatus = userData.accountStatus;
+            console.log(`User has a valid subscription: ${accountStatus}`);
+          } else {
+            console.log('User has no subscription or invalid subscription type');
+          }
+        } else {
+          console.log('User document not found in Firestore');
+        }
+      } catch (firestoreError) {
+        console.error('Error fetching user subscription status:', firestoreError);
+        // Continue with default free status
+      }
+      
+      // Create user data object
       const userData = {
         uid: userCredential.uid,
         email: userCredential.email,
         name: userCredential.displayName || email,
-        accountStatus: 'basic' as 'free' | 'basic' | 'premium' // Tür belirtimi ekledik
+        accountStatus: accountStatus
       };
       
-      // Kullanıcıya ait token oluştur
+      // Generate token with user data
       const token = generateToken(userData);
       
-      // Kullanıcı bilgilerini hazırla
-      console.log('Login API - Kullanıcı bilgileri hazır:', {
+      // Prepare user information
+      console.log('Login API - User information ready:', {
         uid: userData.uid,
         email: userData.email,
         name: userData.name,
-        accountStatus: userData.accountStatus // Abonelik durumunu loglara ekledik
+        accountStatus: userData.accountStatus
       });
       
-      // Response'ı hazırla
+      // Prepare response body
       const responseBody = {
         success: true,
         user: userData,
         token: token,
-        redirectUrl: '/dashboard'
+        redirectUrl: accountStatus === 'free' ? '/pricing' : '/dashboard'
       };
       
       // Create response
-      console.log('Login API - Yanıt oluşturuluyor');
+      console.log('Login API - Creating response');
       const response = NextResponse.json(responseBody);
       
       // Set cookie directly
-      console.log('Login API - Cookie ayarlanıyor');
+      console.log('Login API - Setting cookie');
       response.cookies.set({
         name: 'auth-token',
         value: token,
-        httpOnly: false,      // Client erişimi için false
+        httpOnly: false,      // False for client access
         path: '/',
-        sameSite: 'lax',      // Vercel uyumluluğu için standart değer
-        secure: false,        // HTTP için de çalışsın
-        maxAge: 60 * 60 * 24 * 7 // 7 gün
+        sameSite: 'lax',      // Standard value for Vercel compatibility
+        secure: false,        // Allow HTTP for development
+        maxAge: 60 * 60 * 24 * 7 // 7 days
       });
       
       // Manual header token
       response.headers.set('X-Auth-Token', token);
       
-      // Cache kontrolü
+      // Cache control
       response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
       response.headers.set('Pragma', 'no-cache');
       response.headers.set('Expires', '0');
       
-      console.log('Login API - İşlem başarılı, yanıt dönülüyor');
+      console.log('Login API - Operation successful, returning response');
       return response;
     } catch (loginError: any) {
       console.error('Firebase login error:', loginError);
       const errorMessage = loginError.message || 'Login failed';
       const statusCode = loginError.code?.includes('auth/') ? 401 : 500;
       
-      console.log(`Login API - Firebase hatası: ${errorMessage}, kod: ${statusCode}`);
+      console.log(`Login API - Firebase error: ${errorMessage}, code: ${statusCode}`);
       
       return NextResponse.json(
         { error: errorMessage },
@@ -125,22 +152,22 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('General login error:', error);
     
-    // Firebase auth hatalarını değerlendir
-    let errorMessage = 'Giriş işlemi başarısız oldu';
+    // Evaluate Firebase auth errors
+    let errorMessage = 'Login operation failed';
     let statusCode = 500;
     
     if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-      errorMessage = 'E-posta veya şifre hatalı';
+      errorMessage = 'Email or password is incorrect';
       statusCode = 401;
     } else if (error.code === 'auth/too-many-requests') {
-      errorMessage = 'Çok fazla başarısız giriş denemesi. Lütfen daha sonra tekrar deneyin';
+      errorMessage = 'Too many failed login attempts. Please try again later';
       statusCode = 429;
     } else if (error.code === 'auth/user-disabled') {
-      errorMessage = 'Bu hesap devre dışı bırakılmıştır';
+      errorMessage = 'This account has been disabled';
       statusCode = 403;
     }
     
-    console.log(`Login API - Genel hata: ${errorMessage}, kod: ${statusCode}`);
+    console.log(`Login API - General error: ${errorMessage}, code: ${statusCode}`);
     
     return NextResponse.json({
       success: false,
