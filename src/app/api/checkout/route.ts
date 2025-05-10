@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { auth, currentUser } from '@clerk/nextjs/server';
 import Stripe from 'stripe';
 import { PRICES } from '@/lib/stripe';
 import { getAuthCookieFromRequest, verifyToken } from '@/lib/auth-server';
@@ -47,6 +47,7 @@ export async function POST(req: Request) {
   try {
     // Get authenticated user from Clerk
     const session = await auth();
+    const user = await currentUser();
     
     if (!session || !session.userId) {
       console.error('User not authenticated');
@@ -87,7 +88,7 @@ export async function POST(req: Request) {
     }
     
     // Get user email from Clerk
-    const userEmail = session.user?.emailAddresses[0]?.emailAddress;
+    const userEmail = user?.emailAddresses[0]?.emailAddress;
     
     // If email not found, create a fallback email
     const customerEmail = userEmail || `user+${session.userId}@example.com`;
