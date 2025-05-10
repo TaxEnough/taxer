@@ -3,8 +3,37 @@
 import { SignUp } from '@clerk/nextjs';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useUser } from '@clerk/nextjs';
+import { useAuth } from '@/context/AuthContext';
+import { getAuthTokenFromClient } from '@/lib/auth-client';
 
 export default function RegisterPage() {
+  const router = useRouter();
+  const { isLoaded: clerkLoaded, isSignedIn: clerkSignedIn } = useUser();
+  const { user: firebaseUser, loading: firebaseLoading } = useAuth();
+
+  // Kullanıcı zaten giriş yapmışsa dashboard'a yönlendir
+  useEffect(() => {
+    // Firebase token kontrolü
+    const token = getAuthTokenFromClient();
+    
+    // Eğer kullanıcı Clerk ile giriş yapmışsa
+    if (clerkLoaded && clerkSignedIn) {
+      console.log('Kullanıcı zaten Clerk ile giriş yapmış, dashboard\'a yönlendiriliyor');
+      router.push('/dashboard');
+      return;
+    }
+    
+    // Eğer kullanıcı Firebase ile giriş yapmışsa
+    if (!firebaseLoading && (firebaseUser || token)) {
+      console.log('Kullanıcı zaten Firebase ile giriş yapmış, dashboard\'a yönlendiriliyor');
+      router.push('/dashboard');
+      return;
+    }
+  }, [clerkLoaded, clerkSignedIn, firebaseUser, firebaseLoading, router]);
+
   return (
     <>
       <Navbar />
@@ -12,12 +41,12 @@ export default function RegisterPage() {
         <div className="w-full max-w-md space-y-8">
           <div className="text-center">
             <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
-              Create your account
+              Create a new account
             </h2>
             <p className="mt-2 text-sm text-gray-600">
               Or{' '}
               <a href="/login" className="font-medium text-primary-600 hover:text-primary-500">
-                sign in to your existing account
+                sign in to your account
               </a>
             </p>
           </div>
@@ -34,6 +63,8 @@ export default function RegisterPage() {
                   socialButtonsBlockButton: 'border border-gray-300 hover:bg-gray-50',
                 },
               }}
+              // Kayıt olduktan sonra doğrudan dashboard'a yönlendir
+              redirectUrl="/dashboard"
             />
           </div>
         </div>

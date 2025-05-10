@@ -3,8 +3,37 @@
 import { SignIn } from '@clerk/nextjs';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useUser } from '@clerk/nextjs';
+import { useAuth } from '@/context/AuthContext';
+import { getAuthTokenFromClient } from '@/lib/auth-client';
 
 export default function LoginPage() {
+  const router = useRouter();
+  const { isLoaded: clerkLoaded, isSignedIn: clerkSignedIn } = useUser();
+  const { user: firebaseUser, loading: firebaseLoading } = useAuth();
+
+  // Kullanıcı zaten giriş yapmışsa dashboard'a yönlendir
+  useEffect(() => {
+    // Firebase token kontrolü
+    const token = getAuthTokenFromClient();
+    
+    // Eğer kullanıcı Clerk ile giriş yapmışsa
+    if (clerkLoaded && clerkSignedIn) {
+      console.log('Kullanıcı zaten Clerk ile giriş yapmış, dashboard\'a yönlendiriliyor');
+      router.push('/dashboard');
+      return;
+    }
+    
+    // Eğer kullanıcı Firebase ile giriş yapmışsa
+    if (!firebaseLoading && (firebaseUser || token)) {
+      console.log('Kullanıcı zaten Firebase ile giriş yapmış, dashboard\'a yönlendiriliyor');
+      router.push('/dashboard');
+      return;
+    }
+  }, [clerkLoaded, clerkSignedIn, firebaseUser, firebaseLoading, router]);
+
   return (
     <>
       <Navbar />
@@ -34,6 +63,8 @@ export default function LoginPage() {
                   socialButtonsBlockButton: 'border border-gray-300 hover:bg-gray-50',
                 },
               }}
+              // Clerk ile giriş yapıldıktan sonra doğrudan dashboard'a yönlendir
+              redirectUrl="/dashboard"
             />
           </div>
         </div>

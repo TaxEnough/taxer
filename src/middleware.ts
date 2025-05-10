@@ -44,39 +44,73 @@ function isPremiumRoute(path: string) {
   return premiumRoutes.some(route => path.startsWith(route));
 }
 
+// Sonsuz yönlendirme döngüsünü önlemek için kullanılan yerel cache
+const redirectAttempts = new Map<string, { count: number, timestamp: number }>();
+
 // Clerk middleware'i yapılandır
 export default clerkMiddleware(async (auth, req) => {
   const path = req.nextUrl.pathname;
   
+  // Redirect döngüsünü önlemek için URL kontrolü
+  // IP ve yol tabanlı unique key oluştur
+  const clientIp = req.headers.get('x-real-ip') || req.headers.get('x-forwarded-for') || 'unknown';
+  const routeKey = `${clientIp}:${path}`;
+  
+  // Redirect sayacını al veya oluştur
+  const now = Date.now();
+  const attemptData = redirectAttempts.get(routeKey) || { count: 0, timestamp: now };
+  
+  // Cache'i temizle (5 dakikadan eski girişleri sil)
+  if (now - attemptData.timestamp > 5 * 60 * 1000) {
+    attemptData.count = 0;
+    attemptData.timestamp = now;
+  }
+  
+  // Eğer aynı URL'e çok fazla yönlendirme varsa (döngü), doğrudan geçiş yap
+  if (attemptData.count > 3) {
+    console.log(`Olası yönlendirme döngüsü algılandı: ${routeKey}, geçiş yapılıyor`);
+    redirectAttempts.delete(routeKey); // Sayacı sıfırla
+    return NextResponse.next();
+  }
+  
   // Public rotalar için işlem yok, devam et
   if (isPublicRoute(path)) {
+    // Login sayfasındayken ve kullanıcı giriş yapmışsa, dashboard'a yönlendir
+    // auth.protect() yerine isAuthenticated kullan
+    const isAuthenticated = await isUserAuthenticated(auth);
+    
+    if ((path === '/login' || path === '/register') && isAuthenticated) {
+      return NextResponse.redirect(new URL('/dashboard', req.url));
+    }
     return NextResponse.next();
   }
 
   // Korumalı rotalar için kimlik doğrulama kontrolü
   if (isProtectedRoute(path)) {
-    // auth.protect() kullanarak koruma sağla - giriş yapmamış kullanıcıları otomatik olarak giriş sayfasına yönlendirir
     try {
+      // auth.protect() kullanarak koruma sağla
       await auth.protect();
       
       // Premium rota kontrolü
       if (isPremiumRoute(path)) {
-        // Şimdilik basit bir koruma uygulayalım
-        // İleride premium erişim kontrolü daha ayrıntılı yapılabilir
-        
-        // Not: auth.user özelliği varsayılan olarak ClerkMiddlewareAuth tipinde yok
-        // Bu nedenle premium hesapları kanaldan yöneteceğiz
-        const hasPremiumAccess = await checkPremiumAccess();
+        // Premium erişim kontrolü
+        const hasPremiumAccess = await checkPremiumAccess(auth);
         
         if (!hasPremiumAccess) {
           // Premium üyelik yoksa kullanıcıyı premium planlara yönlendir
-          console.log('Premium access denied - subscription required');
+          // Aynı URL'e yönlendirme sayısını artır
+          attemptData.count += 1;
+          redirectAttempts.set(routeKey, attemptData);
+          console.log(`Premium erişim reddedildi - ${routeKey}, deneme: ${attemptData.count}`);
           return NextResponse.redirect(new URL('/pricing?premium=required', req.url));
         }
       }
     } catch (error) {
       // Yetkilendirme hatası - kullanıcı giriş yapmamış
       console.error('Authentication error:', error);
+      // Aynı URL'e yönlendirme sayısını artır
+      attemptData.count += 1;
+      redirectAttempts.set(routeKey, attemptData);
       return NextResponse.redirect(new URL('/login', req.url));
     }
   }
@@ -84,13 +118,43 @@ export default clerkMiddleware(async (auth, req) => {
   return NextResponse.next();
 });
 
+// Kullanıcının giriş yapmış olup olmadığını kontrol et
+async function isUserAuthenticated(auth: any): Promise<boolean> {
+  try {
+    // auth.protect() çağrısının hata almaması kontrol için yeterli
+    await auth.protect();
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
 // Premium erişimi kontrol et
-// Bu fonksiyon şu an geliştirme amaçlı basit bir şekilde true dönüyor
-// Clerk'in auth yapısının değişmesi durumunda veya gerektiğinde burayı geliştirin
-async function checkPremiumAccess(): Promise<boolean> {
-  // Geliştirme aşamasında herkesin premium erişimi var kabul ediliyor
-  // Bu fonksiyon ileride Clerk'in sağladığı metadata veya API ile güncellenebilir
-  return true;
+async function checkPremiumAccess(auth: any): Promise<boolean> {
+  // Kullanıcı meta verilerini kontrol et
+  try {
+    if (auth.user && auth.user.publicMetadata) {
+      const metadata = auth.user.publicMetadata;
+      
+      // Subscription durumunu kontrol et
+      if (metadata.subscription && metadata.subscription.status === 'active') {
+        return true;
+      }
+      
+      // Varsayılan olarak geliştirme aşamasında premium erişim olmadığını varsayalım
+      // NOT: Gerçek uygulamada, premium kontrolü daha kapsamlı yapılmalıdır
+      return false;
+    }
+    
+    // Metadata yoksa veya kontrol edilemiyorsa
+    // Geliştirme aşamasında premium erişim varsayalım
+    return process.env.NODE_ENV === 'development';
+  } catch (error) {
+    console.error('Premium access check error:', error);
+    
+    // Hata durumunda geliştirme ortamında erişime izin ver
+    return process.env.NODE_ENV === 'development';
+  }
 }
 
 // Middleware konfigürasyonu - hangi rotalar için çalışacağını belirt
