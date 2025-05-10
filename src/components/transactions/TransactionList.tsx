@@ -5,6 +5,7 @@ import { Edit, Trash2, AlertTriangle, Save, X } from 'lucide-react';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { useToast } from '@/components/ui/use-toast';
 import { getAuthTokenFromClient } from '@/lib/auth-client';
+import { useAuth } from '@/context/AuthContext';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,6 +49,7 @@ type Transaction = {
 };
 
 export default function TransactionList() {
+  const { user } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -58,6 +60,10 @@ export default function TransactionList() {
   const [confirmBatchDelete, setConfirmBatchDelete] = useState(false);
   const { toast } = useToast();
   const [error, setError] = useState<string | null>(null);
+  const [selectedStockFilter, setSelectedStockFilter] = useState<string>('');
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('');
+  const [dateRange, setDateRange] = useState<{startDate: Date | null, endDate: Date | null}>({startDate: null, endDate: null});
+  const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
 
   useEffect(() => {
     fetchTransactions();
@@ -121,7 +127,7 @@ export default function TransactionList() {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${getToken()}`
+              'Authorization': `Bearer ${getAuthTokenFromClient()}`
             }
           });
           
@@ -135,16 +141,26 @@ export default function TransactionList() {
           const data = await response.json();
           console.log('İşlemler başarıyla alındı:', data.length);
           
-          // İşlemleri tarihe göre sırala
-          const sortedTransactions = data.sort((a: Transaction, b: Transaction) => {
-            return new Date(b.sellDate).getTime() - new Date(a.sellDate).getTime();
+          // İşlemleri tarihe göre sırala (API'den gelen alanları kullanarak)
+          const sortedTransactions = data.sort((a: ApiTransaction, b: ApiTransaction) => {
+            return new Date(b.sellDate || b.buyDate).getTime() - new Date(a.sellDate || a.buyDate).getTime();
           });
           
-          setTransactions(sortedTransactions);
-          setFilteredTransactions(sortedTransactions);
+          // API'den gelen verileri component formatına dönüştür
+          const formattedTransactions = sortedTransactions.map((item: ApiTransaction) => ({
+            id: item.id,
+            ticker: item.stock,
+            date: item.buyDate,
+            transactionType: item.type,
+            shares: item.quantity,
+            price: item.buyPrice,
+            fees: item.tradingFees,
+            notes: item.note,
+            profit: item.profit
+          }));
           
-          // Hesaplama istatistiklerini güncelle
-          calculateStats(sortedTransactions);
+          setTransactions(formattedTransactions);
+          setFilteredTransactions(formattedTransactions);
           
           // Başarılı olunca döngüyü kır
           break;
@@ -163,7 +179,7 @@ export default function TransactionList() {
               const refreshResponse = await fetch('/api/auth/verify', {
                 method: 'GET',
                 headers: {
-                  'Authorization': `Bearer ${getToken()}`
+                  'Authorization': `Bearer ${getAuthTokenFromClient()}`
                 }
               });
               
