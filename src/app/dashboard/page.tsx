@@ -292,54 +292,49 @@ TSLA,Sell,7,200.50,2023-03-01,235.75,2023-07-15,1650.25,7.99`;
     URL.revokeObjectURL(url);
   };
 
-  // Set isLoggedIn value in localStorage when page loads
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      console.log('Dashboard page loaded, setting localStorage isLoggedIn=true');
-      localStorage.setItem('isLoggedIn', 'true');
-    }
-  }, []);
-
   // Gereksiz render sayısını kontrol etmek için ref kullanımı
   const renderCountRef = useRef(0);
+  const isPageLoadingCompleteRef = useRef(false);
+  const pageInitializedRef = useRef(false);
 
   useEffect(() => {
-    // Eğer bu useEffect zaten çalıştıysa ve kullanıcı bilgisi varsa, tekrar çalışmasını engelle
-    if (renderCountRef.current > 0 && user) {
+    // Eğer sayfa zaten yüklendiyse, işlem yapma
+    if (isPageLoadingCompleteRef.current) {
       return;
     }
     
-    renderCountRef.current += 1;
+    // Sayfa ilk kez başlatılıyor
+    if (!pageInitializedRef.current) {
+      pageInitializedRef.current = true;
+      console.log('Dashboard page ilk kez başlatılıyor');
+    }
     
-    // Debug flag ekleyerek daha az log yazdır
-    const DEBUG = false;
-    const log = (message: string) => {
-      if (DEBUG) {
-        console.log(message);
-      }
-    };
-    
-    log(`DashboardPage useEffect running, loading: ${loading}, user: ${JSON.stringify(user)}`);
-    
-    // End loading state if token exists
     const token = getAuthTokenFromClient();
     if (token) {
-      log('Token found, loading page');
+      isPageLoadingCompleteRef.current = true;
       setPageLoading(false);
       return;
     }
     
-    // Run normal control mechanism if no token
-    if (!loading) {
-      if (!user) {
-        log('User is not logged in, redirecting to login page');
-        router.push('/login');
-      } else {
-        log('User is logged in, loading page');
-        setPageLoading(false);
-      }
+    // Kullanıcı bilgisi varsa yüklendi olarak işaretle
+    if (!loading && user) {
+      isPageLoadingCompleteRef.current = true;
+      setPageLoading(false);
+      return;
+    }
+    
+    // Kullanıcı yoksa ve yükleme bittiyse, login sayfasına yönlendir
+    if (!loading && !user) {
+      router.push('/login');
     }
   }, [user, loading, router]);
+
+  // Set isLoggedIn value in localStorage when page loads
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('isLoggedIn', 'true');
+    }
+  }, []);
 
   // Check if token exists and show page
   if (loading && pageLoading && !getAuthTokenFromClient()) {
