@@ -76,23 +76,23 @@ export async function POST(req: Request) {
       
       case 'invoice.payment_succeeded': {
         // Update subscription record when payment is successful
-        const invoice = event.data.object as Stripe.Invoice;
-        const subscriptionId = invoice.subscription as string;
+        const invoiceObj = event.data.object as any;
+        const subscriptionId = invoiceObj.subscription as string;
         
         if (subscriptionId) {
           const subscription = await stripe.subscriptions.retrieve(subscriptionId) as any;
           
           // Find user with this subscription ID in metadata
           const clerk = await getClerkClient();
-          const users = await clerk.users.getUserList({
-            privateMetadata: { 
-              // This query checks if the subscription ID exists in the user's metadata
-              'subscription.id': subscriptionId
-            }
+          const userList = await clerk.users.getUserList();
+          // Filter users with matching subscription ID manually
+          const matchingUsers = userList.data.filter(user => {
+            const metadata = user.privateMetadata as any;
+            return metadata?.subscription?.id === subscriptionId;
           });
           
-          if (users.length > 0) {
-            const userId = users[0].id;
+          if (matchingUsers.length > 0) {
+            const userId = matchingUsers[0].id;
             
             // Update the subscription metadata
             await clerk.users.updateUser(userId, {
@@ -116,19 +116,20 @@ export async function POST(req: Request) {
       
       case 'customer.subscription.updated': {
         // Handle subscription status changes
-        const subscription = event.data.object as Stripe.Subscription;
+        const subscription = event.data.object as any;
         const subscriptionId = subscription.id;
         
         // Find user with this subscription ID in metadata
         const clerk = await getClerkClient();
-        const users = await clerk.users.getUserList({
-          privateMetadata: { 
-            'subscription.id': subscriptionId
-          }
+        const userList = await clerk.users.getUserList();
+        // Filter users with matching subscription ID manually
+        const matchingUsers = userList.data.filter(user => {
+          const metadata = user.privateMetadata as any;
+          return metadata?.subscription?.id === subscriptionId;
         });
         
-        if (users.length > 0) {
-          const userId = users[0].id;
+        if (matchingUsers.length > 0) {
+          const userId = matchingUsers[0].id;
           
           // Update the subscription metadata
           await clerk.users.updateUser(userId, {
@@ -149,19 +150,20 @@ export async function POST(req: Request) {
       
       case 'customer.subscription.deleted': {
         // Handle subscription cancellation
-        const subscription = event.data.object as Stripe.Subscription;
+        const subscription = event.data.object as any;
         const subscriptionId = subscription.id;
         
         // Find user with this subscription ID in metadata
         const clerk = await getClerkClient();
-        const users = await clerk.users.getUserList({
-          privateMetadata: { 
-            'subscription.id': subscriptionId
-          }
+        const userList = await clerk.users.getUserList();
+        // Filter users with matching subscription ID manually
+        const matchingUsers = userList.data.filter(user => {
+          const metadata = user.privateMetadata as any;
+          return metadata?.subscription?.id === subscriptionId;
         });
         
-        if (users.length > 0) {
-          const userId = users[0].id;
+        if (matchingUsers.length > 0) {
+          const userId = matchingUsers[0].id;
           
           // Update the subscription metadata to show canceled status
           await clerk.users.updateUser(userId, {
