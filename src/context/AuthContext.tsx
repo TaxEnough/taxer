@@ -145,6 +145,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   sessionStorage.setItem('user-premium-info', JSON.stringify(parsedUserInfo));
                   sessionStorage.setItem('premium-cache-expiry', expiry.toString());
                   window.__premiumCacheExpiry = expiry;
+                  
+                  // Premium durumunu cookie'de sakla (middleware için)
+                  document.cookie = `user-premium-status=${JSON.stringify({
+                    accountStatus: parsedUserInfo.accountStatus
+                  })}; path=/; max-age=1800`;
                 }
                 
                 // Korumalı sayfadaysak ve yükleme yapmıyorsak, burada durup ekranın yanıp sönmesini önleyelim
@@ -271,6 +276,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 if (typeof window !== 'undefined') {
                   window.__premiumCacheExpiry = expiry;
                 }
+                
+                // Premium durumunu cookie'de sakla (middleware için)
+                document.cookie = `user-premium-status=${JSON.stringify({
+                  accountStatus: data.user.accountStatus
+                })}; path=/; max-age=1800`;
               }
               
               setUser(data.user);
@@ -569,6 +579,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (typeof window !== 'undefined') {
         window.__premiumCacheExpiry = expiry;
       }
+      
+      // Premium durumunu cookie'de sakla (middleware için)
+      document.cookie = `user-premium-status=${JSON.stringify({
+        accountStatus: updatedUser.accountStatus
+      })}; path=/; max-age=1800`;
     }
   };
 

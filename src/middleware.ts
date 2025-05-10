@@ -67,9 +67,26 @@ export function middleware(request: NextRequest) {
     return redirectToLogin(request);
   }
   
+  // İsteğin client-side session storage'dan gelen premium durumunu kontrol et
+  const premiumCookieName = 'user-premium-status';
+  const premiumCookie = request.cookies.get(premiumCookieName)?.value;
+  
   // Check subscription status - kullanıcının premium durumuna bakılır
-  const accountStatus = payload.accountStatus;
-  // console.log('User account status:', accountStatus);
+  let accountStatus = payload.accountStatus;
+  
+  // Eğer token içinde account status yoksa ama cookie'de varsa, cookie değerini kullan
+  if ((!accountStatus || accountStatus === 'free') && premiumCookie) {
+    try {
+      const premiumData = JSON.parse(premiumCookie);
+      if (premiumData.accountStatus && 
+          (premiumData.accountStatus === 'basic' || premiumData.accountStatus === 'premium')) {
+        accountStatus = premiumData.accountStatus;
+      }
+    } catch (e) {
+      // JSON parse hatası durumunda devam et
+      console.error('Premium cookie parse error:', e);
+    }
+  }
   
   // If accountStatus doesn't exist or is 'free'
   if (!accountStatus || accountStatus === 'free') {

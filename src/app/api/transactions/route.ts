@@ -73,8 +73,27 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
     
-    // Check user subscription status
-    if (!decodedToken.accountStatus || decodedToken.accountStatus === 'free') {
+    // Check user subscription status - client taraflı premium cookie'yi kontrol et
+    const premiumCookie = request.cookies.get('user-premium-status')?.value;
+    let accountStatus = decodedToken.accountStatus || 'free';
+    
+    // Cookie'den premium durumunu almaya çalış eğer token'da yoksa
+    if ((accountStatus === 'free' || !accountStatus) && premiumCookie) {
+      try {
+        const premiumData = JSON.parse(premiumCookie);
+        if (premiumData.accountStatus && 
+            (premiumData.accountStatus === 'basic' || 
+             premiumData.accountStatus === 'premium')) {
+          accountStatus = premiumData.accountStatus;
+          console.log('Using premium status from cookie:', accountStatus);
+        }
+      } catch (e) {
+        console.error('Failed to parse premium cookie:', e);
+      }
+    }
+    
+    // Abone durumunu kontrol et
+    if (!accountStatus || accountStatus === 'free') {
       return NextResponse.json({ error: 'Premium subscription required for this operation' }, { status: 403 });
     }
     
@@ -160,8 +179,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
     
-    // Check user subscription status
-    if (!decodedToken.accountStatus || decodedToken.accountStatus === 'free') {
+    // Check user subscription status - client taraflı premium cookie'yi kontrol et
+    const premiumCookie = request.cookies.get('user-premium-status')?.value;
+    let accountStatus = decodedToken.accountStatus || 'free';
+    
+    // Cookie'den premium durumunu almaya çalış eğer token'da yoksa
+    if ((accountStatus === 'free' || !accountStatus) && premiumCookie) {
+      try {
+        const premiumData = JSON.parse(premiumCookie);
+        if (premiumData.accountStatus && 
+            (premiumData.accountStatus === 'basic' || 
+             premiumData.accountStatus === 'premium')) {
+          accountStatus = premiumData.accountStatus;
+          console.log('Using premium status from cookie:', accountStatus);
+        }
+      } catch (e) {
+        console.error('Failed to parse premium cookie:', e);
+      }
+    }
+    
+    // Abone durumunu kontrol et
+    if (!accountStatus || accountStatus === 'free') {
       return NextResponse.json({ error: 'Premium subscription required for this operation' }, { status: 403 });
     }
     

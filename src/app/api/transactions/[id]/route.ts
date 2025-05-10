@@ -88,8 +88,27 @@ export async function GET(
     const idToken = authHeader.split('Bearer ')[1];
     const decodedToken = await auth.verifyIdToken(idToken);
     
-    // Check for premium account status
-    if (!decodedToken.accountStatus || decodedToken.accountStatus === 'free') {
+    // Check for premium account status - client taraflı premium cookie'yi de kontrol et
+    const premiumCookie = request.cookies.get('user-premium-status')?.value;
+    let accountStatus = decodedToken.accountStatus || 'free';
+    
+    // Cookie'den premium durumunu almaya çalış eğer token'da yoksa
+    if ((accountStatus === 'free' || !accountStatus) && premiumCookie) {
+      try {
+        const premiumData = JSON.parse(premiumCookie);
+        if (premiumData.accountStatus && 
+            (premiumData.accountStatus === 'basic' || 
+            premiumData.accountStatus === 'premium')) {
+          accountStatus = premiumData.accountStatus;
+          console.log('Using premium status from cookie:', accountStatus);
+        }
+      } catch (e) {
+        console.error('Failed to parse premium cookie:', e);
+      }
+    }
+    
+    // Abone durumunu kontrol et
+    if (!accountStatus || accountStatus === 'free') {
       return NextResponse.json(
         { error: 'Premium subscription required for this operation' },
         { status: 403 }
@@ -142,8 +161,27 @@ export async function PUT(
     const idToken = authHeader.split('Bearer ')[1];
     const decodedToken = await auth.verifyIdToken(idToken);
     
-    // Check for premium account status
-    if (!decodedToken.accountStatus || decodedToken.accountStatus === 'free') {
+    // Check for premium account status - client taraflı premium cookie'yi de kontrol et
+    const premiumCookie = request.cookies.get('user-premium-status')?.value;
+    let accountStatus = decodedToken.accountStatus || 'free';
+    
+    // Cookie'den premium durumunu almaya çalış eğer token'da yoksa
+    if ((accountStatus === 'free' || !accountStatus) && premiumCookie) {
+      try {
+        const premiumData = JSON.parse(premiumCookie);
+        if (premiumData.accountStatus && 
+            (premiumData.accountStatus === 'basic' || 
+            premiumData.accountStatus === 'premium')) {
+          accountStatus = premiumData.accountStatus;
+          console.log('Using premium status from cookie:', accountStatus);
+        }
+      } catch (e) {
+        console.error('Failed to parse premium cookie:', e);
+      }
+    }
+    
+    // Abone durumunu kontrol et
+    if (!accountStatus || accountStatus === 'free') {
       return NextResponse.json(
         { error: 'Premium subscription required for this operation' },
         { status: 403 }
@@ -236,8 +274,27 @@ export async function DELETE(
       // Verify token and get user
     const decodedToken = await auth.verifyIdToken(idToken);
       
-      // Check for premium account status
-      if (!decodedToken.accountStatus || decodedToken.accountStatus === 'free') {
+      // Check for premium account status - client taraflı premium cookie'yi de kontrol et
+      const premiumCookie = request.cookies.get('user-premium-status')?.value;
+      let accountStatus = decodedToken.accountStatus || 'free';
+      
+      // Cookie'den premium durumunu almaya çalış eğer token'da yoksa
+      if ((accountStatus === 'free' || !accountStatus) && premiumCookie) {
+        try {
+          const premiumData = JSON.parse(premiumCookie);
+          if (premiumData.accountStatus && 
+              (premiumData.accountStatus === 'basic' || 
+              premiumData.accountStatus === 'premium')) {
+            accountStatus = premiumData.accountStatus;
+            console.log('Using premium status from cookie:', accountStatus);
+          }
+        } catch (e) {
+          console.error('Failed to parse premium cookie:', e);
+        }
+      }
+      
+      // Abone durumunu kontrol et
+      if (!accountStatus || accountStatus === 'free') {
         return NextResponse.json(
           { error: 'Premium subscription required for this operation' },
           { status: 403 }
