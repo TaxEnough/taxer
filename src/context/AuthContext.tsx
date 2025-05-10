@@ -116,15 +116,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Kullanıcının oturum açmış olarak kabul edilmesi için token veya flag gerekli
         const isAuthenticated = !!token || isLoggedInFlag;
         
+        // En son token doğrulama zamanını kontrol et - gereksiz API çağrılarını önlemek için
+        let shouldRefetch = false;
+        
         if (typeof window !== 'undefined') {
           window.__isAuthenticated = isAuthenticated;
           
-          // En son token doğrulama zamanını kontrol et - gereksiz API çağrılarını önlemek için
           const now = Date.now();
           const lastCheck = window.__lastTokenCheck || 0;
           
           // API çağrılarını azalt: 10 dakika (600000 ms) bekle 
-          const shouldRefetch = (now - lastCheck) > 600000;
+          shouldRefetch = (now - lastCheck) > 600000;
           
           // LocalStorage'dan kullanıcı bilgilerini kullanmayı dene
           const userInfoStr = localStorage.getItem('user-info');
