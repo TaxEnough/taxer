@@ -3,7 +3,7 @@ const nextConfig = {
   reactStrictMode: false,
   swcMinify: true,
   experimental: {
-    optimizeCss: true,
+    // optimizeCss özelliğini kaldırıyoruz çünkü 'critters' modülü eksik
   },
   // Firebase Admin SDK gibi Node.js modüllerini istemci tarafına derlememek için transpilePackages yapılandırması
   transpilePackages: [],
