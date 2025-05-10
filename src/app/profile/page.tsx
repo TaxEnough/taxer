@@ -17,9 +17,9 @@ import SubscriptionInfo from '@/components/profile/SubscriptionInfo';
 import { useUser } from '@clerk/nextjs';
 
 export default function ProfilePage() {
-  const { user, loading, logout } = useAuth();
+  const { user: firebaseUser, loading, logout } = useAuth();
   const router = useRouter();
-  const { isLoaded } = useUser();
+  const { user: clerkUser, isLoaded } = useUser();
   const [pageLoading, setPageLoading] = useState(true);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -143,7 +143,7 @@ export default function ProfilePage() {
   };
 
   useEffect(() => {
-    console.log('ProfilePage useEffect çalıştı, loading:', loading, 'user:', user, 'forceRemain:', forceRemain);
+    console.log('ProfilePage useEffect çalıştı, loading:', loading, 'user:', firebaseUser, 'forceRemain:', forceRemain);
     
     // Eğer forceRemain aktifse, her durumda sayfada kal
     if (forceRemain) {
@@ -155,7 +155,7 @@ export default function ProfilePage() {
         console.log('Token bulundu, profil bilgileri yükleniyor');
         
         // Eğer user bilgisi yoksa API'den almaya çalış
-        if (!user) {
+        if (!firebaseUser) {
           console.log('User bilgisi yok, API\'den yüklemeye çalışılacak');
           
           const fetchUserData = async () => {
@@ -189,11 +189,11 @@ export default function ProfilePage() {
           fetchUserData();
         } else {
           console.log('User bilgisi mevcut');
-          setName(user.name || user.email?.split('@')[0] || 'Kullanıcı');
-          setEmail(user.email || '');
+          setName(firebaseUser.name || firebaseUser.email?.split('@')[0] || 'Kullanıcı');
+          setEmail(firebaseUser.email || '');
           
-          if (user.id) {
-            fetchUserSubscription(user.id);
+          if (firebaseUser.id) {
+            fetchUserSubscription(firebaseUser.id);
           }
           
           setPageLoading(false);
@@ -207,30 +207,30 @@ export default function ProfilePage() {
       
       // Yükleme tamamlandıysa ve kullanıcı yoksa, login sayfasına yönlendir
       if (!loading) {
-        if (!user) {
+        if (!firebaseUser) {
           console.log('Yükleme tamamlandı, kullanıcı yok, login sayfasına yönlendiriliyor');
           router.push('/login');
         } else {
           console.log('Yükleme tamamlandı, kullanıcı var');
-          setName(user.name || user.email?.split('@')[0] || 'Kullanıcı');
-          setEmail(user.email || '');
+          setName(firebaseUser.name || firebaseUser.email?.split('@')[0] || 'Kullanıcı');
+          setEmail(firebaseUser.email || '');
           
-          if (user.id) {
-            fetchUserSubscription(user.id);
+          if (firebaseUser.id) {
+            fetchUserSubscription(firebaseUser.id);
           }
           
           setPageLoading(false);
         }
       }
     }
-  }, [loading, user, router, forceRemain]);
+  }, [loading, firebaseUser, router, forceRemain]);
 
   // Kullanıcı oturum açmadıysa veya veri yüklenemiyorsa, ana sayfaya yönlendirme
   useEffect(() => {
-    if (isLoaded && !user) {
+    if (isLoaded && !clerkUser) {
       router.push('/');
     }
-  }, [isLoaded, user, router]);
+  }, [isLoaded, clerkUser, router]);
 
   if (loading || pageLoading) {
     return (
@@ -302,15 +302,15 @@ export default function ProfilePage() {
                   <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
                     <div className="sm:col-span-1">
                       <dt className="text-sm font-medium text-gray-500">Full Name</dt>
-                      <dd className="mt-1 text-sm text-gray-900">{user.fullName || 'Not specified'}</dd>
+                      <dd className="mt-1 text-sm text-gray-900">{clerkUser?.fullName || 'Not specified'}</dd>
                     </div>
                     <div className="sm:col-span-1">
                       <dt className="text-sm font-medium text-gray-500">Email Address</dt>
-                      <dd className="mt-1 text-sm text-gray-900">{user.primaryEmailAddress?.emailAddress || 'Not available'}</dd>
+                      <dd className="mt-1 text-sm text-gray-900">{clerkUser?.primaryEmailAddress?.emailAddress || 'Not available'}</dd>
                     </div>
                     <div className="sm:col-span-1">
                       <dt className="text-sm font-medium text-gray-500">Account ID</dt>
-                      <dd className="mt-1 text-sm text-gray-900">{user.id || 'Not available'}</dd>
+                      <dd className="mt-1 text-sm text-gray-900">{clerkUser?.id || 'Not available'}</dd>
                     </div>
                   </dl>
                 </div>
@@ -340,7 +340,7 @@ export default function ProfilePage() {
                     <p>Security settings are managed through your Clerk account.</p>
                     <div className="mt-4">
                       <button 
-                        onClick={() => user.openUserProfile()}
+                        onClick={() => clerkUser?.openUserProfile()}
                         className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                       >
                         Manage Security Settings
