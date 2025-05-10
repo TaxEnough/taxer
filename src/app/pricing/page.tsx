@@ -7,21 +7,32 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import SubscribeButton from '@/components/SubscribeButton';
 import { PRICES } from '@/lib/stripe';
+import { useUser } from '@clerk/nextjs';
 
 export default function Pricing() {
-  const { user } = useAuth();
+  const { user: firebaseUser } = useAuth();
+  const { isLoaded: isClerkLoaded, isSignedIn: isClerkSignedIn, user: clerkUser } = useUser();
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   
   useEffect(() => {
     // Log authentication status for debugging
     console.log('Auth state in pricing page:', { 
-      isLoggedIn: !!user, 
-      user: user 
+      isFirebaseLoggedIn: !!firebaseUser,
+      isClerkSignedIn: isClerkSignedIn,
+      isClerkLoaded: isClerkLoaded,
+      clerkUser: clerkUser,
+      firebaseUser: firebaseUser 
     });
     
-    setIsAuthenticated(!!user);
-  }, [user]);
+    // Kullanıcının giriş yapmış olup olmadığını belirle
+    // Önce Clerk'e bak, sonra Firebase'e fallback yap
+    if (isClerkLoaded) {
+      setIsAuthenticated(isClerkSignedIn || !!firebaseUser);
+    } else {
+      setIsAuthenticated(!!firebaseUser);
+    }
+  }, [firebaseUser, isClerkSignedIn, isClerkLoaded, clerkUser]);
   
   const calculateDiscount = (monthlyPrice: number, yearlyPrice: number) => {
     const yearlyTotal = monthlyPrice * 12;
