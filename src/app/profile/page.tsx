@@ -13,10 +13,13 @@ import { deleteUser } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
+import SubscriptionInfo from '@/components/profile/SubscriptionInfo';
+import { useUser } from '@clerk/nextjs';
 
 export default function ProfilePage() {
   const { user, loading, logout } = useAuth();
   const router = useRouter();
+  const { isLoaded } = useUser();
   const [pageLoading, setPageLoading] = useState(true);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -222,6 +225,13 @@ export default function ProfilePage() {
     }
   }, [loading, user, router, forceRemain]);
 
+  // Kullanıcı oturum açmadıysa veya veri yüklenemiyorsa, ana sayfaya yönlendirme
+  useEffect(() => {
+    if (isLoaded && !user) {
+      router.push('/');
+    }
+  }, [isLoaded, user, router]);
+
   if (loading || pageLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -237,237 +247,113 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen flex flex-col">
       <Navbar />
-      <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
-        <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-          <div className="px-4 py-5 sm:px-6 flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">My Account</h1>
-              <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                Manage your personal information and account settings here.
-              </p>
-            </div>
-            
-            {/* Subscription Status */}
-            <div className="bg-gray-50 px-4 py-2 rounded-md border border-gray-200">
-              <div className="text-sm font-medium text-gray-700">Subscription</div>
-              <div className={`text-base font-bold ${
-                subscriptionData.plan === 'Premium' ? 'text-purple-600' : 
-                subscriptionData.plan === 'Basic' ? 'text-blue-600' : 'text-gray-500'
-              }`}>
-                {isLoadingSubscription ? 'Loading...' : subscriptionData.plan}
-              </div>
-              {(subscriptionData.plan === 'Free Plan') && (
-                <div className="mt-1 text-xs text-red-500">
-                  Upgrade to access dashboard, transactions, and reports!
-                </div>
-              )}
-              {(subscriptionData.plan === 'Basic' || subscriptionData.plan === 'Premium') && (
-                <div className="mt-1 text-xs text-green-500">
-                  Full access to all premium features!
-                </div>
-              )}
-            </div>
-          </div>
+      
+      <main className="flex-grow container mx-auto py-10 px-4">
+        <div className="max-w-5xl mx-auto">
+          <h1 className="text-3xl font-bold text-gray-900 mb-6">Account Settings</h1>
           
-          {/* Sekme Menüsü */}
-          <div className="border-t border-gray-200">
-            <div className="flex border-b">
+          {/* Tab Navigation */}
+          <div className="border-b border-gray-200 mb-6">
+            <nav className="-mb-px flex space-x-8">
               <button
-                className={`px-6 py-3 text-sm font-medium ${
-                  activeTab === 'profile'
-                    ? 'border-b-2 border-blue-500 text-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
                 onClick={() => setActiveTab('profile')}
+                className={`pb-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'profile'
+                    ? 'border-primary-600 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
               >
-                Profile Information
+                Profile
               </button>
               <button
-                className={`px-6 py-3 text-sm font-medium ${
-                  activeTab === 'password'
-                    ? 'border-b-2 border-blue-500 text-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-                onClick={() => setActiveTab('password')}
-              >
-                Change Password
-              </button>
-              <button
-                className={`px-6 py-3 text-sm font-medium ${
-                  activeTab === 'account'
-                    ? 'border-b-2 border-blue-500 text-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-                onClick={() => setActiveTab('account')}
-              >
-                Account Management
-              </button>
-              <button
-                className={`px-6 py-3 text-sm font-medium ${
-                  activeTab === 'subscription'
-                    ? 'border-b-2 border-blue-500 text-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
                 onClick={() => setActiveTab('subscription')}
+                className={`pb-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'subscription'
+                    ? 'border-primary-600 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
               >
                 Subscription
               </button>
-            </div>
-            
-            {/* Sekme İçeriği */}
-            <div className="p-6">
-              {activeTab === 'profile' && (
-                <ProfileForm />
-              )}
-              
-              {activeTab === 'password' && (
-                <ChangePasswordForm />
-              )}
-              
-              {activeTab === 'account' && (
-                <div>
-                  <h2 className="text-lg font-medium mb-6">Account Management</h2>
-                  
-                  <div className="mb-8">
-                    <h3 className="text-md font-medium mb-4">Account Summary</h3>
-                    <div className="bg-gray-50 p-4 rounded-md">
-                      <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
-                        <div>
-                          <dt className="text-sm font-medium text-gray-500">Total Transactions</dt>
-                          <dd className="mt-1 text-sm text-gray-900">{accountSummary.totalTransactions}</dd>
-                        </div>
-                        <div>
-                          <dt className="text-sm font-medium text-gray-500">Total Investment</dt>
-                          <dd className="mt-1 text-sm text-gray-900">{accountSummary.totalInvestment}</dd>
-                        </div>
-                        <div>
-                          <dt className="text-sm font-medium text-gray-500">Total Tax Calculated</dt>
-                          <dd className="mt-1 text-sm text-gray-900">{accountSummary.totalTaxCalculated}</dd>
-                        </div>
-                        <div>
-                          <dt className="text-sm font-medium text-gray-500">Last Calculation Date</dt>
-                          <dd className="mt-1 text-sm text-gray-900">{accountSummary.lastCalculationDate}</dd>
-                        </div>
-                      </dl>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-10">
-                    <h3 className="text-md font-medium mb-4 text-red-600">Danger Zone</h3>
-                    <DeleteAccountForm />
-                  </div>
+              <button
+                onClick={() => setActiveTab('security')}
+                className={`pb-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'security'
+                    ? 'border-primary-600 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Security
+              </button>
+            </nav>
+          </div>
+          
+          {/* Tab Content */}
+          <div className="mt-6">
+            {activeTab === 'profile' && (
+              <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+                <div className="px-4 py-5 sm:px-6">
+                  <h2 className="text-lg font-medium text-gray-900">Personal Information</h2>
+                  <p className="mt-1 max-w-2xl text-sm text-gray-500">Your personal details and profile settings.</p>
                 </div>
-              )}
-              
-              {activeTab === 'subscription' && (
-                <div>
-                  <h2 className="text-lg font-medium mb-6">Subscription</h2>
-                  
-                  {isLoadingSubscription ? (
-                    <div className="flex justify-center py-6">
-                      <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+                <div className="border-t border-gray-200 px-4 py-5 sm:p-6">
+                  <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+                    <div className="sm:col-span-1">
+                      <dt className="text-sm font-medium text-gray-500">Full Name</dt>
+                      <dd className="mt-1 text-sm text-gray-900">{user.fullName || 'Not specified'}</dd>
                     </div>
-                  ) : (
-                  <div className="bg-gray-50 p-4 rounded-md">
-                      <dl className="grid grid-cols-1 gap-x-4 gap-y-6">
-                      <div>
-                        <dt className="text-sm font-medium text-gray-500">Current Plan</dt>
-                          <dd className="mt-1 text-sm">
-                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              subscriptionData.plan === 'Free Plan' 
-                                ? 'bg-gray-100 text-gray-800' 
-                                : 'bg-green-100 text-green-800'
-                            }`}>
-                              {subscriptionData.plan}
-                            </span>
-                          </dd>
-                      </div>
-                        {subscriptionData.status === 'Active' && (
-                      <div>
-                        <dt className="text-sm font-medium text-gray-500">Renewal Date</dt>
-                            <dd className="mt-1 text-sm text-gray-900">{subscriptionData.renewalDate}</dd>
-                      </div>
-                        )}
-                    </dl>
-                  </div>
-                  )}
-                  
-                  {subscriptionData.status === 'Active' && (
-                  <div className="mt-6 flex space-x-4">
+                    <div className="sm:col-span-1">
+                      <dt className="text-sm font-medium text-gray-500">Email Address</dt>
+                      <dd className="mt-1 text-sm text-gray-900">{user.primaryEmailAddress?.emailAddress || 'Not available'}</dd>
+                    </div>
+                    <div className="sm:col-span-1">
+                      <dt className="text-sm font-medium text-gray-500">Account ID</dt>
+                      <dd className="mt-1 text-sm text-gray-900">{user.id || 'Not available'}</dd>
+                    </div>
+                  </dl>
+                </div>
+              </div>
+            )}
+            
+            {activeTab === 'subscription' && (
+              <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+                <div className="px-4 py-5 sm:px-6">
+                  <h2 className="text-lg font-medium text-gray-900">Subscription Management</h2>
+                  <p className="mt-1 max-w-2xl text-sm text-gray-500">Manage your subscription plan and billing preferences.</p>
+                </div>
+                <div className="border-t border-gray-200 px-4 py-5 sm:p-6">
+                  <SubscriptionInfo />
+                </div>
+              </div>
+            )}
+            
+            {activeTab === 'security' && (
+              <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+                <div className="px-4 py-5 sm:px-6">
+                  <h2 className="text-lg font-medium text-gray-900">Security Settings</h2>
+                  <p className="mt-1 max-w-2xl text-sm text-gray-500">Manage your account security and sign-in methods.</p>
+                </div>
+                <div className="border-t border-gray-200 px-4 py-5 sm:p-6">
+                  <div className="prose">
+                    <p>Security settings are managed through your Clerk account.</p>
+                    <div className="mt-4">
                       <button 
-                        onClick={() => router.push('/pricing')}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                        onClick={() => user.openUserProfile()}
+                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                       >
-                      Change Plan
-                    </button>
-                    <button className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50">
-                      Cancel Subscription
-                    </button>
-                  </div>
-                  )}
-                  
-                  {subscriptionData.status !== 'Active' && (
-                    <div className="mt-6">
-                      <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100 mb-6">
-                        <h3 className="text-lg font-semibold text-blue-800 mb-3">Upgrade to Premium Features!</h3>
-                        <p className="text-sm text-gray-700 mb-4">
-                          Enhance your investment tracking experience with our premium plans. Unlock advanced features including:
-                        </p>
-                        <ul className="space-y-2 mb-6">
-                          <li className="flex items-center">
-                            <svg className="h-5 w-5 text-green-500 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                            </svg>
-                            <span className="text-sm font-medium">Unlimited tax calculations</span>
-                          </li>
-                          <li className="flex items-center">
-                            <svg className="h-5 w-5 text-green-500 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                            </svg>
-                            <span className="text-sm font-medium">Advanced portfolio analytics</span>
-                          </li>
-                          <li className="flex items-center">
-                            <svg className="h-5 w-5 text-green-500 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                            </svg>
-                            <span className="text-sm font-medium">Personalized tax optimization strategies</span>
-                          </li>
-                          <li className="flex items-center">
-                            <svg className="h-5 w-5 text-green-500 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                            </svg>
-                            <span className="text-sm font-medium">Priority customer support</span>
-                          </li>
-                        </ul>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center">
-                            <span className="text-sm font-semibold text-gray-900">Starting at just $19.99/month</span>
-                            <span className="ml-2 px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">Save 20%</span>
-                          </div>
-                          <button 
-                            onClick={() => router.push('/pricing')}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
-                          >
-                            View Plans
-                          </button>
-                        </div>
-                      </div>
-                      <button 
-                        onClick={() => router.push('/pricing')}
-                        className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-md hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 font-medium text-center"
-                      >
-                        Upgrade Now
+                        Manage Security Settings
                       </button>
                     </div>
-                  )}
+                  </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
-      </div>
+      </main>
+      
       <Footer />
     </div>
   );

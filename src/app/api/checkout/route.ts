@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
 import Stripe from 'stripe';
 import { PRICES } from '@/lib/stripe';
 import { getAuthCookieFromRequest, verifyToken } from '@/lib/auth-server';
@@ -37,68 +38,43 @@ async function getUserEmail(userId: string): Promise<string | null> {
   }
 }
 
+// Initialize Stripe client
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2023-10-16',
+});
+
 export async function POST(req: Request) {
   try {
-    console.log('Checkout API endpoint called');
+    // Get authenticated user from Clerk
+    const session = await auth();
     
-    // Get the request body
-    const body = await req.json();
-    const { priceId, successUrl, cancelUrl } = body;
-    
-    console.log('Request body:', { priceId, successUrl, cancelUrl });
-
-    // Validate price ID immediately
-    if (!priceId) {
-      console.error('Missing price ID');
+    if (!session || !session.userId) {
+      console.error('User not authenticated');
       return NextResponse.json(
-        { error: 'Missing price ID' },
+        { error: 'User not authenticated' },
+        { status: 401, headers: corsHeaders }
+      );
+    }
+
+    // Get request data
+    const { priceId, successUrl, cancelUrl } = await req.json();
+    console.log('Checkout request data:', { priceId, successUrl, cancelUrl });
+
+    // Validate priceId
+    if (!priceId) {
+      console.error('Missing priceId');
+      return NextResponse.json(
+        { error: 'Missing priceId' },
         { status: 400, headers: corsHeaders }
       );
     }
 
-    // Get auth token and verify it
-    const token = await getAuthCookieFromRequest(req);
-    
-    if (!token) {
-      console.error('No auth token found in request');
-      return NextResponse.json(
-        { error: 'You must be logged in to create a checkout session' },
-        { status: 401, headers: corsHeaders }
-      );
-    }
-    
-    console.log('Auth token found, verifying...');
-    const session = await verifyToken(token);
-    
-    if (!session) {
-      console.error('Invalid or expired auth token');
-      return NextResponse.json(
-        { error: 'Invalid authentication token' },
-        { status: 401, headers: corsHeaders }
-      );
-    }
-    
-    console.log('User authenticated:', session.userId);
-
-    // Validate Stripe Secret Key
-    if (!process.env.STRIPE_SECRET_KEY) {
-      console.error('STRIPE_SECRET_KEY is not defined');
-      return NextResponse.json(
-        { error: 'Stripe configuration is missing' },
-        { status: 500, headers: corsHeaders }
-      );
-    }
-
-    // Initialize Stripe
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-    console.log('Stripe initialized');
-
-    // Validate price ID against our defined prices
+    // Get all valid price IDs from the PRICES configuration
     const validPriceIds = [
       PRICES.BASIC.MONTHLY.id,
       PRICES.BASIC.YEARLY.id,
       PRICES.PREMIUM.MONTHLY.id,
-      PRICES.PREMIUM.YEARLY.id
+      PRICES.PREMIUM.YEARLY.id,
     ];
 
     if (!validPriceIds.includes(priceId)) {
@@ -109,12 +85,12 @@ export async function POST(req: Request) {
         { status: 400, headers: corsHeaders }
       );
     }
-
-    // Get user's email from Firestore
-    const userEmail = await getUserEmail(session.userId);
+    
+    // Get user email from Clerk
+    const userEmail = session.user?.emailAddresses[0]?.emailAddress;
     
     // If email not found, create a fallback email
-    const customerEmail = userEmail || `user+${session.userId}@taxenough.com`;
+    const customerEmail = userEmail || `user+${session.userId}@example.com`;
     console.log('Using email for checkout:', customerEmail);
 
     try {
@@ -128,8 +104,8 @@ export async function POST(req: Request) {
           },
         ],
         mode: 'subscription',
-        success_url: successUrl || `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?subscription=success`,
-        cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_APP_URL}/pricing?subscription=cancelled`,
+        success_url: successUrl || `${process.env.NEXT_PUBLIC_APP_URL}/profile?tab=subscription&status=success`,
+        cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_APP_URL}/pricing?status=cancelled`,
         metadata: {
           userId: session.userId,
         },
