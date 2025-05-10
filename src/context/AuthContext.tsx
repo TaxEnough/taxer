@@ -98,7 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               window.__isAuthenticated = true;
               window.__premiumCacheExpiry = cacheExpiry;
               
-              if (isMounted && !user) {
+              if (isMounted) {
                 setUser(cachedUser);
                 setLoading(false);
                 window.__authCheckInProgress = false;
@@ -180,7 +180,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // 2. Cache geçersiz
         // 3. Mevcut bir kullanıcı bilgisi yok
         if (token && (!window.__userInfo || shouldRefetch) && isAuthenticated) {
-          await verifyWithApi(token);
+          if (isMounted) {
+            await verifyWithApi(token);
+          }
         } else {
           // Token yoksa doğrulama başarısız oldu
           if (isMounted) {
@@ -209,15 +211,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Optimize edilmiş token doğrulama fonksiyonu
     const verifyWithApi = async (token: string) => {
       try {
+        // Önceki abortController varsa temizle
+        if (abortController) {
+          abortController.abort();
+        }
+        
         // İstek iptal edilebilir olmalı
         abortController = new AbortController();
         
-        // Timeout ile 10 saniyeden uzun süren istekleri iptal et
+        // Timeout ile 5 saniyeden uzun süren istekleri iptal et (10 saniye çok uzun)
         const timeoutId = setTimeout(() => {
-          if (abortController) {
-            abortController.abort();
+          if (abortController && !abortController.signal.aborted) {
+            abortController.abort('timeout');
           }
-        }, 10000);
+        }, 5000);
         
         console.log('Verifying token with API');
         
@@ -235,30 +242,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (response.ok) {
           const data = await response.json();
           
+          // Yeni token alındı mı kontrol et (X-Auth-Token header'ından)
+          const newToken = response.headers.get('X-Auth-Token');
+          if (newToken && newToken !== token) {
+            console.log('Got refreshed token from server, updating local storage');
+            setAuthTokenInClient(newToken);
+          }
+          
           if (data.user) {
-            if (typeof window !== 'undefined') {
+            if (typeof window !== 'undefined' && isMounted) {
               window.__userInfo = data.user;
               window.__isAuthenticated = true;
               window.__lastTokenCheck = Date.now();
             }
             
             // Kullanıcı bilgilerini localStorage'a kaydet
-            localStorage.setItem('user-info', JSON.stringify(data.user));
-            localStorage.setItem('isLoggedIn', 'true');
-            
-            // Subscription bilgisini sessionStorage'a kaydet (30 dakika geçerli)
-            if (data.user.accountStatus) {
-              const now = Date.now();
-              const expiry = now + 1800000; // 30 dakika
-              sessionStorage.setItem('user-premium-info', JSON.stringify(data.user));
-              sessionStorage.setItem('premium-cache-expiry', expiry.toString());
-              
-              if (typeof window !== 'undefined') {
-                window.__premiumCacheExpiry = expiry;
-              }
-            }
-            
             if (isMounted) {
+              localStorage.setItem('user-info', JSON.stringify(data.user));
+              localStorage.setItem('isLoggedIn', 'true');
+              
+              // Subscription bilgisini sessionStorage'a kaydet (30 dakika geçerli)
+              if (data.user.accountStatus) {
+                const now = Date.now();
+                const expiry = now + 1800000; // 30 dakika
+                sessionStorage.setItem('user-premium-info', JSON.stringify(data.user));
+                sessionStorage.setItem('premium-cache-expiry', expiry.toString());
+                
+                if (typeof window !== 'undefined') {
+                  window.__premiumCacheExpiry = expiry;
+                }
+              }
+              
               setUser(data.user);
               setLoading(false);
             }
@@ -273,18 +287,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Token süresi dolmuşsa veya geçersizse
           if (response.status === 401) {
             // Token geçersiz - temizle ve yeniden yönlendir
-            removeAuthTokenFromClient();
-            localStorage.removeItem('user-info');
-            localStorage.setItem('isLoggedIn', 'false');
-            sessionStorage.removeItem('user-premium-info');
-            sessionStorage.removeItem('premium-cache-expiry');
-            
-            if (typeof window !== 'undefined') {
-              window.__userInfo = null;
-              window.__isAuthenticated = false;
-            }
-            
             if (isMounted) {
+              removeAuthTokenFromClient();
+              localStorage.removeItem('user-info');
+              localStorage.setItem('isLoggedIn', 'false');
+              sessionStorage.removeItem('user-premium-info');
+              sessionStorage.removeItem('premium-cache-expiry');
+              
+              if (typeof window !== 'undefined') {
+                window.__userInfo = null;
+                window.__isAuthenticated = false;
+              }
+              
               setUser(null);
               setLoading(false);
               
@@ -296,26 +310,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           } else {
             // Geçici sunucu hatası - mevcut oturumu koruyabiliriz ama yalnızca
             // oturum verisi varsa
-            if (localStorage.getItem('user-info')) {
+            if (localStorage.getItem('user-info') && isMounted) {
               try {
                 // Mevcut kullanıcı bilgisiyle devam et
                 const userData = JSON.parse(localStorage.getItem('user-info') || '{}');
                 
-                if (isMounted) {
-                  setUser(userData);
-                  setLoading(false);
-                }
+                setUser(userData);
+                setLoading(false);
               } catch (e) {
-                if (isMounted) {
-                  setUser(null);
-                  setLoading(false);
-                }
-              }
-            } else {
-              if (isMounted) {
                 setUser(null);
                 setLoading(false);
               }
+            } else if (isMounted) {
+              setUser(null);
+              setLoading(false);
             }
           }
         }
@@ -339,18 +347,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         
         // Token doğrulama hatası - temizle ve yönlendir
-        removeAuthTokenFromClient();
-        localStorage.removeItem('user-info');
-        localStorage.setItem('isLoggedIn', 'false');
-        sessionStorage.removeItem('user-premium-info');
-        sessionStorage.removeItem('premium-cache-expiry');
-        
-        if (typeof window !== 'undefined') {
-          window.__userInfo = null;
-          window.__isAuthenticated = false;
-        }
-        
         if (isMounted) {
+          removeAuthTokenFromClient();
+          localStorage.removeItem('user-info');
+          localStorage.setItem('isLoggedIn', 'false');
+          sessionStorage.removeItem('user-premium-info');
+          sessionStorage.removeItem('premium-cache-expiry');
+          
+          if (typeof window !== 'undefined') {
+            window.__userInfo = null;
+            window.__isAuthenticated = false;
+          }
+          
           setUser(null);
           setLoading(false);
           
@@ -362,16 +370,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    // Bileşen mount olunca veri yükle
     fetchUserData();
     
+    // useEffect cleanup - React unmount errors (418 ve 423 hataları)
     return () => {
       isMounted = false;
       // İşlem devam ediyorsa iptal et
       if (abortController) {
-        abortController.abort();
+        try {
+          // Abort errors önlemek için try/catch içinde
+          if (!abortController.signal.aborted) {
+            abortController.abort('component unmounted');
+          }
+        } catch (e) {
+          console.error('Aborting request failed:', e);
+        }
       }
     };
-  }, [user, loading, router, pathname]);
+  }, [pathname, router]);  // user ve loading dependency'leri kaldırıldı sonsuz döngüyü önlemek için
 
   // Route değişikliklerini yönetmek için daha optimize edilmiş bir yaklaşım
   useEffect(() => {

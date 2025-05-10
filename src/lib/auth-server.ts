@@ -140,15 +140,61 @@ export async function verifyTokenServer(token: string) {
           firebaseError?.code === 'auth/argument-error') {
         try {
           // Fallback to local JWT verification using our secret
-          const decoded = verify(token, JWT_SECRET) as { userId: string, email?: string, name?: string, accountStatus?: string };
-          
-          // Convert to Firebase Admin format
-          return {
-            uid: decoded.userId,
-            email: decoded.email || '',
-            name: decoded.name || '',
-            accountStatus: decoded.accountStatus || 'free',
-          };
+          // İlk olarak süre kontrolünü devre dışı bırakarak deneyelim (ignoreExpiration: true)
+          try {
+            const decoded = verify(token, JWT_SECRET, { ignoreExpiration: true }) as { 
+              userId: string, 
+              email?: string, 
+              name?: string, 
+              accountStatus?: string,
+              exp?: number
+            };
+            
+            // Eğer token gerçekten süresi dolmuşsa, yeni bir token oluştur
+            // Bu, süresi dolmuş JWT token'larını yenilememizi sağlar
+            if (decoded.exp && decoded.exp * 1000 < Date.now()) {
+              console.log('Token expired, refreshing with new expiration date');
+              
+              // Yeni bir JWT token oluştur, eski payload'ı koru
+              const refreshedToken = sign({
+                userId: decoded.userId,
+                email: decoded.email || '',
+                name: decoded.name || '',
+                accountStatus: decoded.accountStatus || 'free'
+              }, JWT_SECRET, { expiresIn: '7d' });
+              
+              // Yeni token'ı verify et
+              const refreshedDecoded = verify(refreshedToken, JWT_SECRET) as { 
+                userId: string, 
+                email?: string, 
+                name?: string, 
+                accountStatus?: string 
+              };
+              
+              // Firebase formatına dönüştür
+              return {
+                uid: refreshedDecoded.userId,
+                email: refreshedDecoded.email || '',
+                name: refreshedDecoded.name || '',
+                accountStatus: refreshedDecoded.accountStatus || 'free',
+                isNewToken: true,  // İstemciye yeni token oluşturulduğunu bildir
+                refreshedToken: refreshedToken  // Yeni token'ı istemciye gönder
+              };
+            }
+            
+            // Token süresi geçerli, normal doğrulama
+            // Convert to Firebase Admin format
+            return {
+              uid: decoded.userId,
+              email: decoded.email || '',
+              name: decoded.name || '',
+              accountStatus: decoded.accountStatus || 'free',
+            };
+          } catch (expiredError) {
+            // Süre kontrolünü devre dışı bırakma da başarısız olursa, daha derin bir sorun var
+            console.error('JWT token refresh failed:', expiredError);
+            return null;
+          }
         } catch (jwtError) {
           console.error('JWT verification fallback error:', jwtError);
           return null;

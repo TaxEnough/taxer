@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthCookieFromRequest, verifyTokenServer } from '@/lib/auth-server';
+import { COOKIE_NAME } from '@/lib/auth';
 
 // GET method for token verification (used by client-side)
 export async function GET(request: NextRequest) {
@@ -37,8 +38,8 @@ export async function GET(request: NextRequest) {
     
     console.log('GET /api/auth/verify - Token verified successfully');
     
-    // Return user information in a consistent format
-    return NextResponse.json({ 
+    // Prepare the response
+    const response = NextResponse.json({ 
       success: true, 
       user: {
         id: decodedToken.uid,
@@ -47,6 +48,27 @@ export async function GET(request: NextRequest) {
         accountStatus: decodedToken.accountStatus || 'free',
       }
     });
+    
+    // Eğer token yenilendiyse yeni token'ı cookie'de güncelle
+    if (decodedToken.isNewToken && decodedToken.refreshedToken) {
+      console.log('GET /api/auth/verify - Setting new refreshed token in cookie');
+      
+      // Cookie ayarları
+      response.cookies.set({
+        name: COOKIE_NAME,
+        value: decodedToken.refreshedToken,
+        httpOnly: false,
+        path: '/',
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 60 * 60 * 24 * 7 // 7 days
+      });
+      
+      // Ayrıca client'ın güncellemesi için header'da da gönder
+      response.headers.set('X-Auth-Token', decodedToken.refreshedToken);
+    }
+    
+    return response;
   } catch (error: any) {
     console.error('GET /api/auth/verify - Error:', error?.message || error);
     
@@ -114,8 +136,8 @@ export async function POST(request: NextRequest) {
     
     console.log('POST /api/auth/verify - Token verified successfully');
     
-    // Return user information in a consistent format
-    return NextResponse.json({ 
+    // Prepare the response
+    const response = NextResponse.json({ 
       success: true, 
       user: {
         id: decodedToken.uid,
@@ -124,6 +146,27 @@ export async function POST(request: NextRequest) {
         accountStatus: decodedToken.accountStatus || 'free',
       }
     });
+    
+    // Eğer token yenilendiyse yeni token'ı cookie'de güncelle
+    if (decodedToken.isNewToken && decodedToken.refreshedToken) {
+      console.log('POST /api/auth/verify - Setting new refreshed token in cookie');
+      
+      // Cookie ayarları
+      response.cookies.set({
+        name: COOKIE_NAME,
+        value: decodedToken.refreshedToken,
+        httpOnly: false,
+        path: '/',
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 60 * 60 * 24 * 7 // 7 days
+      });
+      
+      // Ayrıca client'ın güncellemesi için header'da da gönder
+      response.headers.set('X-Auth-Token', decodedToken.refreshedToken);
+    }
+    
+    return response;
   } catch (error: any) {
     console.error('POST /api/auth/verify - Error:', error?.message || error);
     
