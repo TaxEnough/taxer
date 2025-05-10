@@ -234,7 +234,7 @@ export async function DELETE(
     
     try {
       // Verify token and get user
-      const decodedToken = await auth.verifyIdToken(idToken);
+    const decodedToken = await auth.verifyIdToken(idToken);
       
       // Check for premium account status
       if (!decodedToken.accountStatus || decodedToken.accountStatus === 'free') {
@@ -270,11 +270,11 @@ export async function DELETE(
           { status: 404 }
         );
       }
-      
-      return NextResponse.json({ 
+    
+    return NextResponse.json({
         message: 'Transaction successfully deleted',
         status: 'deleted' 
-      });
+    });
     } catch (deleteError) {
       console.error('Error verifying token or deleting transaction:', deleteError);
       return NextResponse.json(

@@ -145,7 +145,7 @@ export default function TransactionList() {
       setTransactions((prevTransactions) => 
         prevTransactions.filter((transaction) => transaction.id !== deleteId)
       );
-      
+
       toast({
         title: "Warning",
         description: "Transaction may not have been deleted from the server.",
@@ -343,7 +343,7 @@ export default function TransactionList() {
             </tr>
           </thead>
           <tbody>
-            {transactions.map((transaction) => (
+          {transactions.map((transaction) => (
               <tr key={transaction.id} className="border-b hover:bg-gray-50">
                 <td className="py-3 px-2">
                   <input 
@@ -441,27 +441,27 @@ export default function TransactionList() {
                           : 'bg-green-50 text-green-600'
                       }`}>
                         {transaction.transactionType}
-                      </span>
+                </span>
                     </td>
                     <td className="py-3 px-4 text-right">{transaction.shares}</td>
                     <td className="py-3 px-4 text-right">{formatCurrency(transaction.price)}</td>
                     <td className="py-3 px-4 text-right">{formatCurrency(transaction.price * transaction.shares)}</td>
                     <td className="py-3 px-4 text-right">{formatCurrency(transaction.fees)}</td>
                     <td className="py-3 px-4">
-                      <div className="flex justify-center space-x-2">
+                <div className="flex justify-center space-x-2">
                         <button 
                           className="p-1 rounded-full hover:bg-gray-100"
                           onClick={() => startEditing(transaction)}
                         >
-                          <Edit className="h-4 w-4" />
+                      <Edit className="h-4 w-4" />
                         </button>
                         <button 
                           className="p-1 rounded-full hover:bg-gray-100"
                           onClick={() => openDeleteConfirm(transaction.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
+                  >
+                    <Trash2 className="h-4 w-4" />
                         </button>
-                      </div>
+                </div>
                     </td>
                   </>
                 )}
