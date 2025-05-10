@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import Navbar from '@/components/Navbar';
@@ -252,7 +252,7 @@ export default function DashboardPage() {
       } else if (sellDateStr.includes('/')) {
         const [month, day, year] = sellDateStr.split('/').map(Number);
         sellDate = new Date(year, month - 1, day);
-      } else {
+    } else {
         sellDate = new Date(sellDateStr);
       }
       
@@ -300,13 +300,31 @@ TSLA,Sell,7,200.50,2023-03-01,235.75,2023-07-15,1650.25,7.99`;
     }
   }, []);
 
+  // Gereksiz render sayısını kontrol etmek için ref kullanımı
+  const renderCountRef = useRef(0);
+
   useEffect(() => {
-    console.log('DashboardPage useEffect running, loading:', loading, 'user:', user);
+    // Eğer bu useEffect zaten çalıştıysa ve kullanıcı bilgisi varsa, tekrar çalışmasını engelle
+    if (renderCountRef.current > 0 && user) {
+      return;
+    }
+    
+    renderCountRef.current += 1;
+    
+    // Debug flag ekleyerek daha az log yazdır
+    const DEBUG = false;
+    const log = (message: string) => {
+      if (DEBUG) {
+        console.log(message);
+      }
+    };
+    
+    log(`DashboardPage useEffect running, loading: ${loading}, user: ${JSON.stringify(user)}`);
     
     // End loading state if token exists
     const token = getAuthTokenFromClient();
     if (token) {
-      console.log('Token found, loading page');
+      log('Token found, loading page');
       setPageLoading(false);
       return;
     }
@@ -314,10 +332,10 @@ TSLA,Sell,7,200.50,2023-03-01,235.75,2023-07-15,1650.25,7.99`;
     // Run normal control mechanism if no token
     if (!loading) {
       if (!user) {
-        console.log('User is not logged in, redirecting to login page');
+        log('User is not logged in, redirecting to login page');
         router.push('/login');
       } else {
-        console.log('User is logged in, loading page');
+        log('User is logged in, loading page');
         setPageLoading(false);
       }
     }
