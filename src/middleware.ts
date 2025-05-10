@@ -1,125 +1,94 @@
 import { NextResponse } from 'next/server';
+import { authMiddleware } from '@clerk/nextjs/server';
 import type { NextRequest } from 'next/server';
-import { verifyToken } from '@/lib/auth';
+import type { AuthObject } from '@clerk/nextjs/server';
 
-// Protected routes
-const protectedRoutes = ['/dashboard', '/profile', '/transactions', '/reports'];
-// Authentication routes
-const authRoutes = ['/login', '/register'];
-// Cookie name
-const COOKIE_NAME = 'auth-token';
-
-// Premium pages list
-const premiumRoutes = ['/dashboard', '/transactions', '/reports'];
-
-export function middleware(request: NextRequest) {
-  // Geliştirme amacıyla konsola yazmak performansı etkiliyor
-  // console.log('Middleware executing for path:', request.nextUrl.pathname);
-  const { pathname } = request.nextUrl;
-
-  // If on login or register page and token exists, redirect to dashboard
-  if (authRoutes.some(route => pathname.startsWith(route))) {
-    const token = request.cookies.get(COOKIE_NAME)?.value;
-    if (token) {
-      const user = verifyToken(token);
-      if (user && user.userId) {
-        // console.log('Already logged in, redirecting to dashboard');
-        return NextResponse.redirect(new URL('/dashboard', request.url));
-      }
-    }
-  }
-
-  // If accessing a protected route without token, redirect to login
-  if (protectedRoutes.some(route => pathname.startsWith(route))) {
-    const token = request.cookies.get(COOKIE_NAME)?.value;
-    if (!token) {
-      // console.log('No token, redirecting to login');
-      const url = new URL('/login', request.url);
-      url.searchParams.set('redirect', pathname);
-      return NextResponse.redirect(url);
-    }
-  }
-  
-  // Premium page check
-  const isPremiumRoute = premiumRoutes.some(route => pathname.startsWith(route));
-  
-  // If not a premium page, continue
-  if (!isPremiumRoute) {
-    // console.log('Not a premium route, continuing');
-    return NextResponse.next();
-  }
-
-  // Token check - sadece premium sayfalarda token içeriğini kontrol ediyoruz
-  const authToken = request.cookies.get(COOKIE_NAME)?.value;
-  if (!authToken) {
-    // If no token, redirect to login
-    // console.log('No token for premium route, redirecting to login');
-    return redirectToLogin(request);
-  }
-
-  // Verify token - payload içeriği kontrol edilir
-  const payload = verifyToken(authToken);
-  // console.log('Token payload:', payload);
-  
-  // Check user information
-  if (!payload || !payload.userId) {
-    // console.log('Invalid token payload, redirecting to login');
-    return redirectToLogin(request);
-  }
-  
-  // İsteğin client-side session storage'dan gelen premium durumunu kontrol et
-  const premiumCookieName = 'user-premium-status';
-  const premiumCookie = request.cookies.get(premiumCookieName)?.value;
-  
-  // Check subscription status - kullanıcının premium durumuna bakılır
-  let accountStatus = payload.accountStatus;
-  
-  // Eğer token içinde account status yoksa ama cookie'de varsa, cookie değerini kullan
-  if ((!accountStatus || accountStatus === 'free') && premiumCookie) {
-    try {
-      const premiumData = JSON.parse(premiumCookie);
-      if (premiumData.accountStatus && 
-          (premiumData.accountStatus === 'basic' || premiumData.accountStatus === 'premium')) {
-        accountStatus = premiumData.accountStatus;
-      }
-    } catch (e) {
-      // JSON parse hatası durumunda devam et
-      console.error('Premium cookie parse error:', e);
-    }
-  }
-  
-  // If accountStatus doesn't exist or is 'free'
-  if (!accountStatus || accountStatus === 'free') {
-    // console.log('Free account attempting to access premium route:', pathname);
-    // Hard redirect to 404 for free users
-    return NextResponse.redirect(new URL('/404', request.url));
-  }
-  
-  // If 'basic' or 'premium', continue
-  if (accountStatus === 'basic' || accountStatus === 'premium') {
-    // console.log('User has subscription, allowing access to premium route');
-    return NextResponse.next();
-  }
-  
-  // Default: redirect to 404
-  // console.log('Default case - redirecting to 404');
-  return NextResponse.redirect(new URL('/404', request.url));
+// Optimize edilmiş cookie işlemleri
+function getCookieValue(request: NextRequest, name: string): string | null {
+  const cookie = request.cookies.get(name);
+  return cookie?.value || null;
 }
 
-// Helper function to redirect to login
-function redirectToLogin(request: NextRequest) {
-  const loginUrl = new URL('/login', request.url);
-  loginUrl.searchParams.set('redirect', request.nextUrl.pathname);
-  return NextResponse.redirect(loginUrl);
-}
+// Premium içerik gerektiren rotalar
+const premiumPaths = [
+  '/transactions',
+  '/reports',
+];
 
-// Define routes where middleware should run - dar kapsamda çalıştıralım
+// Clerk auth middleware
+export default authMiddleware({
+  // Herkese açık rotalar
+  publicRoutes: [
+    '/',
+    '/login',
+    '/register',
+    '/pricing',
+    '/about',
+    '/contact',
+    '/api/webhook/stripe', // Stripe webhook'u public olmalı
+  ],
+  
+  // Korumalı rotalar için davranışı özelleştir
+  afterAuth(auth, req) {
+    // Kullanıcı oturum açmamışsa ve korumalı bir rotadaysa, login'e yönlendir
+    if (!auth.userId && !auth.isPublicRoute) {
+      return auth.redirectToSignIn({ returnBackUrl: req.url });
+    }
+    
+    // Eğer kullanıcı giriş yapmışsa, auth bilgilerini cookie'lere kaydet (istemci tarafında kullanmak için)
+    const response = NextResponse.next();
+    
+    // Premium rota kontrolü
+    const path = req.nextUrl.pathname;
+    const isPremiumRoute = premiumPaths.some(route => path.startsWith(route));
+    
+    if (isPremiumRoute) {
+      // Öncelikle cookie'den premium durumunu kontrol et - daha hızlı
+      const premiumStatusCookie = getCookieValue(req, 'clerk-premium-status');
+      
+      if (premiumStatusCookie) {
+        try {
+          const premiumData = JSON.parse(premiumStatusCookie);
+          
+          // Kullanıcının premium üyeliği var mı?
+          if (premiumData.isPremium) {
+            // Premium üyelik varsa devam et
+            console.log('Premium access granted via cookie cache');
+            return response;
+          }
+        } catch (error) {
+          console.error('Error parsing premium status cookie:', error);
+        }
+      }
+      
+      // Kullanıcının abonelik bilgilerini al
+      const userMeta = auth.user?.publicMetadata || {};
+      const subscription = userMeta.subscription as any;
+      
+      // Premium erişimi kontrol et
+      if (!subscription || subscription.status !== 'active') {
+        // Premium üyelik yoksa 403 hatası döndür veya premium plana yönlendir
+        console.log('Premium access denied - subscription required');
+        return NextResponse.redirect(new URL('/pricing?premium=required', req.url));
+      }
+    }
+    
+    // Auth OK - devam et
+    return response;
+  },
+});
+
+// Middleware konfigürasyonu - hangi rotalar için çalışacağını belirt
 export const config = {
   matcher: [
-    '/dashboard/:path*',
-    '/transactions/:path*',
-    '/reports/:path*',
-    '/login',
-    '/register'
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - images (public images folder)
+     * - public assets
+     */
+    '/((?!_next/static|_next/image|favicon.ico|images|public|assets).*)',
   ],
 }; 
