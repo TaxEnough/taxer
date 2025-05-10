@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { headers } from 'next/headers';
-import { clerkClient } from '@clerk/nextjs/server';
+import { clerkClient as getClerkClient } from '@clerk/nextjs/server';
 
 // Stripe API client'ı oluştur
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -57,7 +57,8 @@ export async function POST(req: Request) {
         }
         
         // Update Clerk user metadata with subscription details
-        await clerkClient.users.updateUser(userId, {
+        const clerk = await getClerkClient();
+        await clerk.users.updateUser(userId, {
           privateMetadata: {
             subscription: {
               id: subscription.id,
@@ -82,7 +83,8 @@ export async function POST(req: Request) {
           const subscription = await stripe.subscriptions.retrieve(subscriptionId) as any;
           
           // Find user with this subscription ID in metadata
-          const users = await clerkClient.users.getUserList({
+          const clerk = await getClerkClient();
+          const users = await clerk.users.getUserList({
             privateMetadata: { 
               // This query checks if the subscription ID exists in the user's metadata
               'subscription.id': subscriptionId
@@ -93,7 +95,7 @@ export async function POST(req: Request) {
             const userId = users[0].id;
             
             // Update the subscription metadata
-            await clerkClient.users.updateUser(userId, {
+            await clerk.users.updateUser(userId, {
               privateMetadata: {
                 subscription: {
                   id: subscription.id,
@@ -118,7 +120,8 @@ export async function POST(req: Request) {
         const subscriptionId = subscription.id;
         
         // Find user with this subscription ID in metadata
-        const users = await clerkClient.users.getUserList({
+        const clerk = await getClerkClient();
+        const users = await clerk.users.getUserList({
           privateMetadata: { 
             'subscription.id': subscriptionId
           }
@@ -128,7 +131,7 @@ export async function POST(req: Request) {
           const userId = users[0].id;
           
           // Update the subscription metadata
-          await clerkClient.users.updateUser(userId, {
+          await clerk.users.updateUser(userId, {
             privateMetadata: {
               subscription: {
                 id: subscription.id,
@@ -150,7 +153,8 @@ export async function POST(req: Request) {
         const subscriptionId = subscription.id;
         
         // Find user with this subscription ID in metadata
-        const users = await clerkClient.users.getUserList({
+        const clerk = await getClerkClient();
+        const users = await clerk.users.getUserList({
           privateMetadata: { 
             'subscription.id': subscriptionId
           }
@@ -160,7 +164,7 @@ export async function POST(req: Request) {
           const userId = users[0].id;
           
           // Update the subscription metadata to show canceled status
-          await clerkClient.users.updateUser(userId, {
+          await clerk.users.updateUser(userId, {
             privateMetadata: {
               subscription: {
                 id: subscription.id,
