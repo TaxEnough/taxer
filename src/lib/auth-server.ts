@@ -121,9 +121,42 @@ export async function removeAuthCookieOnServer(): Promise<void> {
  */
 export async function verifyTokenServer(token: string) {
   try {
-    // Firebase Auth token'ını doğrula
-    const decodedToken = await auth.verifyIdToken(token);
-    return decodedToken;
+    // Check if token has the Firebase format
+    if (!token || token.split('.').length !== 3) {
+      console.error('Token format invalid');
+      return null;
+    }
+
+    try {
+      // Try with Firebase Admin SDK first
+      const decodedToken = await auth.verifyIdToken(token);
+      console.log('Token successfully verified with Firebase Admin');
+      return decodedToken;
+    } catch (firebaseError: any) {
+      console.error('Firebase token verification error:', firebaseError?.message || firebaseError);
+      
+      // If the error is about missing kid claim, try verifying with JWT
+      if (firebaseError?.message?.includes('kid') || 
+          firebaseError?.code === 'auth/argument-error') {
+        try {
+          // Fallback to local JWT verification using our secret
+          const decoded = verify(token, JWT_SECRET) as { userId: string, email?: string, name?: string, accountStatus?: string };
+          
+          // Convert to Firebase Admin format
+          return {
+            uid: decoded.userId,
+            email: decoded.email || '',
+            name: decoded.name || '',
+            accountStatus: decoded.accountStatus || 'free',
+          };
+        } catch (jwtError) {
+          console.error('JWT verification fallback error:', jwtError);
+          return null;
+        }
+      }
+      
+      return null;
+    }
   } catch (error) {
     console.error('Token doğrulama hatası:', error);
     return null;

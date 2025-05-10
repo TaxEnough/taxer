@@ -69,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Optimize edilmiş auth check - sadece gerektiğinde API çağrısı yapacak
   useEffect(() => {
     let isMounted = true;
+    let abortController: AbortController | null = null;
     
     // Aynı anda birden fazla auth check çalıştırmayı önle
     if (typeof window !== 'undefined' && window.__authCheckInProgress) {
@@ -208,12 +209,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Optimize edilmiş token doğrulama fonksiyonu
     const verifyWithApi = async (token: string) => {
       try {
+        // İstek iptal edilebilir olmalı
+        abortController = new AbortController();
+        
+        // Timeout ile 10 saniyeden uzun süren istekleri iptal et
+        const timeoutId = setTimeout(() => {
+          if (abortController) {
+            abortController.abort();
+          }
+        }, 10000);
+        
+        console.log('Verifying token with API');
+        
         const response = await fetch('/api/auth/verify', {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${token}`
-          }
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          signal: abortController.signal
         });
+        
+        clearTimeout(timeoutId);
         
         if (response.ok) {
           const data = await response.json();
@@ -227,6 +244,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             
             // Kullanıcı bilgilerini localStorage'a kaydet
             localStorage.setItem('user-info', JSON.stringify(data.user));
+            localStorage.setItem('isLoggedIn', 'true');
             
             // Subscription bilgisini sessionStorage'a kaydet (30 dakika geçerli)
             if (data.user.accountStatus) {
@@ -248,33 +266,84 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             throw new Error('No user data found');
           }
         } else {
-          // Token geçersiz - temizle ve yeniden yönlendir
-          removeAuthTokenFromClient();
-          localStorage.removeItem('user-info');
-          sessionStorage.removeItem('user-premium-info');
-          sessionStorage.removeItem('premium-cache-expiry');
+          // Hata yanıtı
+          const errorData = await response.json();
+          console.error('Token verification API error:', errorData);
           
-          if (typeof window !== 'undefined') {
-            window.__userInfo = null;
-            window.__isAuthenticated = false;
-          }
-          
-          if (isMounted) {
-            setUser(null);
-            setLoading(false);
+          // Token süresi dolmuşsa veya geçersizse
+          if (response.status === 401) {
+            // Token geçersiz - temizle ve yeniden yönlendir
+            removeAuthTokenFromClient();
+            localStorage.removeItem('user-info');
+            localStorage.setItem('isLoggedIn', 'false');
+            sessionStorage.removeItem('user-premium-info');
+            sessionStorage.removeItem('premium-cache-expiry');
             
-            // Korumalı bir rotadaysak ve token geçersizse login'e yönlendir
-            if (protectedRoutes.some(route => pathname?.startsWith(route))) {
-              router.push('/login');
+            if (typeof window !== 'undefined') {
+              window.__userInfo = null;
+              window.__isAuthenticated = false;
+            }
+            
+            if (isMounted) {
+              setUser(null);
+              setLoading(false);
+              
+              // Korumalı bir rotadaysak ve token geçersizse login'e yönlendir
+              if (protectedRoutes.some(route => pathname?.startsWith(route))) {
+                router.push('/login');
+              }
+            }
+          } else {
+            // Geçici sunucu hatası - mevcut oturumu koruyabiliriz ama yalnızca
+            // oturum verisi varsa
+            if (localStorage.getItem('user-info')) {
+              try {
+                // Mevcut kullanıcı bilgisiyle devam et
+                const userData = JSON.parse(localStorage.getItem('user-info') || '{}');
+                
+                if (isMounted) {
+                  setUser(userData);
+                  setLoading(false);
+                }
+              } catch (e) {
+                if (isMounted) {
+                  setUser(null);
+                  setLoading(false);
+                }
+              }
+            } else {
+              if (isMounted) {
+                setUser(null);
+                setLoading(false);
+              }
             }
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('API verification error:', error);
+        
+        // AbortError ile iptal edilmiş istek - mevcut bilgileri koruyabilir
+        if (error?.name === 'AbortError') {
+          console.warn('Token verification request timed out');
+          
+          if (localStorage.getItem('user-info') && isMounted) {
+            try {
+              const userData = JSON.parse(localStorage.getItem('user-info') || '{}');
+              setUser(userData);
+            } catch (e) {
+              setUser(null);
+            }
+            setLoading(false);
+            return;
+          }
+        }
         
         // Token doğrulama hatası - temizle ve yönlendir
         removeAuthTokenFromClient();
         localStorage.removeItem('user-info');
+        localStorage.setItem('isLoggedIn', 'false');
+        sessionStorage.removeItem('user-premium-info');
+        sessionStorage.removeItem('premium-cache-expiry');
         
         if (typeof window !== 'undefined') {
           window.__userInfo = null;
@@ -297,6 +366,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     return () => {
       isMounted = false;
+      // İşlem devam ediyorsa iptal et
+      if (abortController) {
+        abortController.abort();
+      }
     };
   }, [user, loading, router, pathname]);
 
@@ -353,6 +426,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         // Kullanıcı bilgilerini kaydet
         localStorage.setItem('user-info', JSON.stringify(data.user));
+        localStorage.setItem('isLoggedIn', 'true');
         
         // Global durumu güncelle
         if (typeof window !== 'undefined') {
@@ -402,6 +476,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         // Kullanıcı bilgilerini kaydet
         localStorage.setItem('user-info', JSON.stringify(data.user));
+        localStorage.setItem('isLoggedIn', 'true');
         
         // Global durumu güncelle
         if (typeof window !== 'undefined') {
@@ -438,6 +513,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Her durumda client tarafındaki token ve bilgileri temizle
       removeAuthTokenFromClient();
       localStorage.removeItem('user-info');
+      localStorage.setItem('isLoggedIn', 'false');
       sessionStorage.removeItem('user-premium-info');
       sessionStorage.removeItem('premium-cache-expiry');
       
