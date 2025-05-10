@@ -1,31 +1,15 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/next"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/webhook",
-      "headers": {
-        "Content-Type": "application/json"
-      },
-      "continue": true
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "outputDirectory": ".next",
+  "regions": ["iad1"],
+  "functions": {
+    "middleware": {
+      "runtime": "nodejs18.x"
     },
-    {
-      "src": "/api/checkout",
-      "headers": {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "X-Requested-With, Content-Type, Accept, Authorization, X-Auth-Token"
-      },
-      "continue": true
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
+    "src/app/api/**/*": {
+      "runtime": "nodejs18.x"
     }
-  ]
+  }
 } 
