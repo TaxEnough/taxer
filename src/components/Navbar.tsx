@@ -38,8 +38,9 @@ export default function Navbar() {
     const checkSubscription = async () => {
       // Clerk entegrasyonu için
       if (isClerkLoaded && isClerkSignedIn && clerkUser) {
-        // Clerk'teki kullanıcı bilgilerini kullan
-        const clerkHasSubscription = !!clerkUser.privateMetadata?.subscription;
+        // Clerk'teki kullanıcı bilgilerini kullan - any tipini kullanarak tip hatalarını önlüyoruz
+        const userWithMetadata = clerkUser as any;
+        const clerkHasSubscription = !!(userWithMetadata?.publicMetadata?.subscription || userWithMetadata?.privateMetadata?.subscription);
         setHasSubscription(clerkHasSubscription);
         return;
       }
@@ -245,16 +246,19 @@ export default function Navbar() {
   const getUserAccountStatus = () => {
     // Clerk'ten kontrol et
     if (isClerkLoaded && isClerkSignedIn && clerkUser) {
-      const subscription = clerkUser.privateMetadata?.subscription;
+      const userWithMetadata = clerkUser as any;
+      const subscription = userWithMetadata?.privateMetadata?.subscription || userWithMetadata?.publicMetadata?.subscription;
       if (subscription?.status === 'active') {
         return subscription.plan || 'Premium';
       }
+      return 'Free Plan';
     }
     
-    // Firebase'den kontrol et
-    if (user?.accountStatus === 'premium') return 'Premium';
-    if (user?.accountStatus === 'basic') return 'Basic';
-    if (hasSubscription) return 'Premium';
+    // Firestore'dan kontrol
+    if (user) {
+      if (user.accountStatus === 'basic') return 'Basic';
+      if (user.accountStatus === 'premium') return 'Premium';
+    }
     return 'Free Plan';
   };
   
@@ -295,7 +299,7 @@ export default function Navbar() {
               </Link>
               
               {/* Premium linkler için koşullu gösterim */}
-              {(hasSubscription || (isClerkLoaded && isClerkSignedIn && clerkUser?.privateMetadata?.subscription)) && (
+              {(hasSubscription || (isClerkLoaded && isClerkSignedIn && (clerkUser as any)?.privateMetadata?.subscription)) && (
                 <>
                   <Link
                     href="/dashboard"
@@ -566,7 +570,7 @@ export default function Navbar() {
               </div>
               <div className="ml-3">
                   <div className="text-base font-medium text-gray-800">{getDisplayName()}</div>
-                  <div className="text-sm font-medium text-gray-500">{user.email || 'No email available'}</div>
+                  <div className="text-sm font-medium text-gray-500">{user?.email || 'No email available'}</div>
               </div>
             </div>
             <div className="mt-3 space-y-1">
