@@ -1,13 +1,9 @@
 import { NextResponse } from 'next/server';
-import { authMiddleware } from '@clerk/nextjs/server';
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import type { NextRequest } from 'next/server';
-import type { AuthObject } from '@clerk/nextjs/server';
 
-// Optimize edilmiş cookie işlemleri
-function getCookieValue(request: NextRequest, name: string): string | null {
-  const cookie = request.cookies.get(name);
-  return cookie?.value || null;
-}
+// Node.js runtime olarak belirt
+export const runtime = 'nodejs';
 
 // Premium içerik gerektiren rotalar
 const premiumPaths = [
@@ -15,67 +11,58 @@ const premiumPaths = [
   '/reports',
 ];
 
-// Clerk auth middleware
-export default authMiddleware({
-  // Herkese açık rotalar
-  publicRoutes: [
-    '/',
-    '/login',
-    '/register',
-    '/pricing',
-    '/about',
-    '/contact',
-    '/api/webhook/stripe', // Stripe webhook'u public olmalı
-  ],
-  
-  // Korumalı rotalar için davranışı özelleştir
-  afterAuth(auth, req) {
-    // Kullanıcı oturum açmamışsa ve korumalı bir rotadaysa, login'e yönlendir
-    if (!auth.userId && !auth.isPublicRoute) {
-      return auth.redirectToSignIn({ returnBackUrl: req.url });
+// Korumalı rotaları tanımla
+const isProtectedRoute = createRouteMatcher([
+  '/dashboard/(.*)',
+  '/transactions/(.*)',
+  '/profile/(.*)',
+  '/reports/(.*)',
+]);
+
+// Herkese açık rotaları tanımla
+const isPublicRoute = createRouteMatcher([
+  '/',
+  '/login',
+  '/register',
+  '/pricing',
+  '/about',
+  '/contact',
+  '/api/webhook/stripe', // Stripe webhook'u public olmalı
+]);
+
+// Clerk middleware ile kimlik doğrulamayı yönet
+export default clerkMiddleware((auth, req) => {
+  // Eğer geçerli URL public bir rota ise, devam et
+  if (isPublicRoute(req)) {
+    return NextResponse.next();
+  }
+
+  // Korumalı rotalar için kimlik doğrulama kontrolü
+  if (isProtectedRoute(req)) {
+    // Kullanıcı oturum açmamışsa, login sayfasına yönlendir
+    if (!auth.userId) {
+      return NextResponse.redirect(new URL('/login', req.url));
     }
-    
-    // Eğer kullanıcı giriş yapmışsa, auth bilgilerini cookie'lere kaydet (istemci tarafında kullanmak için)
-    const response = NextResponse.next();
     
     // Premium rota kontrolü
     const path = req.nextUrl.pathname;
     const isPremiumRoute = premiumPaths.some(route => path.startsWith(route));
     
     if (isPremiumRoute) {
-      // Öncelikle cookie'den premium durumunu kontrol et - daha hızlı
-      const premiumStatusCookie = getCookieValue(req, 'clerk-premium-status');
-      
-      if (premiumStatusCookie) {
-        try {
-          const premiumData = JSON.parse(premiumStatusCookie);
-          
-          // Kullanıcının premium üyeliği var mı?
-          if (premiumData.isPremium) {
-            // Premium üyelik varsa devam et
-            console.log('Premium access granted via cookie cache');
-            return response;
-          }
-        } catch (error) {
-          console.error('Error parsing premium status cookie:', error);
-        }
-      }
-      
       // Kullanıcının abonelik bilgilerini al
       const userMeta = auth.user?.publicMetadata || {};
       const subscription = userMeta.subscription as any;
       
       // Premium erişimi kontrol et
       if (!subscription || subscription.status !== 'active') {
-        // Premium üyelik yoksa 403 hatası döndür veya premium plana yönlendir
+        // Premium üyelik yoksa premium plana yönlendir
         console.log('Premium access denied - subscription required');
         return NextResponse.redirect(new URL('/pricing?premium=required', req.url));
       }
     }
-    
-    // Auth OK - devam et
-    return response;
-  },
+  }
+
+  return NextResponse.next();
 });
 
 // Middleware konfigürasyonu - hangi rotalar için çalışacağını belirt
