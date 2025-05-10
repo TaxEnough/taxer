@@ -27,22 +27,38 @@ export default function Navbar() {
   const [hasSubscription, setHasSubscription] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
+  
+  // Abonelik kontrolü için ref kullanarak tekrarlanan kontrolleri önle
+  const subscriptionCheckedRef = useRef(false);
 
   // Check if user has an active subscription
   useEffect(() => {
     const checkSubscription = async () => {
+      // Eğer zaten kontrol edilmişse ve kullanıcı değişmediyse tekrar kontrol etme
+      if (subscriptionCheckedRef.current && user?.id) return;
+      
       if (user && user.id) {
         try {
           // Kullanıcının abonelik durumunu kontrol et
           // 1. Önce user nesnesindeki accountStatus'e bakıyoruz (token'dan gelir)
-          // Optional chaining ile erişim sağlıyoruz (tip güvenliği için)
           if (user?.accountStatus === 'basic' || user?.accountStatus === 'premium') {
-            console.log('Navbar: Premium üyelik bulundu:', user?.accountStatus);
             setHasSubscription(true);
+            subscriptionCheckedRef.current = true;
             return;
           }
 
-          // 2. Firestore'dan kontrol et (sadece accountStatus bulunamazsa)
+          // 2. Firestore'dan kontrol et (sadece token'da accountStatus bulunamazsa)
+          // Bu işlemi sadece bir kez yapmak için, sonucu sessionStorage'a kaydediyoruz
+          const sessionKey = `subscription-${user.id}`;
+          const cachedStatus = sessionStorage.getItem(sessionKey);
+          
+          if (cachedStatus) {
+            setHasSubscription(cachedStatus === 'true');
+            subscriptionCheckedRef.current = true;
+            return;
+          }
+          
+          // Önbellek bulunamadı, Firestore'dan kontrol et
           const userRef = doc(db, 'users', user.id);
           const userSnap = await getDoc(userRef);
           
@@ -50,28 +66,65 @@ export default function Navbar() {
             const userData = userSnap.data();
             
             // Firestore'da subscriptionStatus veya accountStatus kontrolü
-            if (userData.subscriptionStatus === 'active' || 
-                userData.accountStatus === 'basic' || 
-                userData.accountStatus === 'premium') {
-              console.log('Navbar: Firestore\'dan premium üyelik bulundu');
-              setHasSubscription(true);
-              return;
-            }
+            const isPremium = userData.subscriptionStatus === 'active' || 
+                              userData.accountStatus === 'basic' || 
+                              userData.accountStatus === 'premium';
+                              
+            // Sonucu sessionStorage'a kaydet (10 dakika geçerli)
+            sessionStorage.setItem(sessionKey, isPremium ? 'true' : 'false');
+            
+            // Cache süresini ayarla (10 dakika)
+            const expiry = Date.now() + 600000; // 10 dakika
+            sessionStorage.setItem(`${sessionKey}-expiry`, expiry.toString());
+            
+            setHasSubscription(isPremium);
+            subscriptionCheckedRef.current = true;
+            return;
           }
           
           // Hiçbir premium üyelik özelliği bulunamadı
-          console.log('Navbar: Premium üyelik bulunamadı');
+          sessionStorage.setItem(sessionKey, 'false');
           setHasSubscription(false);
+          subscriptionCheckedRef.current = true;
         } catch (error) {
           console.error("Error checking subscription:", error);
           setHasSubscription(false);
         }
       } else {
         setHasSubscription(false);
+        subscriptionCheckedRef.current = false; // Kullanıcı çıkış yapmış, referansı sıfırla
+      }
+    };
+    
+    // Periyodik önbellek kontrolü (10 dakikada bir)
+    const checkCache = () => {
+      if (!user?.id) return;
+      
+      const sessionKey = `subscription-${user.id}`;
+      const expiryStr = sessionStorage.getItem(`${sessionKey}-expiry`);
+      
+      if (expiryStr) {
+        const expiry = parseInt(expiryStr);
+        const now = Date.now();
+        
+        // Önbellek süresi dolduysa, temizle ve yeniden kontrol et
+        if (now > expiry) {
+          sessionStorage.removeItem(sessionKey);
+          sessionStorage.removeItem(`${sessionKey}-expiry`);
+          subscriptionCheckedRef.current = false; // Yeniden kontrol etmeyi zorla
+          checkSubscription();
+        }
       }
     };
   
     checkSubscription();
+    
+    // 10 dakikada bir önbelleği kontrol et
+    const cacheInterval = setInterval(checkCache, 600000); // 10 dakika
+    
+    return () => {
+      clearInterval(cacheInterval);
+    };
   }, [user]);
 
   // Handle scroll effect for navbar
