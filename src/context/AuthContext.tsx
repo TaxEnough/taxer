@@ -7,6 +7,9 @@ import { auth } from '@/lib/firebase';
 import { getUserData } from '@/lib/auth-firebase';
 import { getAuthTokenFromClient, setAuthTokenInClient, removeAuthTokenFromClient } from '@/lib/auth-client';
 
+// Loglama seviyesini kontrol etmek için değişken
+const DEBUG_LOGS = false;
+
 interface User {
   id: string;
   email: string;
@@ -45,6 +48,7 @@ declare global {
     __lastTokenCheck?: number;
     __userInfo?: User | null;
     __premiumCacheExpiry?: number;
+    __authCheckInProgress?: boolean;
   }
 }
 
@@ -54,12 +58,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
+  // Loglama fonksiyonu
+  const logInfo = (message: string, data?: any) => {
+    if (DEBUG_LOGS) {
+      if (data) {
+        console.log(message, data);
+      } else {
+        console.log(message);
+      }
+    }
+  };
+
   // Check cookies and get user info on client side
   useEffect(() => {
-    console.log('AuthProvider main useEffect running');
+    logInfo('AuthProvider main useEffect running');
     let isMounted = true;
     
+    // Aynı anda birden fazla auth check çalıştırmayı önle
+    if (typeof window !== 'undefined' && window.__authCheckInProgress) {
+      logInfo('Auth check already in progress, skipping');
+      return;
+    }
+    
     const fetchUserData = async () => {
+      // İşlem başladığında flag'i ayarla
+      if (typeof window !== 'undefined') {
+        window.__authCheckInProgress = true;
+      }
+      
       try {
         // İlk önce sessionStorage'dan veri yüklemeyi deneyelim
         // Bu, sayfa yenilemelerinde API çağrısına gerek kalmadan hızlı yükleme sağlar
@@ -73,8 +99,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const isCacheValid = cachedUserInfo && cacheExpiry > now;
           
           if (isCacheValid) {
-            console.log('Using premium cache from sessionStorage, valid for', 
-              Math.round((cacheExpiry - now) / 60000), 'more minutes');
+            logInfo('Using premium cache from sessionStorage, valid for', 
+              Math.round((cacheExpiry - now) / 60000));
             try {
               const cachedUser = JSON.parse(cachedUserInfo);
               window.__userInfo = cachedUser;
@@ -84,13 +110,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               if (isMounted && !user) {
                 setUser(cachedUser);
                 setLoading(false);
+                window.__authCheckInProgress = false;
                 return; // Session cache kullanıldı, API çağrısı yapmaya gerek yok
               }
             } catch (e) {
               console.error('Failed to parse user info from sessionStorage:', e);
             }
           } else if (cachedUserInfo) {
-            console.log('Premium cache expired, will refresh from API');
+            logInfo('Premium cache expired, will refresh from API');
           }
         }
         
@@ -100,7 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const isLoggedInFlag = localStorage.getItem('isLoggedIn') === 'true';
         const userInfoStr = localStorage.getItem('user-info');
         
-        console.log('Auth check:', { 
+        logInfo('Auth check:', { 
           tokenExists: !!token, 
           lsTokenExists: !!localStorageToken,
           isLoggedIn: isLoggedInFlag
@@ -123,8 +150,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // API çağrılarını azalt: 5 dakika (300000 ms) bekle
           const shouldRefetch = (now - lastCheck) > 300000;
           
-          console.log('Global auth status:', window.__isAuthenticated ? 'logged in' : 'not logged in');
-          console.log('Time since last token check:', Math.floor((now - lastCheck) / 1000), 'seconds');
+          logInfo('Global auth status:', window.__isAuthenticated ? 'logged in' : 'not logged in');
+          logInfo('Time since last token check:', Math.floor((now - lastCheck) / 1000));
           
           // Try to use stored user info from localStorage if available
           if (userInfoStr && (!window.__userInfo || !user)) {
@@ -133,7 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               window.__userInfo = parsedUserInfo;
               
               if (isMounted && !user) {
-                console.log('Restoring user from localStorage:', parsedUserInfo);
+                logInfo('Restoring user from localStorage:', parsedUserInfo);
                 setUser(parsedUserInfo);
                 
                 // Subscription bilgisini sessionStorage'a kaydet (30 dakika geçerli)
@@ -142,12 +169,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   sessionStorage.setItem('user-premium-info', JSON.stringify(parsedUserInfo));
                   sessionStorage.setItem('premium-cache-expiry', expiry.toString());
                   window.__premiumCacheExpiry = expiry;
-                  console.log('Premium status cached in session for 30 minutes');
+                  logInfo('Premium status cached in session for 30 minutes');
                 }
                 
                 // If on protected page and not loading, stop here to prevent flicker
                 if (protectedRoutes.some(route => pathname?.startsWith(route)) && !loading) {
                   setLoading(false);
+                  window.__authCheckInProgress = false;
                   
                   // Only make API call in background if needed
                   if (shouldRefetch && effectiveToken) {
@@ -163,10 +191,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
           // Use cached user if available and no new check is needed
           if (window.__userInfo && !shouldRefetch && isAuthenticated) {
-            console.log('Using cached user information');
+            logInfo('Using cached user information');
             if (isMounted) {
               setUser(window.__userInfo);
               setLoading(false);
+              window.__authCheckInProgress = false;
               return;
             }
           }
@@ -177,7 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         if (effectiveToken) {
           // If token exists and enough time has passed, get user info from API
-          console.log('Token exists, verifying with API...');
+          logInfo('Token exists, verifying with API...');
           await verifyWithApi(effectiveToken);
         } else if (isLoggedInFlag && userInfoStr) {
           // Even without token, if localStorage says we're logged in and has user info
@@ -185,7 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           try {
             const parsedUserInfo = JSON.parse(userInfoStr);
             if (isMounted) {
-              console.log('No token but localStorage has user info, maintaining session');
+              logInfo('No token but localStorage has user info, maintaining session');
               setUser(parsedUserInfo);
               
               // Subscription bilgisini sessionStorage'a kaydet (30 dakika geçerli)
@@ -195,10 +224,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 sessionStorage.setItem('user-premium-info', JSON.stringify(parsedUserInfo));
                 sessionStorage.setItem('premium-cache-expiry', expiry.toString());
                 window.__premiumCacheExpiry = expiry;
-                console.log('Premium status cached in session without token for 30 minutes');
+                logInfo('Premium status cached in session without token for 30 minutes');
               }
               
               setLoading(false);
+              window.__authCheckInProgress = false;
               return;
             }
           } catch (e) {
@@ -206,7 +236,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         } else {
           // No token or local storage info means user is not logged in
-          console.log('No authentication data, user is not logged in');
+          logInfo('No authentication data, user is not logged in');
           if (typeof window !== 'undefined') {
             window.__userInfo = null;
             // Session storage'daki premium bilgisini temizle
@@ -217,10 +247,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUser(null);
             localStorage.setItem('isLoggedIn', 'false');
             setLoading(false);
+            window.__authCheckInProgress = false;
             
             // If we're on a protected page and no auth data, redirect to login page
             if (protectedRoutes.some(route => pathname?.startsWith(route))) {
-              console.log('On protected page with no auth data, redirecting to login page');
+              logInfo('On protected page with no auth data, redirecting to login page');
               router.push('/login');
             }
           }
@@ -230,6 +261,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (isMounted) {
           setUser(null);
           setLoading(false);
+          if (typeof window !== 'undefined') {
+            window.__authCheckInProgress = false;
+          }
         }
       }
     };
@@ -248,7 +282,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         if (response.ok) {
           const data = await response.json();
-          console.log('User info received from API:', data);
+          logInfo('User info received from API:', data);
           
           // Cache the request result in global variable
           const userInfo = {
@@ -262,6 +296,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             window.__userInfo = userInfo;
             window.__isAuthenticated = true;
             window.__lastTokenCheck = Date.now();
+            window.__authCheckInProgress = false;
             
             // Premium bilgisini sessionStorage'a kaydet (30 dakika geçerli)
             const now = Date.now();
@@ -269,7 +304,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             sessionStorage.setItem('user-premium-info', JSON.stringify(userInfo));
             sessionStorage.setItem('premium-cache-expiry', expiry.toString());
             window.__premiumCacheExpiry = expiry;
-            console.log('Premium status cached in session for 30 minutes from API');
+            logInfo('Premium status cached in session for 30 minutes from API');
           }
           
           if (isMounted) {
@@ -293,7 +328,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Even if API verification fails, don't immediately log out on protected pages
           // Trust localStorage if we have user info there
           if (userInfoStr && protectedRoutes.some(route => pathname?.startsWith(route))) {
-            console.log('Using local user info despite API verification failure');
+            logInfo('Using local user info despite API verification failure');
             try {
               const fallbackUser = JSON.parse(userInfoStr);
               // Ensure account status is properly typed
@@ -306,7 +341,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 sessionStorage.setItem('user-premium-info', JSON.stringify(fallbackUser));
                 sessionStorage.setItem('premium-cache-expiry', expiry.toString());
                 window.__premiumCacheExpiry = expiry;
-                console.log('Using fallback premium status in session for 30 minutes');
+                window.__authCheckInProgress = false;
+                logInfo('Using fallback premium status in session for 30 minutes');
               }
               
               if (isMounted) {
@@ -321,7 +357,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
           // Clear tokens only if API explicitly rejects with 401 AND we're not on a protected page
           if (response.status === 401 && !protectedRoutes.some(route => pathname?.startsWith(route))) {
-            console.log('Token rejected by API, clearing auth state');
+            logInfo('Token rejected by API, clearing auth state');
             removeAuthTokenFromClient();
             // Session storage'daki premium bilgisini temizle
             sessionStorage.removeItem('user-premium-info');
@@ -330,6 +366,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (typeof window !== 'undefined') {
               window.__userInfo = null;
               window.__isAuthenticated = false;
+              window.__authCheckInProgress = false;
             }
             if (isMounted) {
               setUser(null);
@@ -339,6 +376,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
           if (isMounted) {
             setLoading(false);
+            if (typeof window !== 'undefined') {
+              window.__authCheckInProgress = false;
+            }
           }
         }
       } catch (error) {
@@ -356,7 +396,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               sessionStorage.setItem('user-premium-info', JSON.stringify(fallbackUser));
               sessionStorage.setItem('premium-cache-expiry', expiry.toString());
               window.__premiumCacheExpiry = expiry;
-              console.log('Using fallback premium status on network error');
+              window.__authCheckInProgress = false;
+              logInfo('Using fallback premium status on network error');
             }
             
             setUser(fallbackUser);
@@ -367,6 +408,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         if (isMounted) {
           setLoading(false);
+          if (typeof window !== 'undefined') {
+            window.__authCheckInProgress = false;
+          }
         }
       }
     };
@@ -375,16 +419,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     // Listen to Firebase Auth state
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      console.log('Firebase auth state changed:', firebaseUser?.email || 'no session');
+      logInfo('Firebase auth state changed:', firebaseUser?.email || 'no session');
       
       // If there's a Firebase session but no user in context, update user info
       if (firebaseUser && !user && isMounted) {
-        console.log('Firebase session exists but no context user, updating information');
+        logInfo('Firebase session exists but no context user, updating information');
         
         // Check for a token before getting user info from API
         const token = getAuthTokenFromClient();
         if (!token) {
-          console.log('No token found, creating from Firebase session');
+          logInfo('No token found, creating from Firebase session');
           // Generate token here or set user info directly
           const userFromFirebase = {
             id: firebaseUser.uid,
@@ -408,22 +452,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             window.__premiumCacheExpiry = expiry;
             window.__userInfo = userFromFirebase;
             window.__isAuthenticated = true;
-            console.log('Premium status cached from Firebase session');
+            logInfo('Premium status cached from Firebase session');
           }
         }
       }
     });
     
+    // Sayfa yüklendiğinde tek bir auth check yeterli, 
+    // daha sonra navigasyon değişimlerinde check yapmak için ayrı bir listener
+    const handleRouteChange = () => {
+      // Route değiştiğinde işlem başlatılmadığından emin olalım
+      if (typeof window !== 'undefined' && !window.__authCheckInProgress) {
+        // Sadece navigasyon yenileme, UI'yi kilitlemiyoruz
+        if (window.__userInfo) {
+          // Zaten kullanıcı bilgisi var, API çağrısına gerek yok
+          logInfo('Route changed, user info already available');
+        } else {
+          // Kullanıcı bilgisi yoksa hafif kontrol yap
+          logInfo('Route changed, checking auth state');
+          fetchUserData();
+        }
+      }
+    };
+    
+    // pathname değişikliklerini izle
+    if (pathname) {
+      logInfo('Pathname changed:', pathname);
+      handleRouteChange();
+    }
+    
     // Set up periodic auth check (less frequent API calls)
     const checkAuthInterval = setInterval(() => {
-      if (typeof window !== 'undefined' && window.__isAuthenticated) {
-        console.log('Periodic auth check running');
+      if (typeof window !== 'undefined' && window.__isAuthenticated && !window.__authCheckInProgress) {
         const now = Date.now();
         const lastCheck = window.__lastTokenCheck || 0;
         
         // Eski 2 dakika yerine 5 dakikaya çıkarıldı (300 saniye)
         if ((now - lastCheck) > 300000) {
-          console.log('Refreshing auth state');
+          logInfo('Refreshing auth state after timeout');
           fetchUserData();
         }
       }
@@ -434,6 +500,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isMounted = false;
       clearInterval(checkAuthInterval);
       unsubscribe();
+      // Temizlik yaparken flag'i sıfırla
+      if (typeof window !== 'undefined') {
+        window.__authCheckInProgress = false;
+      }
     };
   }, [pathname, router, user]);
 
@@ -454,7 +524,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await response.json();
-      console.log('Login successful, user:', data.user);
+      logInfo('Login successful, user:', data.user);
       
       // Save token on client side
       if (data.token) {
@@ -471,7 +541,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           sessionStorage.setItem('user-premium-info', JSON.stringify(data.user));
           sessionStorage.setItem('premium-cache-expiry', expiry.toString());
           window.__premiumCacheExpiry = expiry;
-          console.log('Premium status cached on login');
+          logInfo('Premium status cached on login');
         }
       }
       
@@ -505,7 +575,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await response.json();
-      console.log('Registration successful, user:', data.user);
+      logInfo('Registration successful, user:', data.user);
       
       // Save token on client side
       if (data.token) {
@@ -576,7 +646,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       sessionStorage.setItem('user-premium-info', JSON.stringify(updatedUser));
       sessionStorage.setItem('premium-cache-expiry', expiry.toString());
       window.__premiumCacheExpiry = expiry;
-      console.log('Premium status updated in session cache');
+      logInfo('Premium status updated in session cache');
     }
   };
 
