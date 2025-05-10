@@ -2,26 +2,67 @@ import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 
-// Configure service account credentials for Firebase Admin SDK
-const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
-  ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY)
-  : {
+// Servis hesabı kimlik bilgilerini yapılandır
+let serviceAccount;
+
+try {
+  // İlk olarak tam JSON string'i kontrol et
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+    console.log('Firebase Admin: Tam servis hesabı JSON kullanılıyor');
+  } 
+  // Eğer tam JSON yoksa, ayrı çevre değişkenlerini kullan
+  else if (process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL) {
+    serviceAccount = {
       projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
       clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      // \n karakterlerini gerçek satır sonu karakterleriyle değiştir
+      privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
     };
+    console.log('Firebase Admin: Ayrı çevre değişkenleri kullanılıyor');
+  }
+  // Hiçbir kimlik bilgisi bulunamazsa uyar
+  else {
+    console.warn('Firebase Admin: Servis hesabı kimlik bilgileri eksik!');
+    serviceAccount = {
+      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'missing-project-id',
+      clientEmail: 'missing@example.com',
+      privateKey: 'missing-private-key',
+    };
+  }
+} catch (error) {
+  console.error('Firebase Admin: Servis hesabı ayarlanırken hata:', error);
+  throw new Error('Firebase Admin SDK yapılandırma hatası');
+}
 
-// Initialize the Admin SDK
-const apps = getApps();
-const adminApp = apps.length === 0
-  ? initializeApp({
+// Firebase Admin SDK'yı yalnızca bir kez başlat
+let adminApp;
+let db;
+let auth;
+
+try {
+  const apps = getApps();
+  
+  // Uygulama zaten başlatılmışsa, tekrar başlatma
+  if (apps.length === 0) {
+    console.log('Firebase Admin: SDK başlatılıyor');
+    adminApp = initializeApp({
       credential: cert(serviceAccount),
       databaseURL: `https://${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}.firebaseio.com`,
-    })
-  : apps[0];
-
-// Get Firestore and Auth references
-const db = getFirestore(adminApp);
-const auth = getAuth(adminApp);
+    });
+  } else {
+    console.log('Firebase Admin: Mevcut uygulama kullanılıyor');
+    adminApp = apps[0];
+  }
+  
+  // Firestore ve Auth referanslarını al
+  db = getFirestore(adminApp);
+  auth = getAuth(adminApp);
+  
+  console.log('Firebase Admin: Başarıyla yapılandırıldı');
+} catch (error) {
+  console.error('Firebase Admin: SDK başlatılırken hata:', error);
+  throw new Error('Firebase Admin SDK başlatma hatası');
+}
 
 export { db, auth, adminApp }; 

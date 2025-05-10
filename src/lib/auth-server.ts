@@ -120,91 +120,98 @@ export async function removeAuthCookieOnServer(): Promise<void> {
  * @returns Doğrulanmış token bilgisi veya null
  */
 export async function verifyTokenServer(token: string) {
-  try {
-    // Check if token has the Firebase format
-    if (!token || token.split('.').length !== 3) {
-      console.error('Token format invalid');
-      return null;
-    }
+  if (!token || typeof token !== 'string') {
+    console.error('Token geçersiz veya boş');
+    return null;
+  }
 
+  // Token formatı kontrolü
+  const tokenParts = token.split('.');
+  if (tokenParts.length !== 3) {
+    console.error('Token yapısı geçersiz, beklenen format: header.payload.signature');
+    return null;
+  }
+
+  console.log('Token doğrulama başlıyor, token uzunluğu:', token.length);
+
+  try {
+    // Firebase Admin doğrulamasını öncelikle dene
     try {
-      // Try with Firebase Admin SDK first
-      const decodedToken = await auth.verifyIdToken(token);
-      console.log('Token successfully verified with Firebase Admin');
-      return decodedToken;
-    } catch (firebaseError: any) {
-      console.error('Firebase token verification error:', firebaseError?.message || firebaseError);
+      // Firebase Admin SDK ile doğrula
+      console.log('Firebase Admin SDK ile token doğrulanıyor');
+      const decodedToken = await auth.verifyIdToken(token, true);
+      console.log('Token Firebase Admin ile başarıyla doğrulandı');
       
-      // If the error is about missing kid claim, try verifying with JWT
-      if (firebaseError?.message?.includes('kid') || 
-          firebaseError?.code === 'auth/argument-error') {
-        try {
-          // Fallback to local JWT verification using our secret
-          // İlk olarak süre kontrolünü devre dışı bırakarak deneyelim (ignoreExpiration: true)
-          try {
-            const decoded = verify(token, JWT_SECRET, { ignoreExpiration: true }) as { 
-              userId: string, 
-              email?: string, 
-              name?: string, 
-              accountStatus?: string,
-              exp?: number
-            };
-            
-            // Eğer token gerçekten süresi dolmuşsa, yeni bir token oluştur
-            // Bu, süresi dolmuş JWT token'larını yenilememizi sağlar
-            if (decoded.exp && decoded.exp * 1000 < Date.now()) {
-              console.log('Token expired, refreshing with new expiration date');
-              
-              // Yeni bir JWT token oluştur, eski payload'ı koru
-              const refreshedToken = sign({
-                userId: decoded.userId,
-                email: decoded.email || '',
-                name: decoded.name || '',
-                accountStatus: decoded.accountStatus || 'free'
-              }, JWT_SECRET, { expiresIn: '7d' });
-              
-              // Yeni token'ı verify et
-              const refreshedDecoded = verify(refreshedToken, JWT_SECRET) as { 
-                userId: string, 
-                email?: string, 
-                name?: string, 
-                accountStatus?: string 
-              };
-              
-              // Firebase formatına dönüştür
-              return {
-                uid: refreshedDecoded.userId,
-                email: refreshedDecoded.email || '',
-                name: refreshedDecoded.name || '',
-                accountStatus: refreshedDecoded.accountStatus || 'free',
-                isNewToken: true,  // İstemciye yeni token oluşturulduğunu bildir
-                refreshedToken: refreshedToken  // Yeni token'ı istemciye gönder
-              };
-            }
-            
-            // Token süresi geçerli, normal doğrulama
-            // Convert to Firebase Admin format
-            return {
-              uid: decoded.userId,
-              email: decoded.email || '',
-              name: decoded.name || '',
-              accountStatus: decoded.accountStatus || 'free',
-            };
-          } catch (expiredError) {
-            // Süre kontrolünü devre dışı bırakma da başarısız olursa, daha derin bir sorun var
-            console.error('JWT token refresh failed:', expiredError);
-            return null;
-          }
-        } catch (jwtError) {
-          console.error('JWT verification fallback error:', jwtError);
-          return null;
-        }
+      // Account status'ü kontrol et, yoksa varsayılan olarak 'free' kullan
+      if (!decodedToken.accountStatus) {
+        decodedToken.accountStatus = 'free';
       }
       
-      return null;
+      return decodedToken;
+    } catch (firebaseError: any) {
+      // Hata detaylarını logla
+      console.error('Firebase token doğrulama hatası:',
+        firebaseError?.code || 'bilinmeyen hata kodu',
+        firebaseError?.message || 'hata mesajı yok'
+      );
+      
+      // JWT ile yedek doğrulama deneme
+      console.log('Firebase doğrulama başarısız, JWT doğrulamaya geçiliyor');
+      
+      try {
+        // İlk olarak süre kontrolünü devre dışı bırakarak deneyelim
+        const decoded = verify(token, JWT_SECRET, { ignoreExpiration: true }) as { 
+          userId: string, 
+          email?: string, 
+          name?: string, 
+          accountStatus?: string,
+          exp?: number
+        };
+        
+        // Token içeriğini logla
+        console.log('JWT token içeriği doğrulandı:', {
+          userId: decoded.userId,
+          accountStatus: decoded.accountStatus || 'free',
+          expired: decoded.exp && decoded.exp * 1000 < Date.now()
+        });
+        
+        // Eğer token süresi dolmuşsa yenile
+        if (decoded.exp && decoded.exp * 1000 < Date.now()) {
+          console.log('Token süresi dolmuş, yenileniyor');
+          
+          // Yeni token oluştur
+          const refreshedToken = sign({
+            userId: decoded.userId,
+            email: decoded.email || '',
+            name: decoded.name || '',
+            accountStatus: decoded.accountStatus || 'free'
+          }, JWT_SECRET, { expiresIn: '7d' });
+          
+          // Yeni token payload
+          return {
+            uid: decoded.userId,
+            email: decoded.email || '',
+            name: decoded.name || '',
+            accountStatus: decoded.accountStatus || 'free',
+            isNewToken: true,
+            refreshedToken: refreshedToken
+          };
+        }
+        
+        // Token geçerli, Firebase formatına dönüştür
+        return {
+          uid: decoded.userId,
+          email: decoded.email || '',
+          name: decoded.name || '',
+          accountStatus: decoded.accountStatus || 'free'
+        };
+      } catch (jwtError) {
+        console.error('JWT ile yedek doğrulama başarısız:', jwtError);
+        return null;
+      }
     }
   } catch (error) {
-    console.error('Token doğrulama hatası:', error);
+    console.error('Beklenmeyen token doğrulama hatası:', error);
     return null;
   }
 } 
