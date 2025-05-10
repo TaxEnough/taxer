@@ -44,6 +44,7 @@ declare global {
     __isAuthenticated?: boolean;
     __lastTokenCheck?: number;
     __userInfo?: User | null;
+    __premiumCacheExpiry?: number;
   }
 }
 
@@ -60,6 +61,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     const fetchUserData = async () => {
       try {
+        // İlk önce sessionStorage'dan veri yüklemeyi deneyelim
+        // Bu, sayfa yenilemelerinde API çağrısına gerek kalmadan hızlı yükleme sağlar
+        if (typeof window !== 'undefined') {
+          const cachedUserInfo = sessionStorage.getItem('user-premium-info');
+          const cacheExpiryStr = sessionStorage.getItem('premium-cache-expiry');
+          const now = Date.now();
+          const cacheExpiry = cacheExpiryStr ? parseInt(cacheExpiryStr) : 0;
+          
+          // Cache geçerli mi kontrol et (30 dakika = 1800000 ms)
+          const isCacheValid = cachedUserInfo && cacheExpiry > now;
+          
+          if (isCacheValid) {
+            console.log('Using premium cache from sessionStorage, valid for', 
+              Math.round((cacheExpiry - now) / 60000), 'more minutes');
+            try {
+              const cachedUser = JSON.parse(cachedUserInfo);
+              window.__userInfo = cachedUser;
+              window.__isAuthenticated = true;
+              window.__premiumCacheExpiry = cacheExpiry;
+              
+              if (isMounted && !user) {
+                setUser(cachedUser);
+                setLoading(false);
+                return; // Session cache kullanıldı, API çağrısı yapmaya gerek yok
+              }
+            } catch (e) {
+              console.error('Failed to parse user info from sessionStorage:', e);
+            }
+          } else if (cachedUserInfo) {
+            console.log('Premium cache expired, will refresh from API');
+          }
+        }
+        
         // Check for tokens in multiple storage locations
         const token = getAuthTokenFromClient();
         const localStorageToken = localStorage.getItem('auth-token');
@@ -86,8 +120,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const now = Date.now();
           const lastCheck = window.__lastTokenCheck || 0;
           
-          // Make API call only if at least 30 seconds passed since last check
-          const shouldRefetch = (now - lastCheck) > 30000;
+          // API çağrılarını azalt: 5 dakika (300000 ms) bekle
+          const shouldRefetch = (now - lastCheck) > 300000;
           
           console.log('Global auth status:', window.__isAuthenticated ? 'logged in' : 'not logged in');
           console.log('Time since last token check:', Math.floor((now - lastCheck) / 1000), 'seconds');
@@ -101,6 +135,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               if (isMounted && !user) {
                 console.log('Restoring user from localStorage:', parsedUserInfo);
                 setUser(parsedUserInfo);
+                
+                // Subscription bilgisini sessionStorage'a kaydet (30 dakika geçerli)
+                if (parsedUserInfo.accountStatus) {
+                  const expiry = now + 1800000; // 30 dakika
+                  sessionStorage.setItem('user-premium-info', JSON.stringify(parsedUserInfo));
+                  sessionStorage.setItem('premium-cache-expiry', expiry.toString());
+                  window.__premiumCacheExpiry = expiry;
+                  console.log('Premium status cached in session for 30 minutes');
+                }
                 
                 // If on protected page and not loading, stop here to prevent flicker
                 if (protectedRoutes.some(route => pathname?.startsWith(route)) && !loading) {
@@ -124,8 +167,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (isMounted) {
               setUser(window.__userInfo);
               setLoading(false);
+              return;
             }
-            return;
           }
           
           // Update last check time
@@ -144,6 +187,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (isMounted) {
               console.log('No token but localStorage has user info, maintaining session');
               setUser(parsedUserInfo);
+              
+              // Subscription bilgisini sessionStorage'a kaydet (30 dakika geçerli)
+              if (parsedUserInfo.accountStatus) {
+                const now = Date.now();
+                const expiry = now + 1800000; // 30 dakika
+                sessionStorage.setItem('user-premium-info', JSON.stringify(parsedUserInfo));
+                sessionStorage.setItem('premium-cache-expiry', expiry.toString());
+                window.__premiumCacheExpiry = expiry;
+                console.log('Premium status cached in session without token for 30 minutes');
+              }
+              
               setLoading(false);
               return;
             }
@@ -155,6 +209,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('No authentication data, user is not logged in');
           if (typeof window !== 'undefined') {
             window.__userInfo = null;
+            // Session storage'daki premium bilgisini temizle
+            sessionStorage.removeItem('user-premium-info');
+            sessionStorage.removeItem('premium-cache-expiry');
           }
           if (isMounted) {
             setUser(null);
@@ -205,6 +262,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             window.__userInfo = userInfo;
             window.__isAuthenticated = true;
             window.__lastTokenCheck = Date.now();
+            
+            // Premium bilgisini sessionStorage'a kaydet (30 dakika geçerli)
+            const now = Date.now();
+            const expiry = now + 1800000; // 30 dakika
+            sessionStorage.setItem('user-premium-info', JSON.stringify(userInfo));
+            sessionStorage.setItem('premium-cache-expiry', expiry.toString());
+            window.__premiumCacheExpiry = expiry;
+            console.log('Premium status cached in session for 30 minutes from API');
           }
           
           if (isMounted) {
@@ -233,6 +298,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               const fallbackUser = JSON.parse(userInfoStr);
               // Ensure account status is properly typed
               fallbackUser.accountStatus = (fallbackUser.accountStatus || 'free') as 'free' | 'basic' | 'premium';
+              
+              // Session cache'e kaydet
+              if (typeof window !== 'undefined') {
+                const now = Date.now();
+                const expiry = now + 1800000; // 30 dakika
+                sessionStorage.setItem('user-premium-info', JSON.stringify(fallbackUser));
+                sessionStorage.setItem('premium-cache-expiry', expiry.toString());
+                window.__premiumCacheExpiry = expiry;
+                console.log('Using fallback premium status in session for 30 minutes');
+              }
+              
               if (isMounted) {
                 setUser(fallbackUser);
                 setLoading(false);
@@ -247,6 +323,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (response.status === 401 && !protectedRoutes.some(route => pathname?.startsWith(route))) {
             console.log('Token rejected by API, clearing auth state');
             removeAuthTokenFromClient();
+            // Session storage'daki premium bilgisini temizle
+            sessionStorage.removeItem('user-premium-info');
+            sessionStorage.removeItem('premium-cache-expiry');
+            
             if (typeof window !== 'undefined') {
               window.__userInfo = null;
               window.__isAuthenticated = false;
@@ -268,6 +348,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (userInfoStr && isMounted) {
           try {
             const fallbackUser = JSON.parse(userInfoStr);
+            
+            // Session cache'e kaydet - network hatası durumunda
+            if (typeof window !== 'undefined' && fallbackUser.accountStatus) {
+              const now = Date.now();
+              const expiry = now + 1800000; // 30 dakika
+              sessionStorage.setItem('user-premium-info', JSON.stringify(fallbackUser));
+              sessionStorage.setItem('premium-cache-expiry', expiry.toString());
+              window.__premiumCacheExpiry = expiry;
+              console.log('Using fallback premium status on network error');
+            }
+            
             setUser(fallbackUser);
           } catch (e) {
             console.error('Failed to parse fallback user info on network error:', e);
@@ -304,13 +395,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
           setUser(userFromFirebase);
           
-          // Save user info to localStorage
+          // Save user info to localStorage and sessionStorage
           localStorage.setItem('user-info', JSON.stringify(userFromFirebase));
           localStorage.setItem('isLoggedIn', 'true');
           
+          // Premium bilgisini sessionStorage'a kaydet (30 dakika geçerli)
           if (typeof window !== 'undefined') {
+            const now = Date.now();
+            const expiry = now + 1800000; // 30 dakika
+            sessionStorage.setItem('user-premium-info', JSON.stringify(userFromFirebase));
+            sessionStorage.setItem('premium-cache-expiry', expiry.toString());
+            window.__premiumCacheExpiry = expiry;
             window.__userInfo = userFromFirebase;
             window.__isAuthenticated = true;
+            console.log('Premium status cached from Firebase session');
           }
         }
       }
@@ -323,8 +421,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const now = Date.now();
         const lastCheck = window.__lastTokenCheck || 0;
         
-        // Only check every 2 minutes (120 seconds)
-        if ((now - lastCheck) > 120000) {
+        // Eski 2 dakika yerine 5 dakikaya çıkarıldı (300 saniye)
+        if ((now - lastCheck) > 300000) {
           console.log('Refreshing auth state');
           fetchUserData();
         }
@@ -366,6 +464,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           window.__isAuthenticated = true;
           window.__userInfo = data.user;
           window.__lastTokenCheck = Date.now();
+          
+          // Premium bilgisini sessionStorage'a kaydet (30 dakika geçerli)
+          const now = Date.now();
+          const expiry = now + 1800000; // 30 dakika
+          sessionStorage.setItem('user-premium-info', JSON.stringify(data.user));
+          sessionStorage.setItem('premium-cache-expiry', expiry.toString());
+          window.__premiumCacheExpiry = expiry;
+          console.log('Premium status cached on login');
         }
       }
       
@@ -435,9 +541,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Clear cookie on client side
       removeAuthTokenFromClient();
       localStorage.removeItem('isLoggedIn');
+      
+      // Session storage'daki premium bilgisini temizle
       if (typeof window !== 'undefined') {
         window.__isAuthenticated = false;
         window.__userInfo = null;
+        sessionStorage.removeItem('user-premium-info');
+        sessionStorage.removeItem('premium-cache-expiry');
       }
       
       setUser(null);
@@ -459,6 +569,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (typeof window !== 'undefined') {
       window.__userInfo = updatedUser;
       localStorage.setItem('user-info', JSON.stringify(updatedUser));
+      
+      // Premium bilgisini sessionStorage'da da güncelle
+      const now = Date.now();
+      const expiry = now + 1800000; // 30 dakika
+      sessionStorage.setItem('user-premium-info', JSON.stringify(updatedUser));
+      sessionStorage.setItem('premium-cache-expiry', expiry.toString());
+      window.__premiumCacheExpiry = expiry;
+      console.log('Premium status updated in session cache');
     }
   };
 
