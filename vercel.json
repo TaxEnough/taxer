@@ -6,10 +6,10 @@
   "regions": ["iad1"],
   "functions": {
     "middleware": {
-      "runtime": "@vercel/node@2.x"
+      "runtime": "vercel-node@2.15.10"
     },
     "src/app/api/**/*": {
-      "runtime": "@vercel/node@2.x"
+      "runtime": "vercel-node@2.15.10"
     }
   }
 } 
