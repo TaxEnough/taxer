@@ -8,6 +8,7 @@ import Footer from '@/components/Footer';
 import { getAuthTokenFromClient } from '@/lib/auth-client';
 import Link from 'next/link';
 import { useUser } from '@clerk/nextjs';
+import { useClerkAuthCache } from '@/lib/clerk-utils';
 
 // Lazy load edilmiş bileşenler için
 import dynamic from 'next/dynamic';
@@ -59,7 +60,8 @@ function LoadingSpinner() {
 
 export default function DashboardPage() {
   const { user: firebaseUser, loading: firebaseLoading } = useAuth();
-  const { isLoaded: isClerkLoaded, isSignedIn: isClerkSignedIn, user: clerkUser } = useUser();
+  const { isLoaded: clerkLoaded, isSignedIn: clerkSignedIn, user: clerkUser } = useUser();
+  const clerkAuth = useClerkAuthCache();
   const router = useRouter();
   const [pageLoading, setPageLoading] = useState(true);
   
@@ -167,7 +169,7 @@ TSLA,Sell,7,200.50,2023-03-01,235.75,2023-07-15,1650.25,7.99`;
     URL.revokeObjectURL(url);
   };
 
-  // Sayfa yükleme ve auth kontrolü
+  // İlk render'da bir kez çalışması için ref kullan
   const initRef = useRef(false);
 
   useEffect(() => {
@@ -177,15 +179,36 @@ TSLA,Sell,7,200.50,2023-03-01,235.75,2023-07-15,1650.25,7.99`;
     
     // Debug loglama
     console.log('Dashboard sayfa başlatılıyor');
-    console.log('Clerk auth durumu:', { isClerkLoaded, isClerkSignedIn });
+    console.log('Clerk auth durumu:', { 
+      isClerkLoaded: clerkLoaded, 
+      isClerkSignedIn: clerkSignedIn,
+      clerkCacheLoaded: clerkAuth.isLoaded,
+      clerkCacheSignedIn: clerkAuth.isSignedIn,
+      isPremium: clerkAuth.isPremium 
+    });
     
+    // Auth durumunu localStorage'a cache'le
     if (typeof window !== 'undefined') {
       localStorage.setItem('isLoggedIn', 'true');
     }
     
+    // Önce cachelenen bilgilerle hızlı kontrol
+    if (clerkAuth.isLoaded) {
+      if (clerkAuth.isSignedIn) {
+        console.log('Clerk cache ile oturum açılmış');
+        setPageLoading(false);
+        return;
+      } else if (!clerkAuth.isSignedIn && !clerkLoaded) {
+        // Eğer cache'de oturum yok ama Clerk yüklenmemişse, bekle
+        console.log('Clerk cache oturum yok, Clerk yüklenmesi bekleniyor');
+        // Burada bir şey yapma, normal Clerk kontrol akışına devam et
+      }
+    }
+    
+    // Normal Clerk ve Firebase kontrolü
     // İlk önce Clerk kimlik doğrulamasını kontrol et
-    if (isClerkLoaded) {
-      if (isClerkSignedIn) {
+    if (clerkLoaded) {
+      if (clerkSignedIn) {
         console.log('Clerk ile oturum açılmış');
         setPageLoading(false);
       } else {
@@ -204,10 +227,10 @@ TSLA,Sell,7,200.50,2023-03-01,235.75,2023-07-15,1650.25,7.99`;
       console.log('Firebase ile oturum açılmış');
       setPageLoading(false);
     }
-  }, [isClerkLoaded, isClerkSignedIn, firebaseUser, firebaseLoading, router]);
+  }, [clerkLoaded, clerkSignedIn, firebaseUser, firebaseLoading, router, clerkAuth]);
 
   // Yükleniyor durumu göster
-  if ((!isClerkLoaded && firebaseLoading) || (pageLoading && !getAuthTokenFromClient() && !isClerkSignedIn)) {
+  if ((!clerkLoaded && firebaseLoading) || (pageLoading && !getAuthTokenFromClient() && !clerkSignedIn)) {
     return (
       <>
         <Navbar />
