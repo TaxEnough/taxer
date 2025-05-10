@@ -32,7 +32,7 @@ export async function getUserSubscription(userId?: string): Promise<Subscription
     const user = await clerkClient.users.getUser(userId);
     
     // Kullanıcının public ve private meta verilerini kontrol et
-    const subscription = user.privateMetadata.subscription as any || user.publicMetadata.subscription as any;
+    const subscription = (user.privateMetadata as any).subscription || (user.publicMetadata as any).subscription;
     
     // Abonelik durumunu döndür
     if (subscription && subscription.status === 'active') {
@@ -95,7 +95,7 @@ export async function hasUserPremiumAccess(): Promise<boolean> {
   if (!user) return false;
   
   // Kullanıcının meta verilerini kontrol et
-  const subscription = user.privateMetadata.subscription as any || user.publicMetadata.subscription as any;
+  const subscription = (user.privateMetadata as any).subscription || (user.publicMetadata as any).subscription;
   
   // Aktif bir abonelik varsa true döndür
   return subscription && subscription.status === 'active';
@@ -109,7 +109,7 @@ export async function getUserPlanType(): Promise<PlanType> {
   if (!user) return 'free';
   
   // Kullanıcının meta verilerini kontrol et
-  const subscription = user.privateMetadata.subscription as any || user.publicMetadata.subscription as any;
+  const subscription = (user.privateMetadata as any).subscription || (user.publicMetadata as any).subscription;
   
   // Aktif bir abonelik varsa plan tipini döndür, yoksa free
   if (subscription && subscription.status === 'active') {
