@@ -26,8 +26,10 @@ export default function SubscriptionInfo() {
 
       try {
         // Kullanıcının meta verilerinden abonelik bilgilerini al
-        const subData = user.privateMetadata.subscription as any || 
-                        user.publicMetadata.subscription as any;
+        // any tipini kullanmak zorundayız çünkü Clerk tiplerindeki privateMetadata'yı
+        // doğrudan erişemiyoruz
+        const subData = (user as any).privateMetadata?.subscription || 
+                        (user as any).publicMetadata?.subscription;
         
         if (subData && subData.status === 'active') {
           let endDate = '';
