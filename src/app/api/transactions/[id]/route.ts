@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/firebase-admin';
-import { db } from '@/lib/firebase-admin';
+import { auth as adminAuth, db as adminDb } from '@/lib/firebase-admin';
+import { Auth } from 'firebase-admin/auth';
+import { Firestore } from 'firebase-admin/firestore';
+
+// Admin Firebase referanslarını tip tanımlarıyla belirtelim
+const auth: Auth = adminAuth;
+const db: Firestore = adminDb;
 
 // Transaction interface
 interface Transaction {

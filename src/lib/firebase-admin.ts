@@ -1,9 +1,15 @@
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { getAuth } from 'firebase-admin/auth';
+import { getFirestore, Firestore } from 'firebase-admin/firestore';
+import { getAuth, Auth } from 'firebase-admin/auth';
 
 // Servis hesabı kimlik bilgilerini yapılandır
-let serviceAccount;
+interface ServiceAccount {
+  projectId?: string;
+  clientEmail?: string;
+  privateKey?: string;
+}
+
+let serviceAccount: ServiceAccount;
 
 try {
   // İlk olarak tam JSON string'i kontrol et
@@ -37,8 +43,8 @@ try {
 
 // Firebase Admin SDK'yı yalnızca bir kez başlat
 let adminApp;
-let db;
-let auth;
+let db: Firestore;
+let auth: Auth;
 
 try {
   const apps = getApps();
@@ -47,7 +53,7 @@ try {
   if (apps.length === 0) {
     console.log('Firebase Admin: SDK başlatılıyor');
     adminApp = initializeApp({
-      credential: cert(serviceAccount),
+      credential: cert(serviceAccount as any),
       databaseURL: `https://${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}.firebaseio.com`,
     });
   } else {
