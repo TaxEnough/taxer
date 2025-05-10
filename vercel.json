@@ -5,10 +5,13 @@
   "outputDirectory": ".next",
   "regions": ["iad1"],
   "functions": {
-    "middleware": {
+    "middleware.js": {
       "runtime": "vercel-node@2.15.10"
     },
-    "src/app/api/**/*": {
+    "api/**/*.js": {
+      "runtime": "vercel-node@2.15.10"
+    },
+    "src/app/api/**/*.js": {
       "runtime": "vercel-node@2.15.10"
     }
   }
