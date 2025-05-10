@@ -28,10 +28,7 @@ export default clerkMiddleware(async (auth, req) => {
 
   // Korumalı rotalar için kimlik doğrulama kontrolü
   if (isProtectedRoute(req)) {
-    const { userId, redirectToSignIn } = await auth();
-    if (!userId) {
-      return redirectToSignIn();
-    }
+    await auth.protect();
   }
 
   return NextResponse.next();
@@ -39,14 +36,19 @@ export default clerkMiddleware(async (auth, req) => {
 
 export const config = {
   matcher: [
-    // Skip Next.js internals and static files
-    '/((?!_next/static|_next/image|favicon.ico).*)',
-    // Middleware'in çalışacağı rotalar
+    // Temel rotalar için matcher
+    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    
+    // Korumalı rotalar - özel olarak belirtiliyor
     '/dashboard/:path*',
     '/transactions/:path*',
     '/profile/:path*',
     '/reports/:path*',
+    
+    // Açık rotalar - ziyaretçiler görebilir ancak auth kontrolü yapılır
     '/login',
     '/register',
+    '/pricing', 
+    '/about',
   ],
 }; 
