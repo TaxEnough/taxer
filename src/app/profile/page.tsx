@@ -2,237 +2,136 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import { getAuthTokenFromClient } from '@/lib/auth-client';
-import ProfileForm from '@/components/profile/ProfileForm';
-import ChangePasswordForm from '@/components/profile/ChangePasswordForm';
-import DeleteAccountForm from '@/components/profile/DeleteAccountForm';
-import { deleteUser } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase';
-import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import SubscriptionInfo from '@/components/profile/SubscriptionInfo';
-import { useUser } from '@clerk/nextjs';
+import { useUser, useClerk } from '@clerk/nextjs';
 
-export default function ProfilePage() {
-  const { user: firebaseUser, loading, logout } = useAuth();
-  const router = useRouter();
-  const { user: clerkUser, isLoaded } = useUser();
-  const [pageLoading, setPageLoading] = useState(true);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [activeTab, setActiveTab] = useState('profile');
-  const [forceRemain, setForceRemain] = useState(false);
-  const [subscriptionData, setSubscriptionData] = useState({
+// Basit bir abonelik bilgisi bileşeni
+const SimpleSubscriptionInfo = () => {
+  const { user, isLoaded } = useUser();
+  const [subscription, setSubscription] = useState({
     plan: 'Free Plan',
     status: 'Free',
-    renewalDate: '-'
+    renewalDate: null as string | null
   });
-  const [isLoadingSubscription, setIsLoadingSubscription] = useState(true);
-
-  // Varsayılan hesap özeti verileri (hepsi 0)
-  const accountSummary = {
-    totalTransactions: 0,
-    totalInvestment: '0 USD',
-    totalTaxCalculated: '0 USD',
-    lastCalculationDate: '-'
-  };
-
-  // Middleware'i devre dışı bırakmak için URL'de özel parametre kontrolü
+  const [loading, setLoading] = useState(true);
+  
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      if (url.searchParams.has('direct')) {
-        setForceRemain(true);
-        // URL'den parametreyi temizle
-        url.searchParams.delete('direct');
-        window.history.replaceState({}, '', url.toString());
-      }
-    }
-  }, []);
-
-  // Kullanıcının abonelik bilgilerini almak için
-  const fetchUserSubscription = async (userId: string) => {
-    try {
-      setIsLoadingSubscription(true);
-      // Kullanıcı belgesini al
-      const userRef = doc(db, 'users', userId);
-      const userSnap = await getDoc(userRef);
-      
-      if (userSnap.exists()) {
-        const userData = userSnap.data();
-        const subscriptionId = userData.subscriptionId;
-        const subscriptionStatus = userData.subscriptionStatus;
-        const subscriptionPriceId = userData.subscriptionPriceId;
+    if (isLoaded && user) {
+      try {
+        // any tipini kullanmak zorundayız çünkü Clerk tiplerindeki privateMetadata'yı
+        // doğrudan erişemiyoruz
+        const subData = (user as any).privateMetadata?.subscription || 
+                        (user as any).publicMetadata?.subscription;
         
-        if (subscriptionId && subscriptionStatus === 'active') {
-          // Abonelik bilgilerini al
-          const subscriptionRef = doc(db, 'subscriptions', subscriptionId);
-          const subscriptionSnap = await getDoc(subscriptionRef);
-          
-          if (subscriptionSnap.exists()) {
-            const subData = subscriptionSnap.data();
-            // Basic planın ID'si ile tam eşleşme kontrolü yapıyoruz
-            const planType = subData.priceId === 'price_1RIS0fLhWC2oNMWwizDKv78o' ? 'Basic' : 'Premium';
-            
-            // Yenileme tarihini formatla
-            const renewalDate = subData.currentPeriodEnd ? 
-              (() => {
-                // currentPeriodEnd bir Firestore Timestamp, Date veya epoch ms olabilir
-                let date;
-                if (subData.currentPeriodEnd.toDate && typeof subData.currentPeriodEnd.toDate === 'function') {
-                  // Firestore Timestamp
-                  date = subData.currentPeriodEnd.toDate();
-                } else if (subData.currentPeriodEnd instanceof Date) {
-                  // Date nesnesi
-                  date = subData.currentPeriodEnd;
-                } else if (typeof subData.currentPeriodEnd === 'number') {
-                  // Epoch milliseconds
-                  date = new Date(subData.currentPeriodEnd);
-                } else {
-                  // String veya başka format olabilir
-                  try {
-                    date = new Date(subData.currentPeriodEnd);
-                  } catch (e) {
-                    console.error('Geçersiz tarih formatı:', subData.currentPeriodEnd);
-                    return '-';
-                  }
-                }
-                
-                // Tarih geçerli mi kontrol et
-                if (isNaN(date.getTime())) {
-                  console.error('Geçersiz tarih:', date);
-                  return '-';
-                }
-                
-                // Amerikan tarih formatı kullan
-                return date.toLocaleDateString('en-US', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                });
-              })() : '-';
-            
-            setSubscriptionData({
-              plan: planType,
-              status: 'Active',
-              renewalDate: renewalDate
+        if (subData && subData.status === 'active') {
+          let endDate = null;
+          if (subData.currentPeriodEnd) {
+            const date = new Date(subData.currentPeriodEnd);
+            endDate = date.toLocaleDateString('en-US', {
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric'
             });
           }
-        } else {
-          // Aktif abonelik yok
-          setSubscriptionData({
-            plan: 'Free Plan',
-            status: 'Free',
-            renewalDate: '-'
+          
+          setSubscription({
+            plan: subData.plan === 'premium' ? 'Premium Plan' : 'Basic Plan',
+            status: 'Active',
+            renewalDate: endDate
           });
         }
-      }
-    } catch (error) {
-      console.error('Abonelik bilgileri alınırken hata oluştu:', error);
-      setSubscriptionData({
-        plan: 'Free Plan',
-        status: 'Free',
-        renewalDate: '-'
-      });
-    } finally {
-      setIsLoadingSubscription(false);
-    }
-  };
-
-  useEffect(() => {
-    console.log('ProfilePage useEffect çalıştı, loading:', loading, 'user:', firebaseUser, 'forceRemain:', forceRemain);
-    
-    // Eğer forceRemain aktifse, her durumda sayfada kal
-    if (forceRemain) {
-      console.log('Force remain aktif, sayfada kalınıyor');
-      
-      // Token kontrolü
-      const token = getAuthTokenFromClient();
-      if (token) {
-        console.log('Token bulundu, profil bilgileri yükleniyor');
-        
-        // Eğer user bilgisi yoksa API'den almaya çalış
-        if (!firebaseUser) {
-          console.log('User bilgisi yok, API\'den yüklemeye çalışılacak');
-          
-          const fetchUserData = async () => {
-            try {
-              const response = await fetch('/api/auth/me');
-              
-              if (response.ok) {
-                const data = await response.json();
-                console.log('API\'den kullanıcı bilgileri alındı:', data);
-                
-                setName(data.name || data.email?.split('@')[0] || 'Kullanıcı');
-                setEmail(data.email || '');
-                
-                if (data.id) {
-                  fetchUserSubscription(data.id);
-                }
-              } else {
-                console.error('API\'den profil bilgileri alınamadı:', response.status);
-                setName('Kullanıcı');
-                setEmail('');
-              }
-            } catch (error) {
-              console.error('Profil bilgileri yüklenirken hata:', error);
-              setName('Kullanıcı');
-              setEmail('');
-            } finally {
-              setPageLoading(false);
-            }
-          };
-          
-          fetchUserData();
-        } else {
-          console.log('User bilgisi mevcut');
-          setName(firebaseUser.name || firebaseUser.email?.split('@')[0] || 'Kullanıcı');
-          setEmail(firebaseUser.email || '');
-          
-          if (firebaseUser.id) {
-            fetchUserSubscription(firebaseUser.id);
-          }
-          
-          setPageLoading(false);
-        }
-      } else {
-        console.log('Token bulunamadı, login sayfasına yönlendiriliyor');
-        router.push('/login');
+      } catch (error) {
+        console.error('Error fetching subscription:', error);
+      } finally {
+        setLoading(false);
       }
     } else {
-      console.log('Force remain aktif değil, normal akış devam ediyor');
-      
-      // Yükleme tamamlandıysa ve kullanıcı yoksa, login sayfasına yönlendir
-      if (!loading) {
-        if (!firebaseUser) {
-          console.log('Yükleme tamamlandı, kullanıcı yok, login sayfasına yönlendiriliyor');
-          router.push('/login');
-        } else {
-          console.log('Yükleme tamamlandı, kullanıcı var');
-          setName(firebaseUser.name || firebaseUser.email?.split('@')[0] || 'Kullanıcı');
-          setEmail(firebaseUser.email || '');
-          
-          if (firebaseUser.id) {
-            fetchUserSubscription(firebaseUser.id);
-          }
-          
-          setPageLoading(false);
-        }
-      }
+      setLoading(false);
     }
-  }, [loading, firebaseUser, router, forceRemain]);
+  }, [isLoaded, user]);
+  
+  if (loading) {
+    return (
+      <div className="flex justify-center py-6">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary-500"></div>
+      </div>
+    );
+  }
+  
+  return (
+    <div>
+      <div className="bg-gray-50 p-6 rounded-lg mb-6">
+        <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+          <div className="sm:col-span-1">
+            <dt className="text-sm font-medium text-gray-500">Current Plan</dt>
+            <dd className="mt-1">
+              <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                subscription.plan === 'Premium Plan' 
+                  ? 'bg-purple-100 text-purple-800' 
+                  : subscription.plan === 'Basic Plan'
+                  ? 'bg-blue-100 text-blue-800'
+                  : 'bg-gray-100 text-gray-800'
+              }`}>
+                {subscription.plan}
+              </span>
+            </dd>
+          </div>
+          
+          <div className="sm:col-span-1">
+            <dt className="text-sm font-medium text-gray-500">Status</dt>
+            <dd className="mt-1 text-sm">
+              <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                subscription.status === 'Active' 
+                  ? 'bg-green-100 text-green-800' 
+                  : 'bg-gray-100 text-gray-800'
+              }`}>
+                {subscription.status}
+              </span>
+            </dd>
+          </div>
+          
+          {subscription.renewalDate && (
+            <div className="sm:col-span-1">
+              <dt className="text-sm font-medium text-gray-500">Renewal Date</dt>
+              <dd className="mt-1 text-sm text-gray-900">{subscription.renewalDate}</dd>
+            </div>
+          )}
+        </dl>
+      </div>
+      
+      {/* Action Buttons */}
+      <div>
+        <button 
+          onClick={() => window.location.href = '/pricing'}
+          className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+        >
+          {subscription.status === 'Active' ? 'Change Plan' : 'View Plans'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default function ProfilePage() {
+  const router = useRouter();
+  const { user: clerkUser, isLoaded } = useUser();
+  const { openUserProfile } = useClerk();
+  const [pageLoading, setPageLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('profile');
 
   // Kullanıcı oturum açmadıysa veya veri yüklenemiyorsa, ana sayfaya yönlendirme
   useEffect(() => {
-    if (isLoaded && !clerkUser) {
-      router.push('/');
+    if (isLoaded) {
+      if (!clerkUser) {
+        router.push('/');
+      } else {
+        setPageLoading(false);
+      }
     }
   }, [isLoaded, clerkUser, router]);
 
-  if (loading || pageLoading) {
+  if (!isLoaded || pageLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navbar />
@@ -324,7 +223,7 @@ export default function ProfilePage() {
                   <p className="mt-1 max-w-2xl text-sm text-gray-500">Manage your subscription plan and billing preferences.</p>
                 </div>
                 <div className="border-t border-gray-200 px-4 py-5 sm:p-6">
-                  <SubscriptionInfo />
+                  <SimpleSubscriptionInfo />
                 </div>
               </div>
             )}
@@ -340,7 +239,7 @@ export default function ProfilePage() {
                     <p>Security settings are managed through your Clerk account.</p>
                     <div className="mt-4">
                       <button 
-                        onClick={() => clerkUser?.openUserProfile()}
+                        onClick={() => openUserProfile()}
                         className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                       >
                         Manage Security Settings
