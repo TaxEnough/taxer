@@ -57,51 +57,144 @@ export default function TransactionList() {
   const [editedTransaction, setEditedTransaction] = useState<Transaction | null>(null);
   const [confirmBatchDelete, setConfirmBatchDelete] = useState(false);
   const { toast } = useToast();
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchTransactions();
   }, []);
 
   const fetchTransactions = async () => {
+    setLoading(true);
+    setError(null);
+    
     try {
-      setLoading(true);
-      const token = getAuthTokenFromClient();
-      
-      const response = await fetch('/api/transactions', {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to load transactions');
+      // Eğer kullanıcı bilgisi yoksa erken çık
+      if (!user) {
+        console.error('Kullanıcı oturum açmamış, işlemler alınamıyor');
+        setError('Please log in to view transactions.');
+        setLoading(false);
+        return;
       }
       
-      // Get API response
-      const apiData: ApiTransaction[] = await response.json();
+      if (!user.accountStatus || user.accountStatus === 'free') {
+        console.error('Kullanıcının premium hesabı yok:', user.accountStatus);
+        setError('Premium account required to view transactions.');
+        setLoading(false);
+        return;
+      }
       
-      // Transform API data to component format
-      const formattedTransactions: Transaction[] = apiData.map(item => ({
-        id: item.id,
-        ticker: item.stock || '',
-        date: item.sellDate || item.buyDate || '',
-        transactionType: item.type === 'Satış' ? 'SELL' : 'BUY',
-        shares: item.quantity || 0,
-        price: item.sellPrice || item.buyPrice || 0,
-        fees: item.tradingFees || 0,
-        notes: item.note || '',
-        profit: item.profit || 0
-      }));
+      console.log('İşlemler alınıyor, filtreler:', selectedStockFilter, selectedTypeFilter, dateRange);
       
-      setTransactions(formattedTransactions);
-    } catch (error) {
-      console.error('Transaction loading error:', error);
-      toast({
-        title: 'Error',
-        description: 'An error occurred while loading transactions.',
-        variant: 'destructive',
-      });
+      // API URL'ini oluştur
+      let url = '/api/transactions';
+      
+      // Query parametreleri ekle
+      const params = new URLSearchParams();
+      if (selectedStockFilter) params.append('stock', selectedStockFilter);
+      if (selectedTypeFilter) params.append('type', selectedTypeFilter);
+      if (dateRange.startDate) params.append('dateFrom', dateRange.startDate.toISOString().split('T')[0]);
+      if (dateRange.endDate) params.append('dateTo', dateRange.endDate.toISOString().split('T')[0]);
+      
+      // Parametreleri URL'e ekle
+      const queryString = params.toString();
+      if (queryString) url += `?${queryString}`;
+      
+      console.log('Fetch URL:', url);
+      
+      // 3 kez deneme mekanizması
+      let attempts = 0;
+      const maxAttempts = 3;
+      let lastError;
+      
+      while (attempts < maxAttempts) {
+        try {
+          attempts++;
+          
+          // Token yenileme için 1 saniye bekle (sadece yeniden deneme durumunda)
+          if (attempts > 1) {
+            console.log(`İşlemler ${attempts}. kez deneniyor, 1 saniye bekleniyor...`);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+          
+          // API'den işlemleri al
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${getToken()}`
+            }
+          });
+          
+          // Yanıt başarılı değilse hata fırlat
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `API error: ${response.status}`);
+          }
+          
+          // Yanıtı parse et
+          const data = await response.json();
+          console.log('İşlemler başarıyla alındı:', data.length);
+          
+          // İşlemleri tarihe göre sırala
+          const sortedTransactions = data.sort((a: Transaction, b: Transaction) => {
+            return new Date(b.sellDate).getTime() - new Date(a.sellDate).getTime();
+          });
+          
+          setTransactions(sortedTransactions);
+          setFilteredTransactions(sortedTransactions);
+          
+          // Hesaplama istatistiklerini güncelle
+          calculateStats(sortedTransactions);
+          
+          // Başarılı olunca döngüyü kır
+          break;
+          
+        } catch (error: any) {
+          lastError = error;
+          console.error(`API hatası (deneme ${attempts}/${maxAttempts}):`, error.message);
+          
+          // 403 Forbidden hatası durumunda yenileme denemesi yapma
+          if (error.message && error.message.includes('403')) {
+            console.log('Yetkilendirme hatası, cookie durumu kontrol ediliyor');
+            
+            // Kullanıcı bilgilerini yenilemeyi dene
+            try {
+              // Sayfayı tamamen yenilemeden kullanıcı bilgilerini güncelle
+              const refreshResponse = await fetch('/api/auth/verify', {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Bearer ${getToken()}`
+                }
+              });
+              
+              if (refreshResponse.ok) {
+                const refreshData = await refreshResponse.json();
+                console.log('Kullanıcı bilgileri yenilendi:', refreshData.user?.accountStatus);
+                
+                // Yeni bir token aldıysak, devam et
+                if (refreshData.user && refreshData.user.accountStatus !== 'free') {
+                  continue; // Döngünün sonraki yinelemesine geç
+                }
+              }
+            } catch (refreshError) {
+              console.error('Kullanıcı bilgisi yenileme hatası:', refreshError);
+            }
+            
+            // Yeniden deneme yapmayalım, bu bir yetki hatasıdır
+            break;
+          }
+        }
+      }
+      
+      // Tüm denemeler başarısız olduysa
+      if (attempts === maxAttempts && lastError) {
+        console.error('Maksimum deneme sayısına ulaşıldı, işlemler alınamadı');
+        setError('Failed to load transactions. Please try refreshing the page.');
+      }
+      
+    } catch (error: any) {
+      console.error('İşlem alınırken beklenmeyen hata:', error.message);
+      setError('An error occurred while loading transactions.');
     } finally {
       setLoading(false);
     }
