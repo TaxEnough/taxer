@@ -12,10 +12,10 @@ export default function LoginForm() {
   const [success, setSuccess] = useState(false);
   const router = useRouter();
 
-  // Başarılı girişten sonra yönlendirme
+  // Redirect after successful login
   useEffect(() => {
     if (success) {
-      // Hızlı yönlendirme için daha kısa bir süre kullanıyoruz
+      // Using a shorter time for faster redirection
       const timer = setTimeout(() => {
         router.push('/dashboard');
       }, 500);
@@ -31,73 +31,73 @@ export default function LoginForm() {
     
     // Validate form data
     if (!email || !password) {
-      setError('Lütfen email ve şifre girin');
+      setError('Please enter email and password');
       return;
     }
     
     setLoading(true);
     
     try {
-      // Send request to API - cache'leme devre dışı
+      // Send request to API - with cache disabled
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache', // Cache kontrolü
+          'Cache-Control': 'no-cache', // Cache control
         },
         body: JSON.stringify({ email, password }),
         credentials: 'include',
         cache: 'no-store'
       });
       
-      // Yanıtı JSON'a dönüştürmeye çalış
+      // Try to convert response to JSON
       let data;
       try {
         data = await response.json();
       } catch (jsonError) {
-        throw new Error('Sunucu yanıtı geçersiz format');
+        throw new Error('Invalid server response format');
       }
       
-      // Yanıt tamam mı kontrol et
+      // Check if response is okay
       if (!response.ok) {
-        const errorMsg = data.error || data.message || 'Giriş başarısız';
+        const errorMsg = data.error || data.message || 'Login failed';
         throw new Error(errorMsg);
       }
       
-      // Kullanıcı verileri doğru mu kontrol et
+      // Check if user data is correct
       if (!data.user || !data.token) {
-        throw new Error('Eksik sunucu yanıtı');
+        throw new Error('Incomplete server response');
       }
       
-      // Token'ı kaydet - sadece bir kez yap
+      // Save token - do it once
       try {
-        // Client auth lib ile ayarla - bu birden fazla yere kaydeder
+        // Set with client auth lib - this saves to multiple places
         setAuthTokenInClient(data.token);
         
-        // User bilgisini kaydet
+        // Save user info
         localStorage.setItem('user-info', JSON.stringify(data.user));
         localStorage.setItem('isLoggedIn', 'true');
         
-        // Giriş başarılı
+        // Login successful
         setSuccess(true);
         
-        // İşlem tamamlandı
+        // Operation completed
         setLoading(false);
         
-        // Dashboard'a yönlendir - but through the router.push in the useEffect
+        // Redirect to dashboard - through the router.push in useEffect
       } catch (storageError) {
         console.error('Storage error:', storageError);
-        throw new Error('Oturum bilgileri kaydedilemedi');
+        throw new Error('Could not save session information');
       }
     } catch (error: any) {
-      setError(error.message || 'Giriş başarısız');
+      setError(error.message || 'Login failed');
       setLoading(false);
     }
   };
 
   return (
     <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">Giriş</h2>
+      <h2 className="text-2xl font-bold text-gray-900 mb-6">Login</h2>
       
       {error && (
         <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
@@ -107,14 +107,14 @@ export default function LoginForm() {
       
       {success && (
         <div className="bg-green-50 border-l-4 border-green-500 p-4 mb-6">
-          <p className="text-green-700">Giriş başarılı! Yönlendiriliyor...</p>
+          <p className="text-green-700">Login successful! Redirecting...</p>
         </div>
       )}
       
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
           <label htmlFor="email" className="block text-gray-700 text-sm font-medium mb-2">
-            E-posta Adresi
+            Email Address
           </label>
           <input
             id="email"
@@ -129,7 +129,7 @@ export default function LoginForm() {
         
         <div className="mb-6">
           <label htmlFor="password" className="block text-gray-700 text-sm font-medium mb-2">
-            Şifre
+            Password
           </label>
           <input
             id="password"
@@ -154,27 +154,27 @@ export default function LoginForm() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                Giriş yapılıyor...
+                Logging in...
               </>
             ) : success ? (
-              'Yönlendiriliyor...'
+              'Redirecting...'
             ) : (
-              'Giriş Yap'
+              'Login'
             )}
           </button>
         </div>
       </form>
       
       <p className="mt-4 text-center text-sm text-gray-600">
-        Hesabınız yok mu?{' '}
+        Don't have an account?{' '}
         <a href="/register" className="text-primary-600 hover:text-primary-800">
-          Kaydol
+          Register
         </a>
       </p>
       
       <div className="mt-4 pt-4 border-t border-gray-200">
         <p className="text-center text-xs text-gray-500">
-          Giriş yaparken <a href="/privacy" className="text-primary-600 hover:text-primary-800">Gizlilik Politikası</a> ve <a href="/terms" className="text-primary-600 hover:text-primary-800">Kullanım Koşullarını</a> kabul etmiş olursunuz.
+          By logging in, you agree to our <a href="/privacy" className="text-primary-600 hover:text-primary-800">Privacy Policy</a> and <a href="/terms" className="text-primary-600 hover:text-primary-800">Terms of Service</a>.
         </p>
       </div>
     </div>
