@@ -1,12 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
+  reactStrictMode: false,
   swcMinify: true,
   experimental: {
-
+    optimizeCss: true,
   },
   // Firebase Admin SDK gibi Node.js modüllerini istemci tarafına derlememek için transpilePackages yapılandırması
   transpilePackages: [],
+  
+  // Sayfa geçişlerinin sorunsuz olması için yapılandırma
+  pageExtensions: ['tsx', 'ts', 'jsx', 'js'],
   
   // Alt alan adları (subdomain) için yapılandırma
   async rewrites() {
@@ -40,6 +43,16 @@ const nextConfig = {
         ...config.resolve.fallback,
       };
     }
+    
+    // Performans için ek optimizasyonlar
+    if (!isServer) {
+      config.optimization.splitChunks = {
+        chunks: 'all',
+        maxInitialRequests: 25,
+        minSize: 20000,
+      };
+    }
+    
     return config;
   },
 }
