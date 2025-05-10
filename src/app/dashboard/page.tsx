@@ -7,6 +7,7 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { getAuthTokenFromClient } from '@/lib/auth-client';
 import Link from 'next/link';
+import { useUser } from '@clerk/nextjs';
 
 // Lazy load edilmiş bileşenler için
 import dynamic from 'next/dynamic';
@@ -57,7 +58,8 @@ function LoadingSpinner() {
 }
 
 export default function DashboardPage() {
-  const { user, loading } = useAuth();
+  const { user: firebaseUser, loading: firebaseLoading } = useAuth();
+  const { isLoaded: isClerkLoaded, isSignedIn: isClerkSignedIn, user: clerkUser } = useUser();
   const router = useRouter();
   const [pageLoading, setPageLoading] = useState(true);
   
@@ -175,34 +177,37 @@ TSLA,Sell,7,200.50,2023-03-01,235.75,2023-07-15,1650.25,7.99`;
     
     // Debug loglama
     console.log('Dashboard sayfa başlatılıyor');
+    console.log('Clerk auth durumu:', { isClerkLoaded, isClerkSignedIn });
     
     if (typeof window !== 'undefined') {
       localStorage.setItem('isLoggedIn', 'true');
     }
     
-    // Token varsa sayfayı hemen göster
-    const token = getAuthTokenFromClient();
-    if (token) {
-      console.log('Token bulundu, sayfa yükleniyor');
-      setPageLoading(false);
-      return;
-    }
-    
-    // Diğer durumlar için loading state'i ayarla
-    if (!loading) {
-      if (user) {
-        console.log('Kullanıcı giriş yapmış, sayfa yükleniyor');
+    // İlk önce Clerk kimlik doğrulamasını kontrol et
+    if (isClerkLoaded) {
+      if (isClerkSignedIn) {
+        console.log('Clerk ile oturum açılmış');
         setPageLoading(false);
       } else {
-        console.log('Kullanıcı giriş yapmamış, login sayfasına yönlendiriliyor');
-        // URL yönlendirmesi ile sayfaya gitme
-        window.location.href = '/login';
+        // Eski Firebase token'ı kontrol et 
+        const token = getAuthTokenFromClient();
+        if (token || (firebaseUser && !firebaseLoading)) {
+          console.log('Firebase token/user bulundu');
+          setPageLoading(false);
+        } else {
+          console.log('Clerk veya Firebase ile giriş yapılmamış, giriş sayfasına yönlendiriliyor');
+          router.push('/login');
+        }
       }
+    } else if (!firebaseLoading && firebaseUser) {
+      // Clerk yüklenmemişse ama Firebase kullanıcısı varsa
+      console.log('Firebase ile oturum açılmış');
+      setPageLoading(false);
     }
-  }, [user, loading, router]);
+  }, [isClerkLoaded, isClerkSignedIn, firebaseUser, firebaseLoading, router]);
 
   // Yükleniyor durumu göster
-  if ((loading || pageLoading) && !getAuthTokenFromClient()) {
+  if ((!isClerkLoaded && firebaseLoading) || (pageLoading && !getAuthTokenFromClient() && !isClerkSignedIn)) {
     return (
       <>
         <Navbar />
@@ -217,7 +222,8 @@ TSLA,Sell,7,200.50,2023-03-01,235.75,2023-07-15,1650.25,7.99`;
     );
   }
 
-  const userName = user?.name || 'User';
+  // Kullanıcı ismini belirle (önce Clerk, yoksa Firebase)
+  const userName = clerkUser?.firstName || clerkUser?.username || firebaseUser?.name || 'User';
 
   return (
     <>
