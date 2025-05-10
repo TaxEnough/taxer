@@ -37,9 +37,6 @@ export default clerkMiddleware(async (auth, req) => {
   return NextResponse.next();
 });
 
-// Node.js runtime kullanımını belirt
-export const runtime = 'nodejs';
-
 export const config = {
   matcher: [
     // Skip Next.js internals and static files
