@@ -4,6 +4,7 @@ import '../styles/globals.css'
 import { Providers } from './providers'
 import LoadingTransition from '@/components/LoadingTransition'
 import React, { Suspense } from 'react'
+import { ClerkProvider } from '@clerk/nextjs'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -56,15 +57,17 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
-        <LoadingTransition />
-        <Providers>
-          <main className="min-h-screen">
-            {children}
-          </main>
-        </Providers>
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="en-US">
+        <body className={inter.className}>
+          <LoadingTransition />
+          <Providers>
+            <main className="min-h-screen">
+              {children}
+            </main>
+          </Providers>
+        </body>
+      </html>
+    </ClerkProvider>
   )
 } 

@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { UserButton, SignInButton, useUser } from '@clerk/nextjs';
 
 // Kullanıcı arayüzünü doğrudan Navbar içinde tanımlayarak tip uyumluluğunu sağlıyoruz
 interface User {
@@ -18,6 +19,7 @@ interface User {
 
 export default function Navbar() {
   const { user, logout } = useAuth();
+  const { isLoaded: isClerkLoaded, isSignedIn: isClerkSignedIn, user: clerkUser } = useUser();
   const pathName = usePathname();
   const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -34,6 +36,15 @@ export default function Navbar() {
   // Check if user has an active subscription
   useEffect(() => {
     const checkSubscription = async () => {
+      // Clerk entegrasyonu için
+      if (isClerkLoaded && isClerkSignedIn && clerkUser) {
+        // Clerk'teki kullanıcı bilgilerini kullan
+        const clerkHasSubscription = !!clerkUser.privateMetadata?.subscription;
+        setHasSubscription(clerkHasSubscription);
+        return;
+      }
+      
+      // Mevcut Firebase kontrolünü koru (geçiş süreci için)
       // Eğer zaten kontrol edilmişse ve kullanıcı değişmediyse tekrar kontrol etme
       if (subscriptionCheckedRef.current && user?.id) return;
       
@@ -125,7 +136,7 @@ export default function Navbar() {
     return () => {
       clearInterval(cacheInterval);
     };
-  }, [user]);
+  }, [user, isClerkLoaded, isClerkSignedIn, clerkUser]);
 
   // Handle scroll effect for navbar
   useEffect(() => {
@@ -145,6 +156,16 @@ export default function Navbar() {
     
   // Get display name when user changes
   useEffect(() => {
+    // Önce Clerk'ten bilgileri kontrol et
+    if (isClerkLoaded && isClerkSignedIn && clerkUser) {
+      const clerkName = clerkUser.firstName || clerkUser.username;
+      if (clerkName) {
+        setDisplayName(clerkName);
+        return;
+      }
+    }
+    
+    // Clerk'ten bilgi alınamazsa Firebase'e dön
     if (user && user.name) {
       setDisplayName(user.name);
     } else if (user && user.email) {
@@ -153,7 +174,7 @@ export default function Navbar() {
     } else {
       setDisplayName("User");
     }
-  }, [user]);
+  }, [user, isClerkLoaded, isClerkSignedIn, clerkUser]);
   
   // Function to toggle mobile menu
   const toggleMobileMenu = () => {
@@ -189,6 +210,13 @@ export default function Navbar() {
   // Function to get display name
   const getDisplayName = () => {
     if (displayName) return displayName;
+    
+    // Clerk kullanıcı bilgilerinden kontrol et
+    if (isClerkLoaded && isClerkSignedIn && clerkUser) {
+      return clerkUser.firstName || clerkUser.username || 'User';
+    }
+    
+    // Fallback Firebase
     if (user && user.name) return user.name;
     if (user && user.email) {
       const emailName = user.email.split('@')[0];
@@ -212,6 +240,23 @@ export default function Navbar() {
     { name: 'Pricing', href: '/pricing' },
     { name: 'Support', href: '/support' },
   ];
+
+  // User hesap durumunu gösteren bir fonksiyon
+  const getUserAccountStatus = () => {
+    // Clerk'ten kontrol et
+    if (isClerkLoaded && isClerkSignedIn && clerkUser) {
+      const subscription = clerkUser.privateMetadata?.subscription;
+      if (subscription?.status === 'active') {
+        return subscription.plan || 'Premium';
+      }
+    }
+    
+    // Firebase'den kontrol et
+    if (user?.accountStatus === 'premium') return 'Premium';
+    if (user?.accountStatus === 'basic') return 'Basic';
+    if (hasSubscription) return 'Premium';
+    return 'Free Plan';
+  };
   
   return (
     <nav className={`bg-white fixed w-full z-20 top-0 left-0 shadow-sm ${scrolled ? 'shadow-md' : ''}`}>
@@ -248,8 +293,9 @@ export default function Navbar() {
               >
                 About
               </Link>
-              {/* Premium sayfaları sadece aboneliği olan kullanıcılara göster */}
-              {user && hasSubscription && (
+              
+              {/* Premium linkler için koşullu gösterim */}
+              {(hasSubscription || (isClerkLoaded && isClerkSignedIn && clerkUser?.privateMetadata?.subscription)) && (
                 <>
                   <Link
                     href="/dashboard"
@@ -273,31 +319,9 @@ export default function Navbar() {
                   >
                     Transactions
                   </Link>
-                  <Link
-                    href="/reports"
-                    className={`${
-                      isLinkActive('/reports') 
-                        ? 'border-primary-500 text-gray-900' 
-                        : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-                    } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
-                    onClick={handleLinkClick}
-                  >
-                    Reports
-                  </Link>
                 </>
               )}
-              <Link
-                  href="/blog"
-                className={`${
-                  isLinkActive('/blog') 
-                    ? 'border-primary-500 text-gray-900' 
-                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-                } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
-                onClick={handleLinkClick}
-              >
-                Blog
-              </Link>
-              {/* Pricing linkini herkese göster */}
+              
               <Link
                 href="/pricing"
                 className={`${
@@ -309,85 +333,92 @@ export default function Navbar() {
               >
                 Pricing
               </Link>
-              <Link
-                href="/support"
-                className={`${
-                  isLinkActive('/support') 
-                    ? 'border-primary-500 text-gray-900' 
-                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-                } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
-                onClick={handleLinkClick}
-              >
-                Support
-              </Link>
             </div>
           </div>
-          
-          {/* User menu or login/register buttons */}
+
+          {/* User section */}
           <div className="hidden sm:ml-6 sm:flex sm:items-center">
-            {user ? (
-              <div className="ml-3 relative">
-                <div>
-                  <button
+            {isClerkLoaded ? (
+              isClerkSignedIn ? (
+                <div className="flex items-center space-x-4">
+                  <span className="text-sm text-gray-700 font-medium">
+                    {getUserAccountStatus()}
+                  </span>
+                  <UserButton afterSignOutUrl="/" />
+                </div>
+              ) : (
+                <SignInButton mode="modal">
+                  <button className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    Sign In
+                  </button>
+                </SignInButton>
+              )
+            ) : (
+              user ? (
+                <div className="relative" ref={menuRef}>
+                  <button 
+                    type="button" 
+                    className="relative bg-white flex text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                     onClick={toggleProfileMenu}
-                    className="bg-white flex text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                    id="user-menu-button"
-                    aria-expanded="false"
-                    aria-haspopup="true"
                   >
                     <span className="sr-only">Open user menu</span>
-                    <div className="h-8 w-8 rounded-full bg-primary-500 flex items-center justify-center text-white font-medium">
-                      {getDisplayName().charAt(0).toUpperCase()}
+                    <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-medium">
+                      {displayName.charAt(0).toUpperCase()}
                     </div>
                   </button>
+                  
+                  {/* Dropdown menu */}
+                  {profileMenuOpen && (
+                    <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 focus:outline-none">
+                      <div className="px-4 py-2 text-xs text-gray-500">
+                        Logged in as
+                      </div>
+                      <div className="px-4 py-2 text-sm font-medium border-b border-gray-100">
+                        {displayName}
+                        <p className="text-xs font-normal text-gray-500 mt-1">{user?.email}</p>
+                      </div>
+                      
+                      <Link 
+                        href="/profile" 
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" 
+                        onClick={handleLinkClick}
+                      >
+                        Your Profile
+                      </Link>
+                      
+                      <Link 
+                        href="/settings" 
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" 
+                        onClick={handleLinkClick}
+                      >
+                        Settings
+                      </Link>
+                      
+                      <button 
+                        className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        onClick={handleLogout}
+                      >
+                        Sign out
+                      </button>
+                    </div>
+                  )}
                 </div>
-                {profileMenuOpen && (
-                  <div 
-                    className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 focus:outline-none"
-                    role="menu"
-                    aria-orientation="vertical"
-                    aria-labelledby="user-menu-button"
-                    tabIndex={-1}
+              ) : (
+                <div className="flex space-x-2">
+                  <Link 
+                    href="/login" 
+                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                   >
-                    <Link
-                      href="/profile"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      role="menuitem"
-                      tabIndex={-1}
-                      id="user-menu-item-0"
-                      onClick={handleLinkClick}
-                    >
-                      Profile
-                    </Link>
-                    <button
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      role="menuitem"
-                      tabIndex={-1}
-                      id="user-menu-item-2"
-                      onClick={handleLogout}
-                    >
-                      Logout
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="flex space-x-4">
-                <Link
-                  href="/login"
-                  className="text-gray-800 hover:bg-gray-100 px-3 py-2 rounded-md text-sm font-medium"
-                  onClick={handleLinkClick}
-                >
-                  Login
-                </Link>
-                <Link
-                  href="/register"
-                  className="bg-primary-600 text-white hover:bg-primary-700 px-3 py-2 rounded-md text-sm font-medium"
-                  onClick={handleLinkClick}
-                >
-                  Register
-                </Link>
-              </div>
+                    Login
+                  </Link>
+                  <Link 
+                    href="/register" 
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                  >
+                    Sign up
+                  </Link>
+                </div>
+              )
             )}
           </div>
           
