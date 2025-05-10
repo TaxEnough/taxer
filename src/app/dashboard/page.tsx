@@ -6,14 +6,18 @@ import { useAuth } from '@/context/AuthContext';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { getAuthTokenFromClient } from '@/lib/auth-client';
-import dynamic from 'next/dynamic';
 import Link from 'next/link';
 
-// Dinamik olarak yüklenecek bileşenler
-const StockTaxCalculator = dynamic(() => import('@/components/dashboard/StockTaxCalculator'), {
-  loading: () => <div className="animate-pulse h-48 bg-gray-100 rounded-md"></div>,
-  ssr: false
-});
+// Lazy load edilmiş bileşenler için
+import dynamic from 'next/dynamic';
+
+// StockTaxCalculator bileşenini doğrudan import et
+import StockTaxCalculatorComponent from '@/components/dashboard/StockTaxCalculator';
+
+// StockTaxCalculator bileşeni için wrapper
+const StockTaxCalculator = (props: any) => {
+  return <StockTaxCalculatorComponent {...props} />;
+};
 
 // Trade veri tipi tanımı
 interface TradeData {
@@ -295,7 +299,7 @@ TSLA,Sell,7,200.50,2023-03-01,235.75,2023-07-15,1650.25,7.99`;
             {/* Sağ Panel - Lazy Load */}
             <div className="w-full lg:w-2/3">
               <div className="fallback-loading">
-                {calculatorStocks ? <StockTaxCalculator initialStocks={calculatorStocks} /> : <LoadingSpinner />}
+                {calculatorStocks && calculatorStocks.length > 0 ? <StockTaxCalculator initialStocks={calculatorStocks} /> : <LoadingSpinner />}
               </div>
             </div>
           </div>

@@ -12,16 +12,17 @@ export default function LoginForm() {
   const [success, setSuccess] = useState(false);
   const router = useRouter();
 
-  // Handle direct navigation after login
+  // Başarılı girişten sonra yönlendirme
   useEffect(() => {
     if (success) {
+      // Hızlı yönlendirme için daha kısa bir süre kullanıyoruz
       const timer = setTimeout(() => {
-        window.location.href = '/dashboard';
-      }, 1500);
+        router.push('/dashboard');
+      }, 500);
       
       return () => clearTimeout(timer);
     }
-  }, [success]);
+  }, [success, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,21 +31,23 @@ export default function LoginForm() {
     
     // Validate form data
     if (!email || !password) {
-      setError('Please enter email and password');
+      setError('Lütfen email ve şifre girin');
       return;
     }
     
     setLoading(true);
     
     try {
-      // Send request to API
+      // Send request to API - cache'leme devre dışı
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache', // Cache kontrolü
         },
         body: JSON.stringify({ email, password }),
         credentials: 'include',
+        cache: 'no-store'
       });
       
       // Yanıtı JSON'a dönüştürmeye çalış
@@ -52,80 +55,49 @@ export default function LoginForm() {
       try {
         data = await response.json();
       } catch (jsonError) {
-        throw new Error('Invalid server response format');
+        throw new Error('Sunucu yanıtı geçersiz format');
       }
       
       // Yanıt tamam mı kontrol et
       if (!response.ok) {
-        const errorMsg = data.error || data.message || 'Login failed';
+        const errorMsg = data.error || data.message || 'Giriş başarısız';
         throw new Error(errorMsg);
       }
       
       // Kullanıcı verileri doğru mu kontrol et
       if (!data.user || !data.token) {
-        throw new Error('Incomplete server response');
+        throw new Error('Eksik sunucu yanıtı');
       }
       
-      // Set the token from the API on the client side
-      if (data.token) {
-        try {
-          // Doğrudan document.cookie ile ayarla
-          const expiryDate = new Date();
-          expiryDate.setDate(expiryDate.getDate() + 7); // 7 gün
-          document.cookie = `auth-token=${data.token}; path=/; expires=${expiryDate.toUTCString()}`;
-        } catch (cookieError) {
-          console.error('Cookie set error:', cookieError);
-        }
+      // Token'ı kaydet - sadece bir kez yap
+      try {
+        // Client auth lib ile ayarla - bu birden fazla yere kaydeder
+        setAuthTokenInClient(data.token);
         
-        try {
-          // localStorage ile kaydet
-          localStorage.setItem('auth-token', data.token);
-          localStorage.setItem('user-info', JSON.stringify(data.user));
-          localStorage.setItem('isLoggedIn', 'true');
-        } catch (storageError) {
-          console.error('localStorage error:', storageError);
-        }
+        // User bilgisini kaydet
+        localStorage.setItem('user-info', JSON.stringify(data.user));
+        localStorage.setItem('isLoggedIn', 'true');
         
-        try {
-          // Client auth lib ile ayarla
-          setAuthTokenInClient(data.token);
-        } catch (clientAuthError) {
-          console.error('Client auth error:', clientAuthError);
-        }
+        // Giriş başarılı
+        setSuccess(true);
+        
+        // İşlem tamamlandı
+        setLoading(false);
+        
+        // Dashboard'a yönlendir - but through the router.push in the useEffect
+      } catch (storageError) {
+        console.error('Storage error:', storageError);
+        throw new Error('Oturum bilgileri kaydedilemedi');
       }
-      
-      // Check for token in different places
-      setTimeout(() => {
-        try {
-          // Cookie kontrolü
-          const cookies = document.cookie.split(';');
-          const authCookie = cookies.find(c => c.trim().startsWith('auth-token='));
-          
-          // localStorage kontrolü
-          const lsToken = localStorage.getItem('auth-token');
-          
-          // Her şey yolunda
-          if (authCookie || lsToken) {
-            setSuccess(true);
-          } else {
-            setError('Login successful but session storage failed. Please try refreshing the page.');
-            setLoading(false);
-          }
-        } catch (checkError) {
-          setError('An error occurred during login. Please try again.');
-          setLoading(false);
-        }
-      }, 1000);
-      
     } catch (error: any) {
-      setError(error.message || 'Login failed');
+      setError(error.message || 'Giriş başarısız');
       setLoading(false);
     }
   };
 
   return (
     <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">Login</h2>
+      <h2 className="text-2xl font-bold text-gray-900 mb-6">Giriş</h2>
       
       {error && (
         <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
@@ -135,14 +107,14 @@ export default function LoginForm() {
       
       {success && (
         <div className="bg-green-50 border-l-4 border-green-500 p-4 mb-6">
-          <p className="text-green-700">Login successful! Redirecting...</p>
+          <p className="text-green-700">Giriş başarılı! Yönlendiriliyor...</p>
         </div>
       )}
       
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
           <label htmlFor="email" className="block text-gray-700 text-sm font-medium mb-2">
-            Email Address
+            E-posta Adresi
           </label>
           <input
             id="email"
@@ -157,7 +129,7 @@ export default function LoginForm() {
         
         <div className="mb-6">
           <label htmlFor="password" className="block text-gray-700 text-sm font-medium mb-2">
-            Password
+            Şifre
           </label>
           <input
             id="password"
@@ -182,23 +154,29 @@ export default function LoginForm() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                Logging in...
+                Giriş yapılıyor...
               </>
             ) : success ? (
-              'Redirecting...'
+              'Yönlendiriliyor...'
             ) : (
-              'Login'
+              'Giriş Yap'
             )}
           </button>
         </div>
       </form>
       
       <p className="mt-4 text-center text-sm text-gray-600">
-        Don't have an account?{' '}
+        Hesabınız yok mu?{' '}
         <a href="/register" className="text-primary-600 hover:text-primary-800">
-          Register
+          Kaydol
         </a>
       </p>
+      
+      <div className="mt-4 pt-4 border-t border-gray-200">
+        <p className="text-center text-xs text-gray-500">
+          Giriş yaparken <a href="/privacy" className="text-primary-600 hover:text-primary-800">Gizlilik Politikası</a> ve <a href="/terms" className="text-primary-600 hover:text-primary-800">Kullanım Koşullarını</a> kabul etmiş olursunuz.
+        </p>
+      </div>
     </div>
   );
 } 

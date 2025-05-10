@@ -13,7 +13,8 @@ const COOKIE_NAME = 'auth-token';
 const premiumRoutes = ['/dashboard', '/transactions', '/reports'];
 
 export function middleware(request: NextRequest) {
-  console.log('Middleware executing for path:', request.nextUrl.pathname);
+  // Geliştirme amacıyla konsola yazmak performansı etkiliyor
+  // console.log('Middleware executing for path:', request.nextUrl.pathname);
   const { pathname } = request.nextUrl;
 
   // If on login or register page and token exists, redirect to dashboard
@@ -22,7 +23,7 @@ export function middleware(request: NextRequest) {
     if (token) {
       const user = verifyToken(token);
       if (user && user.userId) {
-        console.log('Already logged in, redirecting to dashboard');
+        // console.log('Already logged in, redirecting to dashboard');
         return NextResponse.redirect(new URL('/dashboard', request.url));
       }
     }
@@ -32,7 +33,7 @@ export function middleware(request: NextRequest) {
   if (protectedRoutes.some(route => pathname.startsWith(route))) {
     const token = request.cookies.get(COOKIE_NAME)?.value;
     if (!token) {
-      console.log('No token, redirecting to login');
+      // console.log('No token, redirecting to login');
       const url = new URL('/login', request.url);
       url.searchParams.set('redirect', pathname);
       return NextResponse.redirect(url);
@@ -44,47 +45,47 @@ export function middleware(request: NextRequest) {
   
   // If not a premium page, continue
   if (!isPremiumRoute) {
-    console.log('Not a premium route, continuing');
+    // console.log('Not a premium route, continuing');
     return NextResponse.next();
   }
 
-  // Token check
+  // Token check - sadece premium sayfalarda token içeriğini kontrol ediyoruz
   const authToken = request.cookies.get(COOKIE_NAME)?.value;
   if (!authToken) {
     // If no token, redirect to login
-    console.log('No token for premium route, redirecting to login');
+    // console.log('No token for premium route, redirecting to login');
     return redirectToLogin(request);
   }
 
-  // Verify token
+  // Verify token - payload içeriği kontrol edilir
   const payload = verifyToken(authToken);
-  console.log('Token payload:', payload);
+  // console.log('Token payload:', payload);
   
   // Check user information
   if (!payload || !payload.userId) {
-    console.log('Invalid token payload, redirecting to login');
+    // console.log('Invalid token payload, redirecting to login');
     return redirectToLogin(request);
   }
   
-  // Check subscription status
+  // Check subscription status - kullanıcının premium durumuna bakılır
   const accountStatus = payload.accountStatus;
-  console.log('User account status:', accountStatus);
+  // console.log('User account status:', accountStatus);
   
   // If accountStatus doesn't exist or is 'free'
   if (!accountStatus || accountStatus === 'free') {
-    console.log('Free account attempting to access premium route:', pathname);
+    // console.log('Free account attempting to access premium route:', pathname);
     // Hard redirect to 404 for free users
     return NextResponse.redirect(new URL('/404', request.url));
   }
   
   // If 'basic' or 'premium', continue
   if (accountStatus === 'basic' || accountStatus === 'premium') {
-    console.log('User has subscription, allowing access to premium route');
+    // console.log('User has subscription, allowing access to premium route');
     return NextResponse.next();
   }
   
   // Default: redirect to 404
-  console.log('Default case - redirecting to 404');
+  // console.log('Default case - redirecting to 404');
   return NextResponse.redirect(new URL('/404', request.url));
 }
 
@@ -95,7 +96,7 @@ function redirectToLogin(request: NextRequest) {
   return NextResponse.redirect(loginUrl);
 }
 
-// Define routes where middleware should run
+// Define routes where middleware should run - dar kapsamda çalıştıralım
 export const config = {
   matcher: [
     '/dashboard/:path*',

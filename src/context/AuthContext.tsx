@@ -1,13 +1,10 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
-import { getUserData } from '@/lib/auth-firebase';
 import { getAuthTokenFromClient, setAuthTokenInClient, removeAuthTokenFromClient } from '@/lib/auth-client';
 
-// Loglama seviyesini kontrol etmek için değişken
+// DEBUG_LOGS değişkenini tamamen kapatıyoruz
 const DEBUG_LOGS = false;
 
 interface User {
@@ -58,25 +55,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Loglama fonksiyonu
-  const logInfo = (message: string, data?: any) => {
-    if (DEBUG_LOGS) {
-      if (data) {
-        console.log(message, data);
-      } else {
-        console.log(message);
-      }
-    }
-  };
+  // Optimize loglama fonksiyonu
+  const logInfo = DEBUG_LOGS 
+    ? (message: string, data?: any) => {
+        if (data) {
+          console.log(message, data);
+        } else {
+          console.log(message);
+        }
+      } 
+    : () => {};
 
-  // Check cookies and get user info on client side
+  // Optimize edilmiş auth check - sadece gerektiğinde API çağrısı yapacak
   useEffect(() => {
-    logInfo('AuthProvider main useEffect running');
     let isMounted = true;
     
     // Aynı anda birden fazla auth check çalıştırmayı önle
     if (typeof window !== 'undefined' && window.__authCheckInProgress) {
-      logInfo('Auth check already in progress, skipping');
       return;
     }
     
@@ -88,19 +83,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       try {
         // İlk önce sessionStorage'dan veri yüklemeyi deneyelim
-        // Bu, sayfa yenilemelerinde API çağrısına gerek kalmadan hızlı yükleme sağlar
         if (typeof window !== 'undefined') {
           const cachedUserInfo = sessionStorage.getItem('user-premium-info');
           const cacheExpiryStr = sessionStorage.getItem('premium-cache-expiry');
           const now = Date.now();
           const cacheExpiry = cacheExpiryStr ? parseInt(cacheExpiryStr) : 0;
           
-          // Cache geçerli mi kontrol et (30 dakika = 1800000 ms)
-          const isCacheValid = cachedUserInfo && cacheExpiry > now;
-          
-          if (isCacheValid) {
-            logInfo('Using premium cache from sessionStorage, valid for', 
-              Math.round((cacheExpiry - now) / 60000));
+          // Cache geçerli mi kontrol et
+          if (cachedUserInfo && cacheExpiry > now) {
             try {
               const cachedUser = JSON.parse(cachedUserInfo);
               window.__userInfo = cachedUser;
@@ -111,75 +101,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setUser(cachedUser);
                 setLoading(false);
                 window.__authCheckInProgress = false;
-                return; // Session cache kullanıldı, API çağrısı yapmaya gerek yok
+                return;
               }
             } catch (e) {
               console.error('Failed to parse user info from sessionStorage:', e);
             }
-          } else if (cachedUserInfo) {
-            logInfo('Premium cache expired, will refresh from API');
           }
         }
         
-        // Check for tokens in multiple storage locations
+        // Token kontrolü - daha verimli hale getirildi
         const token = getAuthTokenFromClient();
-        const localStorageToken = localStorage.getItem('auth-token');
         const isLoggedInFlag = localStorage.getItem('isLoggedIn') === 'true';
-        const userInfoStr = localStorage.getItem('user-info');
         
-        logInfo('Auth check:', { 
-          tokenExists: !!token, 
-          lsTokenExists: !!localStorageToken,
-          isLoggedIn: isLoggedInFlag
-        });
+        // Kullanıcının oturum açmış olarak kabul edilmesi için token veya flag gerekli
+        const isAuthenticated = !!token || isLoggedInFlag;
         
-        // Use any available token
-        const effectiveToken = token || localStorageToken;
-        
-        // Consider user authenticated if any token exists or the flag is set
-        const isAuthenticated = !!effectiveToken || isLoggedInFlag;
-        
-        // Set global authentication state
         if (typeof window !== 'undefined') {
           window.__isAuthenticated = isAuthenticated;
           
-          // Check last token verification time to prevent too frequent API calls
+          // En son token doğrulama zamanını kontrol et - gereksiz API çağrılarını önlemek için
           const now = Date.now();
           const lastCheck = window.__lastTokenCheck || 0;
           
-          // API çağrılarını azalt: 5 dakika (300000 ms) bekle
-          const shouldRefetch = (now - lastCheck) > 300000;
+          // API çağrılarını azalt: 10 dakika (600000 ms) bekle 
+          const shouldRefetch = (now - lastCheck) > 600000;
           
-          logInfo('Global auth status:', window.__isAuthenticated ? 'logged in' : 'not logged in');
-          logInfo('Time since last token check:', Math.floor((now - lastCheck) / 1000));
-          
-          // Try to use stored user info from localStorage if available
-          if (userInfoStr && (!window.__userInfo || !user)) {
+          // LocalStorage'dan kullanıcı bilgilerini kullanmayı dene
+          const userInfoStr = localStorage.getItem('user-info');
+          if (userInfoStr && !user) {
             try {
               const parsedUserInfo = JSON.parse(userInfoStr);
               window.__userInfo = parsedUserInfo;
               
-              if (isMounted && !user) {
-                logInfo('Restoring user from localStorage:', parsedUserInfo);
+              if (isMounted) {
                 setUser(parsedUserInfo);
                 
-                // Subscription bilgisini sessionStorage'a kaydet (30 dakika geçerli)
+                // Premium bilgisini cache'le
                 if (parsedUserInfo.accountStatus) {
                   const expiry = now + 1800000; // 30 dakika
                   sessionStorage.setItem('user-premium-info', JSON.stringify(parsedUserInfo));
                   sessionStorage.setItem('premium-cache-expiry', expiry.toString());
                   window.__premiumCacheExpiry = expiry;
-                  logInfo('Premium status cached in session for 30 minutes');
                 }
                 
-                // If on protected page and not loading, stop here to prevent flicker
+                // Korumalı sayfadaysak ve yükleme yapmıyorsak, burada durup ekranın yanıp sönmesini önleyelim
                 if (protectedRoutes.some(route => pathname?.startsWith(route)) && !loading) {
                   setLoading(false);
                   window.__authCheckInProgress = false;
                   
-                  // Only make API call in background if needed
-                  if (shouldRefetch && effectiveToken) {
-                    verifyWithApi(effectiveToken);
+                  // Sadece gerekirse ve token varsa arka planda API çağrısı yap
+                  if (shouldRefetch && token) {
+                    verifyWithApi(token);
                   }
                   return;
                 }
@@ -189,9 +161,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
           }
           
-          // Use cached user if available and no new check is needed
+          // Hiç API çağrısı yapmadan sonucu dön - daha hızlı sayfa yükleme için
           if (window.__userInfo && !shouldRefetch && isAuthenticated) {
-            logInfo('Using cached user information');
             if (isMounted) {
               setUser(window.__userInfo);
               setLoading(false);
@@ -199,313 +170,161 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               return;
             }
           }
-          
-          // Update last check time
-          window.__lastTokenCheck = now;
         }
         
-        if (effectiveToken) {
-          // If token exists and enough time has passed, get user info from API
-          logInfo('Token exists, verifying with API...');
-          await verifyWithApi(effectiveToken);
-        } else if (isLoggedInFlag && userInfoStr) {
-          // Even without token, if localStorage says we're logged in and has user info
-          // Keep the user logged in on protected pages to avoid disruption
-          try {
-            const parsedUserInfo = JSON.parse(userInfoStr);
-            if (isMounted) {
-              logInfo('No token but localStorage has user info, maintaining session');
-              setUser(parsedUserInfo);
-              
-              // Subscription bilgisini sessionStorage'a kaydet (30 dakika geçerli)
-              if (parsedUserInfo.accountStatus) {
-                const now = Date.now();
-                const expiry = now + 1800000; // 30 dakika
-                sessionStorage.setItem('user-premium-info', JSON.stringify(parsedUserInfo));
-                sessionStorage.setItem('premium-cache-expiry', expiry.toString());
-                window.__premiumCacheExpiry = expiry;
-                logInfo('Premium status cached in session without token for 30 minutes');
-              }
-              
-              setLoading(false);
-              window.__authCheckInProgress = false;
-              return;
-            }
-          } catch (e) {
-            console.error('Failed to parse user info from isLoggedIn flag:', e);
-          }
+        // API çağrısı sadece aşağıdaki durumlarda yapılır:
+        // 1. Token var
+        // 2. Cache geçersiz
+        // 3. Mevcut bir kullanıcı bilgisi yok
+        if (token && (!window.__userInfo || shouldRefetch) && isAuthenticated) {
+          await verifyWithApi(token);
         } else {
-          // No token or local storage info means user is not logged in
-          logInfo('No authentication data, user is not logged in');
-          if (typeof window !== 'undefined') {
-            window.__userInfo = null;
-            // Session storage'daki premium bilgisini temizle
-            sessionStorage.removeItem('user-premium-info');
-            sessionStorage.removeItem('premium-cache-expiry');
-          }
+          // Token yoksa doğrulama başarısız oldu
           if (isMounted) {
             setUser(null);
-            localStorage.setItem('isLoggedIn', 'false');
             setLoading(false);
-            window.__authCheckInProgress = false;
             
-            // If we're on a protected page and no auth data, redirect to login page
+            // Korumalı bir rotadaysak ve token yoksa login'e yönlendir
             if (protectedRoutes.some(route => pathname?.startsWith(route))) {
-              logInfo('On protected page with no auth data, redirecting to login page');
               router.push('/login');
             }
           }
         }
       } catch (error) {
-        console.error('Error checking user status:', error);
+        console.error('Auth provider error:', error);
         if (isMounted) {
           setUser(null);
           setLoading(false);
-          if (typeof window !== 'undefined') {
-            window.__authCheckInProgress = false;
-          }
+        }
+      } finally {
+        if (typeof window !== 'undefined') {
+          window.__authCheckInProgress = false;
         }
       }
     };
     
-    // Separate API verification to avoid code duplication
+    // Optimize edilmiş token doğrulama fonksiyonu
     const verifyWithApi = async (token: string) => {
       try {
-        const response = await fetch('/api/auth/me', {
+        const response = await fetch('/api/auth/verify', {
+          method: 'GET',
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-            'X-Auth-Token': token
-          },
-          cache: 'no-store'
+            'Authorization': `Bearer ${token}`
+          }
         });
         
         if (response.ok) {
           const data = await response.json();
-          logInfo('User info received from API:', data);
           
-          // Cache the request result in global variable
-          const userInfo = {
-            id: data.id,
-            email: data.email,
-            name: data.name || data.email.split('@')[0],
-            accountStatus: (data.accountStatus || 'free') as 'free' | 'basic' | 'premium',
-          };
-          
-          if (typeof window !== 'undefined') {
-            window.__userInfo = userInfo;
-            window.__isAuthenticated = true;
-            window.__lastTokenCheck = Date.now();
-            window.__authCheckInProgress = false;
+          if (data.user) {
+            if (typeof window !== 'undefined') {
+              window.__userInfo = data.user;
+              window.__isAuthenticated = true;
+              window.__lastTokenCheck = Date.now();
+            }
             
-            // Premium bilgisini sessionStorage'a kaydet (30 dakika geçerli)
-            const now = Date.now();
-            const expiry = now + 1800000; // 30 dakika
-            sessionStorage.setItem('user-premium-info', JSON.stringify(userInfo));
-            sessionStorage.setItem('premium-cache-expiry', expiry.toString());
-            window.__premiumCacheExpiry = expiry;
-            logInfo('Premium status cached in session for 30 minutes from API');
-          }
-          
-          if (isMounted) {
-            setUser(userInfo);
+            // Kullanıcı bilgilerini localStorage'a kaydet
+            localStorage.setItem('user-info', JSON.stringify(data.user));
             
-            // Update localStorage
-            localStorage.setItem('isLoggedIn', 'true');
-            localStorage.setItem('user-info', JSON.stringify(userInfo));
+            // Subscription bilgisini sessionStorage'a kaydet (30 dakika geçerli)
+            if (data.user.accountStatus) {
+              const now = Date.now();
+              const expiry = now + 1800000; // 30 dakika
+              sessionStorage.setItem('user-premium-info', JSON.stringify(data.user));
+              sessionStorage.setItem('premium-cache-expiry', expiry.toString());
+              
+              if (typeof window !== 'undefined') {
+                window.__premiumCacheExpiry = expiry;
+              }
+            }
             
-            // Ensure token is saved in all places
-            setAuthTokenInClient(token);
-            
-            setLoading(false);
+            if (isMounted) {
+              setUser(data.user);
+              setLoading(false);
+            }
+          } else {
+            throw new Error('No user data found');
           }
         } else {
-          console.warn('API verification failed:', response.status);
+          // Token geçersiz - temizle ve yeniden yönlendir
+          removeAuthTokenFromClient();
+          localStorage.removeItem('user-info');
+          sessionStorage.removeItem('user-premium-info');
+          sessionStorage.removeItem('premium-cache-expiry');
           
-          // Use localStorage user info if available
-          const userInfoStr = localStorage.getItem('user-info');
-          
-          // Even if API verification fails, don't immediately log out on protected pages
-          // Trust localStorage if we have user info there
-          if (userInfoStr && protectedRoutes.some(route => pathname?.startsWith(route))) {
-            logInfo('Using local user info despite API verification failure');
-            try {
-              const fallbackUser = JSON.parse(userInfoStr);
-              // Ensure account status is properly typed
-              fallbackUser.accountStatus = (fallbackUser.accountStatus || 'free') as 'free' | 'basic' | 'premium';
-              
-              // Session cache'e kaydet
-              if (typeof window !== 'undefined') {
-                const now = Date.now();
-                const expiry = now + 1800000; // 30 dakika
-                sessionStorage.setItem('user-premium-info', JSON.stringify(fallbackUser));
-                sessionStorage.setItem('premium-cache-expiry', expiry.toString());
-                window.__premiumCacheExpiry = expiry;
-                window.__authCheckInProgress = false;
-                logInfo('Using fallback premium status in session for 30 minutes');
-              }
-              
-              if (isMounted) {
-                setUser(fallbackUser);
-                setLoading(false);
-              }
-              return;
-            } catch (e) {
-              console.error('Failed to parse fallback user info:', e);
-            }
-          }
-          
-          // Clear tokens only if API explicitly rejects with 401 AND we're not on a protected page
-          if (response.status === 401 && !protectedRoutes.some(route => pathname?.startsWith(route))) {
-            logInfo('Token rejected by API, clearing auth state');
-            removeAuthTokenFromClient();
-            // Session storage'daki premium bilgisini temizle
-            sessionStorage.removeItem('user-premium-info');
-            sessionStorage.removeItem('premium-cache-expiry');
-            
-            if (typeof window !== 'undefined') {
-              window.__userInfo = null;
-              window.__isAuthenticated = false;
-              window.__authCheckInProgress = false;
-            }
-            if (isMounted) {
-              setUser(null);
-              localStorage.setItem('isLoggedIn', 'false');
-            }
+          if (typeof window !== 'undefined') {
+            window.__userInfo = null;
+            window.__isAuthenticated = false;
           }
           
           if (isMounted) {
+            setUser(null);
             setLoading(false);
-            if (typeof window !== 'undefined') {
-              window.__authCheckInProgress = false;
+            
+            // Korumalı bir rotadaysak ve token geçersizse login'e yönlendir
+            if (protectedRoutes.some(route => pathname?.startsWith(route))) {
+              router.push('/login');
             }
           }
         }
       } catch (error) {
-        console.error('Error verifying token with API:', error);
-        // On network errors, keep the user logged in using localStorage info
-        const userInfoStr = localStorage.getItem('user-info');
-        if (userInfoStr && isMounted) {
-          try {
-            const fallbackUser = JSON.parse(userInfoStr);
-            
-            // Session cache'e kaydet - network hatası durumunda
-            if (typeof window !== 'undefined' && fallbackUser.accountStatus) {
-              const now = Date.now();
-              const expiry = now + 1800000; // 30 dakika
-              sessionStorage.setItem('user-premium-info', JSON.stringify(fallbackUser));
-              sessionStorage.setItem('premium-cache-expiry', expiry.toString());
-              window.__premiumCacheExpiry = expiry;
-              window.__authCheckInProgress = false;
-              logInfo('Using fallback premium status on network error');
-            }
-            
-            setUser(fallbackUser);
-          } catch (e) {
-            console.error('Failed to parse fallback user info on network error:', e);
-          }
+        console.error('API verification error:', error);
+        
+        // Token doğrulama hatası - temizle ve yönlendir
+        removeAuthTokenFromClient();
+        localStorage.removeItem('user-info');
+        
+        if (typeof window !== 'undefined') {
+          window.__userInfo = null;
+          window.__isAuthenticated = false;
         }
         
         if (isMounted) {
+          setUser(null);
           setLoading(false);
-          if (typeof window !== 'undefined') {
-            window.__authCheckInProgress = false;
+          
+          // Korumalı bir rotadaysak ve hata oluştuysa login'e yönlendir
+          if (protectedRoutes.some(route => pathname?.startsWith(route))) {
+            router.push('/login');
           }
         }
       }
     };
-    
+
     fetchUserData();
     
-    // Listen to Firebase Auth state
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      logInfo('Firebase auth state changed:', firebaseUser?.email || 'no session');
-      
-      // If there's a Firebase session but no user in context, update user info
-      if (firebaseUser && !user && isMounted) {
-        logInfo('Firebase session exists but no context user, updating information');
-        
-        // Check for a token before getting user info from API
-        const token = getAuthTokenFromClient();
-        if (!token) {
-          logInfo('No token found, creating from Firebase session');
-          // Generate token here or set user info directly
-          const userFromFirebase = {
-            id: firebaseUser.uid,
-            email: firebaseUser.email || '',
-            name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || '',
-            accountStatus: 'free' as 'free' | 'basic' | 'premium',
-          };
-          
-          setUser(userFromFirebase);
-          
-          // Save user info to localStorage and sessionStorage
-          localStorage.setItem('user-info', JSON.stringify(userFromFirebase));
-          localStorage.setItem('isLoggedIn', 'true');
-          
-          // Premium bilgisini sessionStorage'a kaydet (30 dakika geçerli)
-          if (typeof window !== 'undefined') {
-            const now = Date.now();
-            const expiry = now + 1800000; // 30 dakika
-            sessionStorage.setItem('user-premium-info', JSON.stringify(userFromFirebase));
-            sessionStorage.setItem('premium-cache-expiry', expiry.toString());
-            window.__premiumCacheExpiry = expiry;
-            window.__userInfo = userFromFirebase;
-            window.__isAuthenticated = true;
-            logInfo('Premium status cached from Firebase session');
-          }
-        }
-      }
-    });
-    
-    // Sayfa yüklendiğinde tek bir auth check yeterli, 
-    // daha sonra navigasyon değişimlerinde check yapmak için ayrı bir listener
-    const handleRouteChange = () => {
-      // Route değiştiğinde işlem başlatılmadığından emin olalım
-      if (typeof window !== 'undefined' && !window.__authCheckInProgress) {
-        // Sadece navigasyon yenileme, UI'yi kilitlemiyoruz
-        if (window.__userInfo) {
-          // Zaten kullanıcı bilgisi var, API çağrısına gerek yok
-          logInfo('Route changed, user info already available');
-        } else {
-          // Kullanıcı bilgisi yoksa hafif kontrol yap
-          logInfo('Route changed, checking auth state');
-          fetchUserData();
-        }
-      }
-    };
-    
-    // pathname değişikliklerini izle
-    if (pathname) {
-      logInfo('Pathname changed:', pathname);
-      handleRouteChange();
-    }
-    
-    // Set up periodic auth check (less frequent API calls)
-    const checkAuthInterval = setInterval(() => {
-      if (typeof window !== 'undefined' && window.__isAuthenticated && !window.__authCheckInProgress) {
-        const now = Date.now();
-        const lastCheck = window.__lastTokenCheck || 0;
-        
-        // Eski 2 dakika yerine 5 dakikaya çıkarıldı (300 saniye)
-        if ((now - lastCheck) > 300000) {
-          logInfo('Refreshing auth state after timeout');
-          fetchUserData();
-        }
-      }
-    }, 60000); // Check every minute if refresh is needed
-    
-    // Cleanup on unmount
-    return () => { 
+    return () => {
       isMounted = false;
-      clearInterval(checkAuthInterval);
-      unsubscribe();
-      // Temizlik yaparken flag'i sıfırla
-      if (typeof window !== 'undefined') {
-        window.__authCheckInProgress = false;
+    };
+  }, [user, loading, router, pathname]);
+
+  // Route değişikliklerini yönetmek için daha optimize edilmiş bir yaklaşım
+  useEffect(() => {
+    const handleRouteChange = () => {
+      // Eğer pathname yoksa veya zaten kontrol ediliyorsa işlem yapmayalım
+      if (!pathname || typeof window === 'undefined') return;
+      
+      const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
+      const isAuthRoute = authRoutes.some(route => pathname.startsWith(route));
+      
+      // Global auth durumuna bakalım
+      const isAuthenticated = window.__isAuthenticated === true;
+      
+      // Korumalı bir sayfadayız ve kimlik doğrulama yapılmamış
+      if (isProtectedRoute && !isAuthenticated && !loading) {
+        router.push('/login');
+        return;
+      }
+      
+      // Login/register sayfasındayız ve zaten giriş yapılmış
+      if (isAuthRoute && isAuthenticated && !loading) {
+        router.push('/dashboard');
+        return;
       }
     };
-  }, [pathname, router, user]);
+    
+    handleRouteChange();
+  }, [pathname, loading, router]);
 
   const login = async (email: string, password: string) => {
     setLoading(true);
@@ -516,40 +335,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ email, password }),
+        credentials: 'include',
       });
-
+      
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || 'Login failed');
+        throw new Error(data.message || data.error || 'Login failed');
       }
-
+      
       const data = await response.json();
-      logInfo('Login successful, user:', data.user);
       
-      // Save token on client side
       if (data.token) {
+        // Token'ı client tarafında ayarla
         setAuthTokenInClient(data.token);
-        localStorage.setItem('isLoggedIn', 'true');
+        
+        // Kullanıcı bilgilerini kaydet
+        localStorage.setItem('user-info', JSON.stringify(data.user));
+        
+        // Global durumu güncelle
         if (typeof window !== 'undefined') {
-          window.__isAuthenticated = true;
           window.__userInfo = data.user;
+          window.__isAuthenticated = true;
           window.__lastTokenCheck = Date.now();
-          
-          // Premium bilgisini sessionStorage'a kaydet (30 dakika geçerli)
-          const now = Date.now();
-          const expiry = now + 1800000; // 30 dakika
-          sessionStorage.setItem('user-premium-info', JSON.stringify(data.user));
-          sessionStorage.setItem('premium-cache-expiry', expiry.toString());
-          window.__premiumCacheExpiry = expiry;
-          logInfo('Premium status cached on login');
         }
+        
+        // State'i güncelle
+        setUser(data.user);
+        
+        // Dashboard'a yönlendir
+        router.push(data.redirectUrl || '/dashboard');
+      } else {
+        throw new Error('No token received');
       }
-      
-      setUser(data.user);
-      
-      // Use page reload to solve redirection issue
-      window.location.href = '/dashboard';
-      return;
     } catch (error: any) {
       console.error('Login error:', error);
       throw error;
@@ -557,7 +374,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
   };
-
+  
   const register = async (name: string, email: string, password: string) => {
     setLoading(true);
     try {
@@ -567,32 +384,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ name, email, password }),
+        credentials: 'include',
       });
-
+      
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || 'Registration failed');
+        throw new Error(data.message || data.error || 'Registration failed');
       }
-
-      const data = await response.json();
-      logInfo('Registration successful, user:', data.user);
       
-      // Save token on client side
+      const data = await response.json();
+      
       if (data.token) {
+        // Token'ı client tarafında ayarla
         setAuthTokenInClient(data.token);
-        localStorage.setItem('isLoggedIn', 'true');
+        
+        // Kullanıcı bilgilerini kaydet
+        localStorage.setItem('user-info', JSON.stringify(data.user));
+        
+        // Global durumu güncelle
         if (typeof window !== 'undefined') {
-          window.__isAuthenticated = true;
           window.__userInfo = data.user;
+          window.__isAuthenticated = true;
           window.__lastTokenCheck = Date.now();
         }
+        
+        // State'i güncelle
+        setUser(data.user);
+        
+        // Dashboard'a yönlendir
+        router.push(data.redirectUrl || '/dashboard');
+      } else {
+        throw new Error('No token received');
       }
-      
-      setUser(data.user);
-      
-      // Use page reload to solve redirection issue
-      window.location.href = '/dashboard';
-      return;
     } catch (error: any) {
       console.error('Registration error:', error);
       throw error;
@@ -600,59 +423,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
   };
-
+  
   const logout = async () => {
-    setLoading(true);
     try {
       await fetch('/api/auth/logout', {
         method: 'POST',
+        credentials: 'include',
       });
-      
-      // Clear cookie on client side
+    } catch (error) {
+      console.error('Logout API error:', error);
+    } finally {
+      // Her durumda client tarafındaki token ve bilgileri temizle
       removeAuthTokenFromClient();
-      localStorage.removeItem('isLoggedIn');
+      localStorage.removeItem('user-info');
+      sessionStorage.removeItem('user-premium-info');
+      sessionStorage.removeItem('premium-cache-expiry');
       
-      // Session storage'daki premium bilgisini temizle
+      // Global durumu güncelle
       if (typeof window !== 'undefined') {
-        window.__isAuthenticated = false;
         window.__userInfo = null;
-        sessionStorage.removeItem('user-premium-info');
-        sessionStorage.removeItem('premium-cache-expiry');
+        window.__isAuthenticated = false;
       }
       
+      // State'i güncelle
       setUser(null);
       
-      // Use page reload to solve redirection issue
-      window.location.href = '/login';
-      return;
-    } catch (error: any) {
-      console.error('Logout error:', error);
-      throw error;
-    } finally {
-      setLoading(false);
+      // Login sayfasına yönlendir
+      router.push('/login');
     }
   };
   
-  // Kullanıcı bilgilerini güncelleme fonksiyonu
   const updateUserProfile = (updatedUser: User) => {
     setUser(updatedUser);
+    
+    // LocalStorage'ı güncelle
+    localStorage.setItem('user-info', JSON.stringify(updatedUser));
+    
+    // Global state'i güncelle
     if (typeof window !== 'undefined') {
       window.__userInfo = updatedUser;
-      localStorage.setItem('user-info', JSON.stringify(updatedUser));
-      
-      // Premium bilgisini sessionStorage'da da güncelle
+    }
+    
+    // Subscription bilgisini sessionStorage'a güncelle
+    if (updatedUser.accountStatus) {
       const now = Date.now();
       const expiry = now + 1800000; // 30 dakika
       sessionStorage.setItem('user-premium-info', JSON.stringify(updatedUser));
       sessionStorage.setItem('premium-cache-expiry', expiry.toString());
-      window.__premiumCacheExpiry = expiry;
-      logInfo('Premium status updated in session cache');
+      
+      if (typeof window !== 'undefined') {
+        window.__premiumCacheExpiry = expiry;
+      }
     }
   };
 
-  // Context.Provider'a value prop'u geçerken object olarak inline tanımla
   return (
-    <AuthContext.Provider 
+    <AuthContext.Provider
       value={{
         user,
         loading,
