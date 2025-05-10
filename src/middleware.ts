@@ -40,7 +40,7 @@ export default clerkMiddleware((auth, req) => {
   // Korumalı rotalar için kimlik doğrulama kontrolü
   if (isProtectedRoute(req)) {
     // Kullanıcı oturum açmamışsa, login sayfasına yönlendir
-    if (!auth.userId) {
+    if (!auth?.userId) {
       return NextResponse.redirect(new URL('/login', req.url));
     }
     
@@ -50,7 +50,7 @@ export default clerkMiddleware((auth, req) => {
     
     if (isPremiumRoute) {
       // Kullanıcının abonelik bilgilerini al
-      const userMeta = auth.user?.publicMetadata || {};
+      const userMeta = auth?.user?.publicMetadata || {};
       const subscription = userMeta.subscription as any;
       
       // Premium erişimi kontrol et
