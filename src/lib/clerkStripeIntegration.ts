@@ -1,6 +1,6 @@
-import { clerkClient } from "@clerk/nextjs/server";
 import { auth } from "@clerk/nextjs/server";
 import { currentUser } from "@clerk/nextjs/server";
+import { clerkClient } from "@clerk/nextjs/server";
 
 // Subscription durumlarını temsil eden tipler
 export type SubscriptionStatus = 'active' | 'canceled' | 'past_due' | 'unpaid' | 'incomplete' | 'incomplete_expired' | 'trialing' | 'paused' | null;
@@ -28,11 +28,16 @@ export async function getUserSubscription(userId?: string): Promise<Subscription
   }
 
   try {
-    // Clerk'ten kullanıcı bilgilerini al
-    const user = await clerkClient.users.getUser(userId);
+    // Clerk'ten kullanıcı bilgilerini al - await ve then kullanılarak
+    const user = await fetch(`https://api.clerk.com/v1/users/${userId}`, {
+      headers: {
+        Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+      },
+    }).then(res => res.json());
     
     // Kullanıcının public ve private meta verilerini kontrol et
-    const subscription = (user.privateMetadata as any).subscription || (user.publicMetadata as any).subscription;
+    const subscription = (user.private_metadata?.subscription) || (user.public_metadata?.subscription);
     
     // Abonelik durumunu döndür
     if (subscription && subscription.status === 'active') {
@@ -69,18 +74,26 @@ export async function updateUserSubscription(
   }
 ): Promise<boolean> {
   try {
-    // Kullanıcı meta verilerini güncelle
-    await clerkClient.users.updateUser(userId, {
-      privateMetadata: {
-        subscription: {
-          status: subscriptionData.status,
-          plan: subscriptionData.plan,
-          id: subscriptionData.id,
-          currentPeriodEnd: subscriptionData.currentPeriodEnd
+    // Kullanıcı meta verilerini güncelle - fetch kullanarak
+    const response = await fetch(`https://api.clerk.com/v1/users/${userId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        private_metadata: {
+          subscription: {
+            status: subscriptionData.status,
+            plan: subscriptionData.plan,
+            id: subscriptionData.id,
+            currentPeriodEnd: subscriptionData.currentPeriodEnd
+          }
         }
-      }
+      }),
     });
-    return true;
+    
+    return response.ok;
   } catch (error) {
     console.error("Error updating user subscription in Clerk:", error);
     return false;
