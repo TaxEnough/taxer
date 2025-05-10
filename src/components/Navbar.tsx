@@ -353,76 +353,15 @@ export default function Navbar() {
               ) : (
                 <SignInButton mode="modal">
                   <button className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-                    Sign In
+                    Giriş Yap
                   </button>
                 </SignInButton>
               )
             ) : (
-              user ? (
-                <div className="relative" ref={menuRef}>
-                  <button 
-                    type="button" 
-                    className="relative bg-white flex text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                    onClick={toggleProfileMenu}
-                  >
-                    <span className="sr-only">Open user menu</span>
-                    <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-medium">
-                      {displayName.charAt(0).toUpperCase()}
-                    </div>
-                  </button>
-                  
-                  {/* Dropdown menu */}
-                  {profileMenuOpen && (
-                    <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 focus:outline-none">
-                      <div className="px-4 py-2 text-xs text-gray-500">
-                        Logged in as
-                      </div>
-                      <div className="px-4 py-2 text-sm font-medium border-b border-gray-100">
-                        {displayName}
-                        <p className="text-xs font-normal text-gray-500 mt-1">{user?.email}</p>
-                      </div>
-                      
-                      <Link 
-                        href="/profile" 
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" 
-                        onClick={handleLinkClick}
-                      >
-                        Your Profile
-                      </Link>
-                      
-                      <Link 
-                        href="/settings" 
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" 
-                        onClick={handleLinkClick}
-                      >
-                        Settings
-                      </Link>
-                      
-                      <button 
-                        className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                        onClick={handleLogout}
-                      >
-                        Sign out
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="flex space-x-2">
-                  <Link 
-                    href="/login" 
-                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                  >
-                    Login
-                  </Link>
-                  <Link 
-                    href="/register" 
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                  >
-                    Sign up
-                  </Link>
-                </div>
-              )
+              // Firebase UI'ı tamamen kaldırıyoruz
+              <div className="flex items-center space-x-2">
+                <div className="animate-pulse bg-gray-200 h-8 w-20 rounded-md"></div>
+              </div>
             )}
           </div>
           
@@ -487,7 +426,7 @@ export default function Navbar() {
             About
           </Link>
           {/* Premium sayfaları sadece aboneliği olan kullanıcılara göster */}
-          {user && hasSubscription && (
+          {(hasSubscription || (isClerkLoaded && isClerkSignedIn && (clerkUser as any)?.privateMetadata?.subscription)) && (
             <>
               <Link
                 href="/dashboard"
@@ -560,54 +499,46 @@ export default function Navbar() {
           </Link>
         </div>
         <div className="pt-4 pb-3 border-t border-gray-200">
-        {user ? (
+        {isClerkLoaded ? (
+          isClerkSignedIn ? (
             <>
-            <div className="flex items-center px-4">
-              <div className="flex-shrink-0">
+              <div className="flex items-center px-4">
+                <div className="flex-shrink-0">
                   <div className="h-10 w-10 rounded-full bg-primary-500 flex items-center justify-center text-white font-medium">
-                  {getDisplayName().charAt(0).toUpperCase()}
+                    {getDisplayName().charAt(0).toUpperCase()}
+                  </div>
+                </div>
+                <div className="ml-3">
+                  <div className="text-base font-medium text-gray-800">{getDisplayName()}</div>
+                  <div className="text-sm font-medium text-gray-500">{clerkUser?.primaryEmailAddress?.emailAddress || 'No email available'}</div>
                 </div>
               </div>
-              <div className="ml-3">
-                  <div className="text-base font-medium text-gray-800">{getDisplayName()}</div>
-                  <div className="text-sm font-medium text-gray-500">{user?.email || 'No email available'}</div>
-              </div>
-            </div>
-            <div className="mt-3 space-y-1">
+              <div className="mt-3 space-y-1">
                 <Link
-                href="/profile"
+                  href="/profile"
                   className="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"
                   onClick={handleLinkClick}
-              >
-                  Profile
+                >
+                  Profil
                 </Link>
-                <button
-                  className="block w-full text-left px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"
-                onClick={handleLogout}
-              >
-                Logout
-                </button>
-            </div>
+              </div>
             </>
-        ) : (
-            <div className="mt-3 space-y-1">
-              <Link
-                href="/login"
-                className="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"
-                onClick={handleLinkClick}
-              >
-                Login
-              </Link>
-              <Link
-                href="/register"
-                className="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"
-                onClick={handleLinkClick}
-              >
-                Register
-              </Link>
+          ) : (
+            <div className="mt-3 space-y-1 px-4">
+              <SignInButton mode="modal">
+                <button className="w-full text-left px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100">
+                  Giriş Yap
+                </button>
+              </SignInButton>
             </div>
-          )}
+          )
+        ) : (
+          // Firebase UI'ı kaldırıldı, yükleme ekranı göster
+          <div className="flex items-center justify-center py-4">
+            <div className="animate-pulse bg-gray-200 h-8 w-20 rounded-md"></div>
           </div>
+        )}
+        </div>
       </div>
     </nav>
   );
