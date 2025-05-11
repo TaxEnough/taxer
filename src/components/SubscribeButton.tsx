@@ -20,36 +20,64 @@ export default function SubscribeButton({ priceId, className = '', children }: S
       
       console.log('Starting subscription process for price ID:', priceId);
       
-      // URL'nin doğru olduğundan emin olalım
+      // URL'leri hazırla
       const successUrl = `${window.location.origin}/dashboard?subscription=success`;
       const cancelUrl = `${window.location.origin}/pricing?subscription=cancelled`;
       
-      // Ana API endpoint
-      const PRIMARY_API_URL = `/api/checkout`;
+      // Birden fazla API endpoint'i ayarla ve sırayla dene
+      // Bu Vercel'deki sorunları çözmek için fallback mekanizması oluşturur
+      const API_ENDPOINTS = [
+        '/api/checkout',
+        '/api/payment/checkout',
+        '/api/payment/create-checkout'
+      ];
       
-      console.log('Sending request to:', PRIMARY_API_URL);
+      let response = null;
+      let lastError = null;
       
-      // POST isteği yapalım
-      let response;
-      try {
-        response = await fetch(PRIMARY_API_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: JSON.stringify({
-            priceId,
-            successUrl,
-            cancelUrl
-          })
-        });
-      } catch (fetchError: any) {
-        console.error('Error fetching from primary API:', fetchError);
-        throw new Error(`Ödeme sistemi hatası: ${fetchError.message || 'Bilinmeyen hata'}. Lütfen daha sonra tekrar deneyin.`);
+      // Her endpoint'i sırayla dene, birinin başarılı olmasını bekle
+      for (const endpoint of API_ENDPOINTS) {
+        try {
+          console.log(`Attempting payment request to: ${endpoint}`);
+          
+          response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+              priceId,
+              successUrl,
+              cancelUrl
+            })
+          });
+          
+          console.log(`Response from ${endpoint}:`, { 
+            status: response.status,
+            statusText: response.statusText
+          });
+          
+          // İşlem başarılıysa döngüden çık
+          if (response.ok) {
+            console.log(`Successful response from ${endpoint}`);
+            break;
+          } else {
+            // Başarısız ama yanıt aldık, sonraki endpoint'i denemeden önce bu hata bilgisini sakla
+            lastError = new Error(`${endpoint} sunucusu ${response.status} hata kodu döndürdü: ${response.statusText}`);
+            console.error(`Error from ${endpoint}:`, lastError);
+          }
+        } catch (fetchError) {
+          // İstek hatası, sonraki endpoint'i dene
+          console.error(`Fetch error with ${endpoint}:`, fetchError);
+          lastError = fetchError;
+        }
       }
       
-      console.log('Response status:', response.status);
+      // Tüm endpoint'ler denendikten sonra hala başarılı yanıt yoksa hata fırlat
+      if (!response || !response.ok) {
+        throw lastError || new Error('Tüm ödeme endpoint\'leri başarısız oldu.');
+      }
       
       // Headers'ı güvenli bir şekilde log yapalım
       const headersObj: Record<string, string> = {};
@@ -63,19 +91,8 @@ export default function SubscribeButton({ priceId, className = '', children }: S
       if (!contentType || !contentType.includes('application/json')) {
         console.error('Non-JSON response received:', contentType);
         const responseText = await response.text();
-        console.error('Response body:', responseText.substring(0, 200) + '...');
-        throw new Error(`Sunucu ${response.status} döndürdü ve JSON yanıt vermedi. Detaylar için konsola bakın.`);
-      }
-      
-      // HTTP Status kodunu kontrol et
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Error response:', {
-          status: response.status,
-          statusText: response.statusText,
-          data: errorData
-        });
-        throw new Error(`Sunucu ${response.status} hata kodu döndürdü: ${errorData.error || response.statusText}`);
+        console.error('Response body:', responseText.substring(0, 300));
+        throw new Error(`Sunucu JSON yanıt vermedi. Detaylar için konsola bakın.`);
       }
       
       // Yanıtı JSON olarak parse et
@@ -98,7 +115,7 @@ export default function SubscribeButton({ priceId, className = '', children }: S
       console.error('Error subscribing:', error);
       
       // Türkçe hata mesajı
-      setError(`Ödeme sistemi hatası: ${error.message}. Lütfen daha sonra tekrar deneyin veya destek ile iletişime geçin.`);
+      setError(`Ödeme sistemi hatası: ${error.message || 'Beklenmeyen bir hata oluştu'}. Lütfen daha sonra tekrar deneyin veya destek ile iletişime geçin.`);
     } finally {
       setLoading(false);
     }
