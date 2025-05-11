@@ -94,7 +94,6 @@ export async function POST(req: NextRequest) {
         metadata: {
           userId: session.userId,
         },
-        customer_creation: 'always',
         subscription_data: {
           metadata: {
             userId: session.userId,
