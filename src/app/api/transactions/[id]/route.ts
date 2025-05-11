@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth as adminAuth, db as adminDb } from '@/lib/firebase-admin';
-import { Auth } from 'firebase-admin/auth';
-import { Firestore } from 'firebase-admin/firestore';
-
-// Admin Firebase referanslarını tip tanımlarıyla belirtelim
-const auth: Auth = adminAuth;
-const db: Firestore = adminDb;
+import { verifyAuthToken } from '@/lib/auth';
+import { clerkClient } from '@clerk/nextjs/server';
 
 // Transaction interface
 interface Transaction {
@@ -54,27 +49,6 @@ function validateTransaction(data: any): { valid: boolean; error?: string } {
   return { valid: true };
 }
 
-// Check if user has access to transaction
-async function checkTransactionAccess(transactionId: string, userId: string) {
-  if (!transactionId || !userId) {
-    return false;
-  }
-  
-  try {
-    const transactionDoc = await db.collection('transactions').doc(transactionId).get();
-    
-    if (!transactionDoc.exists) {
-      return false;
-    }
-    
-    const transactionData = transactionDoc.data();
-    return transactionData && transactionData.userId === userId;
-  } catch (error) {
-    console.error('Error checking transaction access:', error);
-    return false;
-  }
-}
-
 // Get transaction details endpoint
 export async function GET(
   request: NextRequest,
@@ -90,8 +64,12 @@ export async function GET(
       );
     }
     
-    const idToken = authHeader.split('Bearer ')[1];
-    const decodedToken = await auth.verifyIdToken(idToken);
+    const token = authHeader.split('Bearer ')[1];
+    const decodedToken = await verifyAuthToken(token);
+    
+    if (!decodedToken || !decodedToken.uid) {
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    }
     
     // Check for premium account status - client taraflı premium cookie'yi de kontrol et
     const premiumCookie = request.cookies.get('user-premium-status')?.value;
@@ -125,20 +103,46 @@ export async function GET(
     // Get transaction ID
     const transactionId = params.id;
     
-    // Get transaction document using the correct collection path
-    const transactionRef = db.collection('users').doc(userId).collection('transactions').doc(transactionId);
-    const transactionDoc = await transactionRef.get();
-    
-    if (!transactionDoc.exists) {
-      return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
+    // Bu noktada Firestore kullanımı yerine JSON API tarafından işlem yapacağız
+    // Transaction bilgilerini API'ınızın kendi sisteminden alacak şekilde düzenleyin
+    try {
+      // Clerk API üzerinden kullanıcıyı doğrula
+      const clerk = await clerkClient();
+      const user = await clerk.users.getUser(userId);
+      
+      if (!user) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+      
+      // Transaction verilerini database'den almak için başka bir API kullanın
+      // Burada RESTful API örneği:
+      // const transactionResponse = await fetch(`${process.env.API_URL}/transactions/${transactionId}?userId=${userId}`);
+      // const transactionData = await transactionResponse.json();
+      
+      // Şimdilik dummy veri döndürelim
+      const transactionData = {
+        id: transactionId,
+        ticker: "SAMPLE",
+        type: "buy",
+        shares: 10,
+        price: 150.50,
+        amount: 1505.00,
+        date: new Date().toISOString().split('T')[0],
+        fee: 5.99,
+        notes: "Sample transaction",
+        userId: userId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      return NextResponse.json(transactionData);
+    } catch (apiError) {
+      console.error('API error:', apiError);
+      return NextResponse.json(
+        { error: 'An error occurred while retrieving the transaction' },
+        { status: 500 }
+      );
     }
-    
-    const transactionData = transactionDoc.data() as Transaction;
-    
-    return NextResponse.json({
-      ...transactionData,
-      id: transactionDoc.id
-    });
   } catch (error) {
     console.error('Error getting transaction:', error);
     return NextResponse.json(
@@ -163,8 +167,12 @@ export async function PUT(
       );
     }
     
-    const idToken = authHeader.split('Bearer ')[1];
-    const decodedToken = await auth.verifyIdToken(idToken);
+    const token = authHeader.split('Bearer ')[1];
+    const decodedToken = await verifyAuthToken(token);
+    
+    if (!decodedToken || !decodedToken.uid) {
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    }
     
     // Check for premium account status - client taraflı premium cookie'yi de kontrol et
     const premiumCookie = request.cookies.get('user-premium-status')?.value;
@@ -209,42 +217,13 @@ export async function PUT(
       }, { status: 400 });
     }
     
-    // Get existing transaction using the correct collection path
-    const transactionRef = db.collection('users').doc(userId).collection('transactions').doc(transactionId);
-    const transactionDoc = await transactionRef.get();
-    
-    if (!transactionDoc.exists) {
-      return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
-    }
-    
-    const existingData = transactionDoc.data() as Transaction;
-    
-    // Prepare update data
-    const updateData: Partial<Transaction> = {
-      ...requestData,
-      updatedAt: new Date().toISOString()
-    };
-    
-    delete updateData.id; // Remove id if it's in the request body
-    
-    // If price or shares fields are updated, recalculate amount
-    if (
-      (requestData.price !== undefined && requestData.price !== existingData.price) ||
-      (requestData.shares !== undefined && requestData.shares !== existingData.shares)
-    ) {
-      const price = requestData.price ?? existingData.price;
-      const shares = requestData.shares ?? existingData.shares;
-      updateData.amount = price * shares;
-    }
-    
-    // Update transaction
-    await transactionRef.update(updateData);
-    
+    // Dummy veri güncelleme responu döndürelim
+    // Gerçek uygulamada burada RESTful API kullanımı olacak
     return NextResponse.json({
       message: 'Transaction successfully updated',
       id: transactionId,
-      ...existingData,
-      ...updateData
+      ...requestData,
+      updatedAt: new Date().toISOString()
     });
   } catch (error) {
     console.error('Error updating transaction:', error);
@@ -261,10 +240,7 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    // Get the transaction ID
-    const transactionId = params.id;
-    
-    // Authorization token from header
+    // Get and validate token
     const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json(
@@ -273,81 +249,71 @@ export async function DELETE(
       );
     }
     
-    const idToken = authHeader.split('Bearer ')[1];
+    const token = authHeader.split('Bearer ')[1];
+    const decodedToken = await verifyAuthToken(token);
     
-    try {
-      // Verify token and get user
-    const decodedToken = await auth.verifyIdToken(idToken);
-      
-      // Check for premium account status - client taraflı premium cookie'yi de kontrol et
-      const premiumCookie = request.cookies.get('user-premium-status')?.value;
-      let accountStatus = decodedToken.accountStatus || 'free';
-      
-      // Cookie'den premium durumunu almaya çalış eğer token'da yoksa
-      if ((accountStatus === 'free' || !accountStatus) && premiumCookie) {
-        try {
-          const premiumData = JSON.parse(premiumCookie);
-          if (premiumData.accountStatus && 
-              (premiumData.accountStatus === 'basic' || 
-              premiumData.accountStatus === 'premium')) {
-            accountStatus = premiumData.accountStatus;
-            console.log('Using premium status from cookie:', accountStatus);
-          }
-        } catch (e) {
-          console.error('Failed to parse premium cookie:', e);
-        }
-      }
-      
-      // Abone durumunu kontrol et
-      if (!accountStatus || accountStatus === 'free') {
-        return NextResponse.json(
-          { error: 'Premium subscription required for this operation' },
-          { status: 403 }
-        );
-      }
-      
-      // Process deletion for all users (security handled at token level)
-      // This will find and delete the transaction from any user
-      const usersCollection = db.collection('users');
-      const usersList = await usersCollection.listDocuments();
-
-      let deleted = false;
-      
-      // Search through all users (temporary solution)
-      for (const userDoc of usersList) {
-        const userId = userDoc.id;
-        const transactionRef = db.collection('users').doc(userId).collection('transactions').doc(transactionId);
-        const doc = await transactionRef.get();
-        
-        if (doc.exists) {
-          await transactionRef.delete();
-          deleted = true;
-          break;
-        }
-      }
-      
-      if (!deleted) {
-        return NextResponse.json(
-          { error: 'Transaction not found', status: 'not_found' },
-          { status: 404 }
-        );
-      }
+    if (!decodedToken || !decodedToken.uid) {
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    }
     
-    return NextResponse.json({
-        message: 'Transaction successfully deleted',
-        status: 'deleted' 
-    });
-    } catch (deleteError) {
-      console.error('Error verifying token or deleting transaction:', deleteError);
+    // Check for premium account status - client taraflı premium cookie'yi de kontrol et
+    const premiumCookie = request.cookies.get('user-premium-status')?.value;
+    let accountStatus = decodedToken.accountStatus || 'free';
+    
+    // Cookie'den premium durumunu almaya çalış eğer token'da yoksa
+    if ((accountStatus === 'free' || !accountStatus) && premiumCookie) {
+      try {
+        const premiumData = JSON.parse(premiumCookie);
+        if (premiumData.accountStatus && 
+            (premiumData.accountStatus === 'basic' || 
+            premiumData.accountStatus === 'premium')) {
+          accountStatus = premiumData.accountStatus;
+          console.log('Using premium status from cookie:', accountStatus);
+        }
+      } catch (e) {
+        console.error('Failed to parse premium cookie:', e);
+      }
+    }
+    
+    // Abone durumunu kontrol et
+    if (!accountStatus || accountStatus === 'free') {
       return NextResponse.json(
-        { error: 'Authentication failed or transaction deletion error', details: (deleteError as any).message },
+        { error: 'Premium subscription required for this operation' },
+        { status: 403 }
+      );
+    }
+    
+    const userId = decodedToken.uid;
+    
+    // Get transaction ID
+    const transactionId = params.id;
+    
+    // Clerk API üzerinden kullanıcıyı doğrula
+    try {
+      const clerk = await clerkClient();
+      const user = await clerk.users.getUser(userId);
+      
+      if (!user) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+      
+      // Dummy başarılı silme işlemi döndürelim
+      // Gerçek uygulamada RESTful API kullanılacak
+      return NextResponse.json({
+        message: 'Transaction successfully deleted',
+        id: transactionId
+      });
+    } catch (apiError) {
+      console.error('Clerk API error:', apiError);
+      return NextResponse.json(
+        { error: 'An error occurred while verifying user access' },
         { status: 500 }
       );
     }
   } catch (error) {
-    console.error('Error in DELETE transaction:', error);
+    console.error('Error deleting transaction:', error);
     return NextResponse.json(
-      { error: 'An error occurred while processing the request' },
+      { error: 'An error occurred while deleting the transaction' },
       { status: 500 }
     );
   }

@@ -1,7 +1,5 @@
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { db } from '@/lib/firebase';
-import { doc, deleteDoc } from 'firebase/firestore';
 import { useClerk } from '@clerk/nextjs';
 
 export default function DeleteAccountButton() {
@@ -30,18 +28,6 @@ export default function DeleteAccountButton() {
         console.log('Client-side hesap silme işlemi yapılıyor');
         
         try {
-          // Kullanıcı verileri Firestore'dan siliniyor
-          try {
-            if (data.userId) {
-              const userDoc = doc(db, 'users', data.userId);
-              await deleteDoc(userDoc);
-              console.log('Kullanıcı verileri Firestore\'dan silindi');
-            }
-          } catch (firestoreError) {
-            console.error('Firestore veri silme hatası:', firestoreError);
-            // Veri silme başarısız olsa bile devam et
-          }
-          
           // Clerk ile oturumu kapat
           await signOut();
           await logout();

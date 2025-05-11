@@ -2,11 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { db } from '@/lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
 import { UserButton, SignInButton, useUser } from '@clerk/nextjs';
 
 // Kullanıcı arayüzünü doğrudan Navbar içinde tanımlayarak tip uyumluluğunu sağlıyoruz
@@ -38,105 +35,20 @@ export default function Navbar() {
     const checkSubscription = async () => {
       // Clerk entegrasyonu için
       if (isClerkLoaded && isClerkSignedIn && clerkUser) {
-        // Clerk'teki kullanıcı bilgilerini kullan - any tipini kullanarak tip hatalarını önlüyoruz
+        // Clerk'teki kullanıcı bilgilerini kullan
         const userWithMetadata = clerkUser as any;
         const clerkHasSubscription = !!(userWithMetadata?.publicMetadata?.subscription || userWithMetadata?.privateMetadata?.subscription);
         setHasSubscription(clerkHasSubscription);
+        subscriptionCheckedRef.current = true;
         return;
       }
       
-      // Mevcut Firebase kontrolünü koru (geçiş süreci için)
-      // Eğer zaten kontrol edilmişse ve kullanıcı değişmediyse tekrar kontrol etme
-      if (subscriptionCheckedRef.current && user?.id) return;
-      
-      if (user && user.id) {
-        try {
-          // Kullanıcının abonelik durumunu kontrol et
-          // 1. Önce user nesnesindeki accountStatus'e bakıyoruz (token'dan gelir)
-          if (user?.accountStatus === 'basic' || user?.accountStatus === 'premium') {
-            setHasSubscription(true);
-            subscriptionCheckedRef.current = true;
-            return;
-          }
-
-          // 2. Firestore'dan kontrol et (sadece token'da accountStatus bulunamazsa)
-          // Bu işlemi sadece bir kez yapmak için, sonucu sessionStorage'a kaydediyoruz
-          const sessionKey = `subscription-${user.id}`;
-          const cachedStatus = sessionStorage.getItem(sessionKey);
-          
-          if (cachedStatus) {
-            setHasSubscription(cachedStatus === 'true');
-            subscriptionCheckedRef.current = true;
-            return;
-          }
-          
-          // Önbellek bulunamadı, Firestore'dan kontrol et
-          const userRef = doc(db, 'users', user.id);
-          const userSnap = await getDoc(userRef);
-          
-          if (userSnap.exists()) {
-            const userData = userSnap.data();
-            
-            // Firestore'da subscriptionStatus veya accountStatus kontrolü
-            const isPremium = userData.subscriptionStatus === 'active' || 
-                              userData.accountStatus === 'basic' || 
-                              userData.accountStatus === 'premium';
-                              
-            // Sonucu sessionStorage'a kaydet (10 dakika geçerli)
-            sessionStorage.setItem(sessionKey, isPremium ? 'true' : 'false');
-            
-            // Cache süresini ayarla (10 dakika)
-            const expiry = Date.now() + 600000; // 10 dakika
-            sessionStorage.setItem(`${sessionKey}-expiry`, expiry.toString());
-            
-            setHasSubscription(isPremium);
-            subscriptionCheckedRef.current = true;
-            return;
-          }
-          
-          // Hiçbir premium üyelik özelliği bulunamadı
-          sessionStorage.setItem(sessionKey, 'false');
-          setHasSubscription(false);
-          subscriptionCheckedRef.current = true;
-        } catch (error) {
-          console.error("Error checking subscription:", error);
-          setHasSubscription(false);
-        }
-      } else {
-        setHasSubscription(false);
-        subscriptionCheckedRef.current = false; // Kullanıcı çıkış yapmış, referansı sıfırla
-      }
+      // Kullanıcı girişi olmadığında veya kontrol edilemediğinde
+      setHasSubscription(false);
+      subscriptionCheckedRef.current = false;
     };
     
-    // Periyodik önbellek kontrolü (10 dakikada bir)
-    const checkCache = () => {
-      if (!user?.id) return;
-      
-      const sessionKey = `subscription-${user.id}`;
-      const expiryStr = sessionStorage.getItem(`${sessionKey}-expiry`);
-      
-      if (expiryStr) {
-        const expiry = parseInt(expiryStr);
-        const now = Date.now();
-        
-        // Önbellek süresi dolduysa, temizle ve yeniden kontrol et
-        if (now > expiry) {
-          sessionStorage.removeItem(sessionKey);
-          sessionStorage.removeItem(`${sessionKey}-expiry`);
-          subscriptionCheckedRef.current = false; // Yeniden kontrol etmeyi zorla
-          checkSubscription();
-        }
-      }
-    };
-  
     checkSubscription();
-    
-    // 10 dakikada bir önbelleği kontrol et
-    const cacheInterval = setInterval(checkCache, 600000); // 10 dakika
-    
-    return () => {
-      clearInterval(cacheInterval);
-    };
   }, [user, isClerkLoaded, isClerkSignedIn, clerkUser]);
 
   // Handle scroll effect for navbar
@@ -166,7 +78,7 @@ export default function Navbar() {
       }
     }
     
-    // Clerk'ten bilgi alınamazsa Firebase'e dön
+    // Clerk'ten bilgi alınamazsa Auth Context'ten dön
     if (user && user.name) {
       setDisplayName(user.name);
     } else if (user && user.email) {
@@ -217,7 +129,7 @@ export default function Navbar() {
       return clerkUser.firstName || clerkUser.username || 'User';
     }
     
-    // Fallback Firebase
+    // Fallback
     if (user && user.name) return user.name;
     if (user && user.email) {
       const emailName = user.email.split('@')[0];
@@ -254,11 +166,9 @@ export default function Navbar() {
       return 'Free Plan';
     }
     
-    // Firestore'dan kontrol
-    if (user) {
-      if (user.accountStatus === 'basic') return 'Basic';
-      if (user.accountStatus === 'premium') return 'Premium';
-    }
+    // Fallback kontrol
+    if (user && (user as any).accountStatus === 'basic') return 'Basic';
+    if (user && (user as any).accountStatus === 'premium') return 'Premium';
     return 'Free Plan';
   };
   
@@ -269,14 +179,14 @@ export default function Navbar() {
           {/* Logo and main nav links */}
           <div className="flex items-center">
             <div className="flex-shrink-0 flex items-center">
-              <Link href="/" className="flex items-center" onClick={handleLinkClick}>
+              <Link href="/" className="flex items-center" onClick={handleLinkClick} passHref>
                 <img src="/images/logo_text.png" alt="Logo" width={32} height={32} className="h-8 w-auto" />
                 <span className="ml-2 text-xl font-bold text-gray-800"></span>
               </Link>
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-              <Link
-                href="/"
+              <Link href="/" 
+                passHref
                 className={`${
                   isLinkActive('/') 
                     ? 'border-primary-500 text-gray-900' 
@@ -286,8 +196,8 @@ export default function Navbar() {
               >
                 Home
               </Link>
-              <Link
-                href="/about"
+              <Link href="/about"
+                passHref
                 className={`${
                   isLinkActive('/about') 
                     ? 'border-primary-500 text-gray-900' 
@@ -301,8 +211,8 @@ export default function Navbar() {
               {/* Premium linkler için koşullu gösterim */}
               {(hasSubscription || (isClerkLoaded && isClerkSignedIn && (clerkUser as any)?.privateMetadata?.subscription)) && (
                 <>
-                  <Link
-                    href="/dashboard"
+                  <Link href="/dashboard"
+                    passHref
                     className={`${
                       isLinkActive('/dashboard') 
                         ? 'border-primary-500 text-gray-900' 
@@ -312,8 +222,8 @@ export default function Navbar() {
                   >
                     Dashboard
                   </Link>
-                  <Link
-                    href="/transactions"
+                  <Link href="/transactions"
+                    passHref
                     className={`${
                       isLinkActive('/transactions') 
                         ? 'border-primary-500 text-gray-900' 
@@ -326,8 +236,8 @@ export default function Navbar() {
                 </>
               )}
               
-              <Link
-                href="/pricing"
+              <Link href="/pricing"
+                passHref
                 className={`${
                   isLinkActive('/pricing') 
                     ? 'border-primary-500 text-gray-900' 
@@ -358,7 +268,7 @@ export default function Navbar() {
                 </SignInButton>
               )
             ) : (
-              // Firebase UI'ı tamamen kaldırıyoruz
+              // Yükleme göstergesi
               <div className="flex items-center space-x-2">
                 <div className="animate-pulse bg-gray-200 h-8 w-20 rounded-md"></div>
               </div>
@@ -403,141 +313,85 @@ export default function Navbar() {
       {/* Mobile menu, show/hide based on menu state */}
       <div className={`${mobileMenuOpen ? 'block' : 'hidden'} sm:hidden`}>
         <div className="pt-2 pb-3 space-y-1">
-          <Link
-            href="/"
-            className={`${
-              isLinkActive('/') 
-                ? 'bg-primary-50 border-primary-500 text-primary-700' 
-                : 'border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800'
-            } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
-            onClick={handleLinkClick}
-          >
-            Home
-          </Link>
-          <Link
-            href="/about"
-            className={`${
-              isLinkActive('/about') 
-                ? 'bg-primary-50 border-primary-500 text-primary-700' 
-                : 'border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800'
-            } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
-            onClick={handleLinkClick}
-          >
-            About
-          </Link>
-          {/* Premium sayfaları sadece aboneliği olan kullanıcılara göster */}
-          {(hasSubscription || (isClerkLoaded && isClerkSignedIn && (clerkUser as any)?.privateMetadata?.subscription)) && (
-            <>
-              <Link
-                href="/dashboard"
-                className={`${
-                  isLinkActive('/dashboard') 
-                    ? 'bg-primary-50 border-primary-500 text-primary-700' 
-                    : 'border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800'
-                } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
-                onClick={handleLinkClick}
-              >
-                Dashboard
-              </Link>
-              <Link
-                href="/transactions"
-                className={`${
-                  isLinkActive('/transactions') 
-                    ? 'bg-primary-50 border-primary-500 text-primary-700' 
-                    : 'border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800'
-                } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
-                onClick={handleLinkClick}
-              >
-                Transactions
-              </Link>
-              <Link
-                href="/reports"
-                className={`${
-                  isLinkActive('/reports') 
-                    ? 'bg-primary-50 border-primary-500 text-primary-700' 
-                    : 'border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800'
-                } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
-                onClick={handleLinkClick}
-              >
-                Reports
-              </Link>
-            </>
-          )}
-          <Link
-            href="/blog"
-            className={`${
-              isLinkActive('/blog') 
-                ? 'bg-primary-50 border-primary-500 text-primary-700' 
-                : 'border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800'
-            } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
-            onClick={handleLinkClick}
-          >
-            Blog
-          </Link>
-          {/* Pricing linkini herkese göster */}
-          <Link
-            href="/pricing"
-            className={`${
-              isLinkActive('/pricing') 
-                ? 'bg-primary-50 border-primary-500 text-primary-700' 
-              : 'border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800'
-            } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
-            onClick={handleLinkClick}
-          >
-            Pricing
-          </Link>
-          <Link
-            href="/support"
-            className={`${
-              isLinkActive('/support') 
-                ? 'bg-primary-50 border-primary-500 text-primary-700' 
-                : 'border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800'
-            } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
-            onClick={handleLinkClick}
-          >
-            Support
-          </Link>
+          {mobileMenuLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              passHref
+              className={`${
+                isLinkActive(link.href) 
+                  ? 'bg-primary-50 border-primary-500 text-primary-700' 
+                  : 'border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800'
+              } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
+              onClick={handleLinkClick}
+            >
+              {link.name}
+            </Link>
+          ))}
         </div>
+        
+        {/* Mobile menu user section */}
         <div className="pt-4 pb-3 border-t border-gray-200">
-        {isClerkLoaded ? (
-          isClerkSignedIn ? (
-            <>
-              <div className="flex items-center px-4">
-                <div className="flex-shrink-0">
-                  <div className="h-10 w-10 rounded-full bg-primary-500 flex items-center justify-center text-white font-medium">
-                    {getDisplayName().charAt(0).toUpperCase()}
+          {isClerkLoaded ? (
+            isClerkSignedIn ? (
+              <div>
+                <div className="flex items-center px-4">
+                  <div className="flex-shrink-0">
+                    <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
+                      <span className="text-primary-800 font-medium">
+                        {getDisplayName().charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="ml-3">
+                    <div className="text-base font-medium text-gray-800">{getDisplayName()}</div>
+                    <div className="text-sm font-medium text-gray-500">
+                      {isClerkSignedIn ? clerkUser.primaryEmailAddress?.emailAddress : ''}
+                    </div>
                   </div>
                 </div>
-                <div className="ml-3">
-                  <div className="text-base font-medium text-gray-800">{getDisplayName()}</div>
-                  <div className="text-sm font-medium text-gray-500">{clerkUser?.primaryEmailAddress?.emailAddress || 'No email available'}</div>
+                <div className="mt-3 space-y-1">
+                  <Link
+                    href="/profile"
+                    passHref
+                    className="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"
+                    onClick={handleLinkClick}
+                  >
+                    Profile
+                  </Link>
+                  <Link
+                    href="/settings"
+                    passHref
+                    className="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"
+                    onClick={handleLinkClick}
+                  >
+                    Settings
+                  </Link>
+                  <button
+                    onClick={() => {
+                      handleLinkClick();
+                      logout();
+                    }}
+                    className="w-full text-left block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"
+                  >
+                    Sign out
+                  </button>
                 </div>
               </div>
-              <div className="mt-3 space-y-1">
-                <Link
-                  href="/profile"
-                  className="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"
-                  onClick={handleLinkClick}
-                >
-                  Profile
-                </Link>
+            ) : (
+              <div className="px-4 flex justify-center">
+                <SignInButton mode="modal">
+                  <button className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    Sign In
+                  </button>
+                </SignInButton>
               </div>
-            </>
+            )
           ) : (
-            <div className="mt-3 space-y-1 px-4">
-              <SignInButton mode="modal">
-                <button className="w-full text-left px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100">
-                  Sign In
-                </button>
-              </SignInButton>
+            <div className="px-4 py-4 flex justify-center">
+              <div className="animate-pulse bg-gray-200 h-8 w-20 rounded-md"></div>
             </div>
-          )
-        ) : (
-          // Firebase UI'ı kaldırıldı, yükleme ekranı göster
-          <div className="flex items-center justify-center py-4">
-            <div className="animate-pulse bg-gray-200 h-8 w-20 rounded-md"></div>
-          </div>
-        )}
+          )}
         </div>
       </div>
     </nav>
