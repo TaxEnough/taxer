@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { getAuth, deleteUserAccount } from '@/lib/auth-firebase';
-import { signInWithEmailAndPassword, signOut, User as FirebaseUser } from 'firebase/auth';
+import { useUser, useClerk } from '@clerk/nextjs';
 
 export default function DeleteAccountForm() {
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -12,120 +11,18 @@ export default function DeleteAccountForm() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const auth = getAuth();
-  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(auth.currentUser);
   
-  const { user, logout } = useAuth();
+  const { user, logout } = useAuth(); // Legacy compatibility
+  const { user: clerkUser, isSignedIn } = useUser();
+  const { signOut } = useClerk();
   const router = useRouter();
-  
-  // Firebase kullanıcı oturumunu kontrol et
-  useEffect(() => {
-    const checkFirebaseAuth = () => {
-      const currentUser = auth.currentUser;
-      setFirebaseUser(currentUser);
-      console.log("Firebase oturum durumu:", currentUser ? "Açık" : "Kapalı");
-    };
-    
-    checkFirebaseAuth();
-    
-    // Firebase oturum değişikliklerini dinle
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      setFirebaseUser(user);
-      console.log("Firebase oturum değişikliği:", user ? "Oturum açıldı" : "Oturum kapatıldı");
-    });
-    
-    return () => unsubscribe();
-  }, []);
-  
-  // Silme onayını göster
-  const handleOpenConfirmation = () => {
-    if (!user) {
-      setError("Session is not active. You need to be logged in to delete your account.");
-      router.push('/login');
-      return;
-    }
-    
-    // Firebase'de oturum açık mı kontrol et
-    if (!firebaseUser) {
-      setError("Firebase session is not active. You need to log in again to delete your account.");
-      // Eğer context'de kullanıcı bilgisi varsa, firebase'e giriş yapmayı dene
-      if (user && user.email) {
-        setError("You need to enter your password to verify your session.");
-        setShowConfirmation(true);
-        return;
-      } else {
-        router.push('/login');
-        return;
-      }
-    }
-    
-    setError(null);
-    setShowConfirmation(true);
-  };
-
-  // Kullanıcıyı giriş yaptır
-  const handleLogin = async () => {
-    if (!user || !user.email) {
-      setError("User information not found. Please log in again.");
-      router.push('/login');
-      return;
-    }
-    
-    try {
-      setIsDeleting(true);
-      setError(null);
-      
-      // Firebase'de oturum aç
-      await signInWithEmailAndPassword(auth, user.email, password);
-      setFirebaseUser(auth.currentUser);
-      setSuccess("Authentication successful! Now you can delete your account.");
-      
-      // 2 saniye sonra başarı mesajını temizle
-      setTimeout(() => {
-        setSuccess(null);
-      }, 2000);
-      
-    } catch (error: any) {
-      console.error("Login error:", error);
-      let errorMessage = "An error occurred during login.";
-      
-      // Firebase hata kodlarını kontrol et
-      if (error.code === 'auth/wrong-password') {
-        errorMessage = "Wrong password. Please try again.";
-      } else if (error.code === 'auth/too-many-requests') {
-        errorMessage = "Too many failed login attempts. Please try again later.";
-      } else if (error.code === 'auth/user-not-found') {
-        errorMessage = "User not found. Please try a different email address.";
-      }
-      
-      setError(errorMessage);
-    } finally {
-      setIsDeleting(false);
-    }
-  };
 
   // Hesabı sil
   const handleDeleteAccount = async () => {
-    if (!user) {
+    if (!clerkUser || !isSignedIn) {
       setError("Session is not active. You need to be logged in to delete your account.");
       router.push('/login');
       return;
-    }
-    
-    // Firebase oturumu kontrol et
-    if (!firebaseUser) {
-      // Önce Firebase'de oturum açmayı dene
-      try {
-        if (!password) {
-          setError("You need to enter your password to delete your account.");
-          return;
-        }
-        await handleLogin();
-      } catch (error) {
-        console.error("Firebase login error:", error);
-        setError("You need to log in again to delete your account. Please enter your password.");
-        return;
-      }
     }
     
     if (!password) {
@@ -133,43 +30,33 @@ export default function DeleteAccountForm() {
       return;
     }
     
+    setIsDeleting(true);
+    setError(null);
+    
     try {
-      setIsDeleting(true);
-      setError(null);
+      // Clerk API kullanarak hesabı silme (password argümanı olmadan)
+      await clerkUser.delete();
       
-      // Hesabı sil
-      await deleteUserAccount(password);
+      // Hesap silindi, çıkış yap
+      await signOut();
       
-      setSuccess("Your account has been successfully deleted. You are being redirected to the home page...");
+      setSuccess("Your account has been successfully deleted.");
       
-      // Çıkış yap ve ana sayfaya yönlendir
-      await logout();
-      
-      // 2 saniye bekle ve ana sayfaya yönlendir
+      // Başlangıç sayfasına yönlendir
       setTimeout(() => {
         router.push('/');
       }, 2000);
       
     } catch (error: any) {
-      console.error("Account deletion error:", error);
+      console.error("Error deleting account:", error);
       
-      // Hata mesajlarını kontrol et
-      let errorMessage = "An error occurred while deleting the account.";
+      // Clerk API hatalarını ele al
+      let errorMessage = "An error occurred while deleting your account.";
       
-      if (error.message) {
-        if (error.message.includes("wrong-password")) {
-          errorMessage = "Wrong password. Please try again.";
-        } else if (error.message.includes("requires-recent-login")) {
-          errorMessage = "For security reasons, you need to log in again. Please log out and log in again.";
-          // Oturumu kapat
-          signOut(auth).then(() => {
-            setTimeout(() => {
-              router.push('/login');
-            }, 2000);
-          });
-        } else if (error.message.includes("too-many-requests")) {
-          errorMessage = "Too many failed attempts. Please try again later.";
-        }
+      if (error.status === 401) {
+        errorMessage = "Incorrect password. Please try again.";
+      } else if (error.status === 429) {
+        errorMessage = "Too many requests. Please try again later.";
       }
       
       setError(errorMessage);
@@ -178,59 +65,38 @@ export default function DeleteAccountForm() {
     }
   };
 
-  // İptal et
-  const handleCancel = () => {
-    setShowConfirmation(false);
-    setPassword('');
-    setError(null);
-    setSuccess(null);
-  };
-
   return (
-    <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-      <h3 className="text-lg font-semibold text-red-600 mb-4">Account Management</h3>
+    <div className="bg-white p-6 rounded-lg shadow-sm border border-red-100">
+      <h2 className="text-lg font-medium text-gray-900 mb-4">Delete Account</h2>
+      <p className="text-sm text-gray-600 mb-4">
+        Once you delete your account, there is no going back. Please be certain.
+      </p>
+      
+      {error && (
+        <div className="mb-4 p-4 rounded-md bg-red-50 text-red-700 text-sm">
+          {error}
+        </div>
+      )}
+      
+      {success && (
+        <div className="mb-4 p-4 rounded-md bg-green-50 text-green-700 text-sm">
+          {success}
+        </div>
+      )}
       
       {!showConfirmation ? (
-        <div>
-          <p className="text-gray-700 mb-4">
-            Deleting your account will permanently remove all your data and this action cannot be undone.
-          </p>
-          <button
-            type="button"
-            onClick={handleOpenConfirmation}
-            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-          >
-            Delete My Account
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setShowConfirmation(true)}
+          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+        >
+          Delete My Account
+        </button>
       ) : (
         <div className="space-y-4">
-          <div className="bg-red-100 p-3 rounded-md border border-red-300">
-            <h4 className="font-bold text-red-800 mb-2">Warning: This action cannot be undone!</h4>
-            <p className="text-gray-800">
-              When you delete your account, all your data will be permanently deleted. Enter your password to confirm this action.
-            </p>
-          </div>
-          
-          {!firebaseUser && user && (
-            <div className="bg-yellow-100 p-3 rounded-md border border-yellow-300">
-              <p className="text-yellow-800">
-                For security reasons, you need to verify your Firebase session to delete your account. Please enter your password.
-              </p>
-            </div>
-          )}
-          
-          {error && (
-            <div className="bg-red-100 p-3 rounded-md border border-red-300">
-              <p className="text-red-800">{error}</p>
-            </div>
-          )}
-          
-          {success && (
-            <div className="bg-green-100 p-3 rounded-md border border-green-300">
-              <p className="text-green-800">{success}</p>
-            </div>
-          )}
+          <p className="text-sm font-medium text-red-600">
+            Are you sure you want to delete your account? All of your data will be permanently removed. This action cannot be undone.
+          </p>
           
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
@@ -248,31 +114,24 @@ export default function DeleteAccountForm() {
           </div>
           
           <div className="flex space-x-3">
-            {!firebaseUser && user ? (
-              <button
-                type="button"
-                onClick={handleLogin}
-                disabled={isDeleting || !password}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isDeleting ? "Processing..." : "Verify Identity"}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleDeleteAccount}
-                disabled={isDeleting || !password}
-                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isDeleting ? "Deleting Account..." : "Delete My Account"}
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={handleDeleteAccount}
+              disabled={isDeleting || !password}
+              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isDeleting ? "Deleting Account..." : "Delete My Account"}
+            </button>
             
             <button
               type="button"
-              onClick={handleCancel}
+              onClick={() => {
+                setShowConfirmation(false);
+                setPassword('');
+                setError(null);
+              }}
               disabled={isDeleting}
-              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>

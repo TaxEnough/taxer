@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { updateProfile } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { useUser } from '@clerk/nextjs';
+import { useRouter } from 'next/navigation';
+import { getUserSubscription } from '@/lib/clerkStripeIntegration';
 
 export default function ProfileForm() {
-  const { user } = useAuth();
+  const { user } = useAuth(); // Backward compatibility for AuthContext
+  const { user: clerkUser, isLoaded: clerkLoaded, isSignedIn } = useUser(); // Clerk user
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [isEditing, setIsEditing] = useState(false);
@@ -15,56 +16,39 @@ export default function ProfileForm() {
   const [message, setMessage] = useState({ text: '', type: '' });
   const [subscriptionStatus, setSubscriptionStatus] = useState('Free Plan');
   const [debugInfo, setDebugInfo] = useState('');
+  const router = useRouter();
 
   useEffect(() => {
     // Debug bilgisi
     console.log('ProfileForm - Auth Context User:', user);
+    console.log('ProfileForm - Clerk User:', clerkUser);
     
-    if (user) {
-      setName(user.name || '');
-      // Eğer context'ten alınan e-posta yoksa veya boşsa Firestore'dan doğrudan almayı deneyelim
-      setEmail(user.email || '');
+    // Öncelikle Clerk kullanıcısını kontrol et
+    if (clerkLoaded && isSignedIn && clerkUser) {
+      const fullName = clerkUser.fullName || 
+                       `${clerkUser.firstName || ''} ${clerkUser.lastName || ''}`.trim();
+      
+      setName(fullName || user?.name || '');
+      
+      // Clerk'ten e-posta al
+      const primaryEmail = clerkUser.primaryEmailAddress?.emailAddress;
+      setEmail(primaryEmail || user?.email || '');
       
       // Debug için bilgiyi ayarla
-      const debugText = `User ID: ${user.id || 'Missing'}\nName: ${user.name || 'Missing'}\nEmail: ${user.email || 'Missing'}\n`;
+      const debugText = `User ID: ${clerkUser.id || user?.id || 'Missing'}\n` +
+                        `Name: ${fullName || 'Missing'}\n` +
+                        `Email: ${primaryEmail || 'Missing'}\n`;
       setDebugInfo(debugText);
-      
-      // E-posta alanı boşsa, direkt Firestore'dan almayı dene
-      if (!user.email) {
-        console.log('Email not found in AuthContext, trying to get directly from Firestore');
-        getEmailFromFirestore(user.id);
-      }
       
       // Abonelik durumunu kontrol et
       const checkSubscription = async () => {
         try {
-          const userRef = doc(db, 'users', user.id);
-          const userSnap = await getDoc(userRef);
+          const subscription = await getUserSubscription(clerkUser.id);
           
-          if (userSnap.exists()) {
-            const userData = userSnap.data();
-            
-            // Eğer email hala boşsa ve Firestore'da varsa
-            if (!email && userData.email) {
-              console.log('Setting email from Firestore:', userData.email);
-              setEmail(userData.email);
-              setDebugInfo(prev => prev + `\nFirestore Email: ${userData.email}`);
-            }
-            
-            if (userData.subscriptionStatus === 'active' && userData.subscriptionId) {
-              const subscriptionRef = doc(db, 'subscriptions', userData.subscriptionId);
-              const subscriptionSnap = await getDoc(subscriptionRef);
-              
-              if (subscriptionSnap.exists()) {
-                const subData = subscriptionSnap.data();
-                const planType = subData.priceId === 'price_1RIS0fLhWC2oNMWwizDKv78o' ? 'Basic' : 'Premium';
-                setSubscriptionStatus(planType);
-              } else {
-                setSubscriptionStatus('Free Plan');
-              }
-            } else {
-              setSubscriptionStatus('Free Plan');
-            }
+          if (subscription.status === 'active') {
+            setSubscriptionStatus(subscription.planType === 'premium' ? 'Premium' : 'Basic');
+          } else {
+            setSubscriptionStatus('Free Plan');
           }
         } catch (error) {
           console.error('Abonelik durumu kontrol edilirken hata oluştu:', error);
@@ -73,101 +57,54 @@ export default function ProfileForm() {
       };
       
       checkSubscription();
-    }
-  }, [user]);
-  
-  // Direkt olarak Firestore'dan email verisini al
-  const getEmailFromFirestore = async (userId: string) => {
-    if (!userId) return;
-    
-    try {
-      const userRef = doc(db, 'users', userId);
-      const userSnap = await getDoc(userRef);
+    } 
+    // Eğer Clerk kullanıcısı yoksa, fallback olarak AuthContext kullanıcısına bak
+    else if (user) {
+      setName(user.name || '');
+      setEmail(user.email || '');
       
-      if (userSnap.exists()) {
-        const userData = userSnap.data();
-        
-        if (userData.email) {
-          console.log('Email found in Firestore:', userData.email);
-          setEmail(userData.email);
-          setDebugInfo(prev => prev + `\nFirestore email found: ${userData.email}`);
-        } else {
-          console.log('No email found in Firestore document');
-          setDebugInfo(prev => prev + '\nNo email in Firestore document');
-        }
-      } else {
-        console.log('User document not found in Firestore');
-        setDebugInfo(prev => prev + '\nUser document not found in Firestore');
-      }
-    } catch (error) {
-      console.error('Error getting email from Firestore:', error);
-      setDebugInfo(prev => prev + '\nError getting email from Firestore');
+      const debugText = `User ID: ${user.id || 'Missing'}\n` +
+                        `Name: ${user.name || 'Missing'}\n` +
+                        `Email: ${user.email || 'Missing'}\n`;
+      setDebugInfo(debugText);
+      
+      // Subscription bilgisi yok, default free plan göster
+      setSubscriptionStatus('Free Plan');
     }
-  };
+  }, [user, clerkUser, clerkLoaded, isSignedIn]);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!user) return;
+    if (!name.trim()) {
+      setMessage({ text: 'Name cannot be empty', type: 'error' });
+      return;
+    }
     
     setIsSaving(true);
     setMessage({ text: '', type: '' });
     
     try {
-      const response = await fetch('/api/user/update-profile', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ name }),
-      });
-      
-      const data = await response.json();
-      
-      // API işlemi başarılı mı?
-      if (response.ok) {
+      // Clerk kullanıcısını kontrol et ve güncelle
+      if (clerkLoaded && isSignedIn && clerkUser) {
+        // Clerk API ile isim güncelleme
+        const nameParts = name.trim().split(' ');
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+        
+        await clerkUser.update({
+          firstName,
+          lastName
+        });
+        
         setMessage({ text: 'Profile updated successfully', type: 'success' });
         setIsEditing(false);
       } 
-      // Client tarafında işlem yapılması gerekiyor mu?
-      else if (response.status === 202 && data.shouldUseClientSide) {
-        console.log('Client-side profil güncelleme işlemi yapılıyor');
-        
-        // Firebase Auth kullanıcısını kontrol et
-        if (!auth.currentUser) {
-          setMessage({ 
-            text: 'Your session may have expired. Please log in again.', 
-            type: 'error' 
-          });
-          return;
-        }
-        
-        try {
-          // Firebase Auth'taki kullanıcı görünen adını güncelle
-          await updateProfile(auth.currentUser, {
-            displayName: name
-          });
-          
-          // Güncellenmiş kullanıcı adını AuthContext'i güncelle
-          // Burada doğrudan context'i güncelleyecek bir fonksiyon olmadığından,
-          // Sayfayı yenilemek en iyi çözüm olabilir
-          
-          setMessage({ text: 'Profile updated successfully (client-side)', type: 'success' });
-          setIsEditing(false);
-          
-          // Kullanıcı bilgisini yenilemek için sayfayı 2 saniye sonra yenileyelim
-          setTimeout(() => {
-            window.location.reload();
-          }, 2000);
-        } catch (clientError: any) {
-          console.error('Client-side profil güncelleme hatası:', clientError);
-          setMessage({ 
-            text: 'An error occurred while updating the profile: ' + (clientError.message || 'Unknown error'), 
-            type: 'error' 
-          });
-        }
-      } else {
-        throw new Error(data.error || 'An error occurred while updating the profile');
+      // Eğer Clerk kullanıcısı yoksa hata ver
+      else {
+        setMessage({ text: 'Your session may have expired. Please log in again.', type: 'error' });
+        setTimeout(() => {
+          router.push('/login');
+        }, 2000);
       }
     } catch (error: any) {
       console.error('Profil güncelleme hatası:', error);
@@ -225,72 +162,72 @@ export default function ProfileForm() {
               </div>
             </div>
             
-            <div className="flex justify-end space-x-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsEditing(false);
-                  setName(user?.name || '');
-                }}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            <div className="flex space-x-3">
+              <button 
+                type="submit" 
+                className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                disabled={isSaving}
+              >
+                {isSaving ? 'Saving...' : 'Save Changes'}
+              </button>
+              <button 
+                type="button" 
+                className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                onClick={() => setIsEditing(false)}
+                disabled={isSaving}
               >
                 Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-              >
-                {isSaving ? 'Saving...' : 'Save'}
               </button>
             </div>
           </div>
         </form>
       ) : (
-        <div>
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-lg font-medium text-gray-900">Personal Information</h2>
-            <button
-              onClick={() => setIsEditing(true)}
-              className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-primary-700 bg-primary-100 hover:bg-primary-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-            >
-              Edit
-            </button>
+        <div className="space-y-6">
+          <div className="border-b border-gray-200 pb-4">
+            <h3 className="text-lg font-medium text-gray-900">Account Information</h3>
+            {debugInfo && process.env.NODE_ENV === 'development' && (
+              <div className="my-2 p-2 bg-gray-100 rounded text-xs font-mono whitespace-pre-wrap">
+                {debugInfo}
+              </div>
+            )}
           </div>
           
-          <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
-            <div className="sm:col-span-1">
-              <dt className="text-sm font-medium text-gray-500">Full Name</dt>
-              <dd className="mt-1 text-sm text-gray-900">{user?.name || 'Not specified'}</dd>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <p className="text-sm font-medium text-gray-500">Full Name</p>
+              <p className="mt-1 text-sm text-gray-900">{name || 'Not provided'}</p>
             </div>
-            <div className="sm:col-span-1">
-              <dt className="text-sm font-medium text-gray-500">Email Address</dt>
-              <dd className="mt-1 text-sm text-gray-900">{email || user?.email || 'Not available'}</dd>
+            
+            <div>
+              <p className="text-sm font-medium text-gray-500">Email Address</p>
+              <p className="mt-1 text-sm text-gray-900">{email || 'Not provided'}</p>
             </div>
-            <div className="sm:col-span-1">
-              <dt className="text-sm font-medium text-gray-500">Account ID</dt>
-              <dd className="mt-1 text-sm text-gray-900">{user?.id || 'Not available'}</dd>
-            </div>
-            <div className="sm:col-span-1">
-              <dt className="text-sm font-medium text-gray-500">Account Status</dt>
-              <dd className="mt-1 text-sm">
-                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                  subscriptionStatus === 'Free Plan' 
-                    ? 'bg-gray-100 text-gray-800' 
-                    : 'bg-green-100 text-green-800'
+            
+            <div>
+              <p className="text-sm font-medium text-gray-500">Subscription</p>
+              <p className="mt-1 text-sm">
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  subscriptionStatus === 'Premium' 
+                    ? 'bg-green-100 text-green-800' 
+                    : subscriptionStatus === 'Basic' 
+                      ? 'bg-blue-100 text-blue-800' 
+                      : 'bg-gray-100 text-gray-800'
                 }`}>
                   {subscriptionStatus}
                 </span>
-              </dd>
+              </p>
             </div>
-          </dl>
+          </div>
           
-          {/* Debug bilgileri - yalnızca test için */}
-          {debugInfo && process.env.NODE_ENV !== 'production' && (
-            <div className="mt-6 p-3 bg-gray-100 rounded-md text-xs font-mono whitespace-pre-wrap opacity-70">
-              {debugInfo}
-            </div>
-          )}
+          <div>
+            <button 
+              type="button" 
+              className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              onClick={() => setIsEditing(true)}
+            >
+              Edit Profile
+            </button>
+          </div>
         </div>
       )}
     </div>

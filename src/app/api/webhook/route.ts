@@ -1,8 +1,20 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { headers } from 'next/headers';
-import { db } from '@/lib/firebase';
-import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { updateUserSubscription } from '@/lib/clerkStripeIntegration';
+
+// Debug loglama fonksiyonu
+function logInfo(message: string, data?: any) {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] WEBHOOK INFO: ${message}`);
+  if (data) {
+    try {
+      console.log(JSON.stringify(data, null, 2));
+    } catch (e) {
+      console.log('Veri loglanamadı:', e);
+    }
+  }
+}
 
 export async function POST(req: Request) {
   const body = await req.text();
@@ -35,40 +47,39 @@ export async function POST(req: Request) {
         // Extract user ID from metadata
         const userId = session.metadata?.userId;
         if (!userId) {
-          throw new Error('Missing userId in session metadata');
+          console.error('Missing userId in session metadata');
+          return NextResponse.json(
+            { error: 'Missing userId in session metadata' },
+            { status: 400 }
+          );
         }
+
+        logInfo('Checkout session completed', { 
+          sessionId: session.id,
+          userId,
+          customerEmail: session.customer_email
+        });
 
         // Get the subscription data from Stripe
         const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
         const subscription = await stripe.subscriptions.retrieve(session.subscription as string) as any;
         
-        // Store subscription data in Firestore
-        const userRef = doc(db, 'users', userId);
-        const userDoc = await getDoc(userRef);
+        // Plan tipini belirle
+        const priceId = subscription.items.data[0]?.price?.id;
+        const planType = determinePlanType(priceId);
         
-        if (userDoc.exists()) {
-          // Create a subscription record
-          await setDoc(doc(db, 'subscriptions', subscription.id), {
-            userId,
-            status: subscription.status,
-            priceId: subscription.items.data[0].price.id,
-            currentPeriodStart: new Date(subscription.current_period_start * 1000),
-            currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-          
-          // Update user with subscription info
-          await updateDoc(userRef, {
-            subscriptionId: subscription.id,
-            subscriptionStatus: subscription.status,
-            subscriptionPriceId: subscription.items.data[0].price.id,
-            updatedAt: serverTimestamp(),
-          });
-          
-          console.log(`Subscription ${subscription.id} created for user ${userId}`);
+        // Clerk metadata'sına kaydet
+        const updateResult = await updateUserSubscription(userId, {
+          status: 'active',
+          plan: planType,
+          id: subscription.id,
+          currentPeriodEnd: new Date(subscription.current_period_end * 1000)
+        });
+        
+        if (updateResult) {
+          logInfo(`Subscription ${subscription.id} created for user ${userId} and saved to Clerk metadata`);
         } else {
-          console.error(`User ${userId} not found`);
+          console.error(`Failed to update Clerk metadata for user ${userId}`);
         }
         
         break;
@@ -76,22 +87,38 @@ export async function POST(req: Request) {
       
       case 'invoice.payment_succeeded': {
         // Update subscription record when payment is successful
-        const invoice = event.data.object as any; // Use any to bypass type checking
+        const invoice = event.data.object as any;
         const subscriptionId = invoice.subscription as string;
+        const customerId = invoice.customer as string;
         
         if (subscriptionId) {
           const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
           const subscription = await stripe.subscriptions.retrieve(subscriptionId) as any;
           
-          // Update the subscription record
-          await updateDoc(doc(db, 'subscriptions', subscriptionId), {
-            status: subscription.status,
-            currentPeriodStart: new Date(subscription.current_period_start * 1000),
-            currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-            updatedAt: serverTimestamp(),
-          });
+          // Metadata'dan userId'yi al
+          const userId = subscription.metadata?.userId;
           
-          console.log(`Subscription ${subscriptionId} payment succeeded`);
+          if (userId) {
+            // Plan tipini belirle
+            const priceId = subscription.items.data[0]?.price?.id;
+            const planType = determinePlanType(priceId);
+            
+            // Clerk metadata'sını güncelle
+            const updateResult = await updateUserSubscription(userId, {
+              status: 'active',
+              plan: planType,
+              id: subscription.id,
+              currentPeriodEnd: new Date(subscription.current_period_end * 1000)
+            });
+            
+            if (updateResult) {
+              logInfo(`Subscription ${subscriptionId} payment succeeded and Clerk metadata updated for user ${userId}`);
+            } else {
+              console.error(`Failed to update Clerk metadata for user ${userId}`);
+            }
+          } else {
+            console.error(`UserId not found in subscription metadata for subscription ${subscriptionId}`);
+          }
         }
         
         break;
@@ -99,31 +126,31 @@ export async function POST(req: Request) {
       
       case 'customer.subscription.updated': {
         // Handle subscription status changes
-        const subscription = event.data.object as any; // Use any to bypass type checking
+        const subscription = event.data.object as any;
         
-        // Find the user with this subscription
-        const subscriptionRef = doc(db, 'subscriptions', subscription.id);
-        const subscriptionDoc = await getDoc(subscriptionRef);
+        // Metadata'dan userId'yi al
+        const userId = subscription.metadata?.userId;
         
-        if (subscriptionDoc.exists()) {
-          const { userId } = subscriptionDoc.data() as { userId: string };
+        if (userId) {
+          // Plan tipini belirle
+          const priceId = subscription.items.data[0]?.price?.id;
+          const planType = determinePlanType(priceId);
           
-          // Update subscription record
-          await updateDoc(subscriptionRef, {
+          // Clerk metadata'sını güncelle
+          const updateResult = await updateUserSubscription(userId, {
             status: subscription.status,
-            currentPeriodStart: new Date(subscription.current_period_start * 1000),
-            currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-            updatedAt: serverTimestamp(),
+            plan: planType,
+            id: subscription.id,
+            currentPeriodEnd: new Date(subscription.current_period_end * 1000)
           });
           
-          // Update user subscription status
-          const userRef = doc(db, 'users', userId);
-          await updateDoc(userRef, {
-            subscriptionStatus: subscription.status,
-            updatedAt: serverTimestamp(),
-          });
-          
-          console.log(`Subscription ${subscription.id} updated for user ${userId}`);
+          if (updateResult) {
+            logInfo(`Subscription ${subscription.id} updated and Clerk metadata updated for user ${userId}`);
+          } else {
+            console.error(`Failed to update Clerk metadata for user ${userId}`);
+          }
+        } else {
+          console.error(`UserId not found in subscription metadata for subscription ${subscription.id}`);
         }
         
         break;
@@ -133,34 +160,32 @@ export async function POST(req: Request) {
         // Handle subscription cancellation
         const subscription = event.data.object as any;
         
-        // Find the user with this subscription
-        const subscriptionRef = doc(db, 'subscriptions', subscription.id);
-        const subscriptionDoc = await getDoc(subscriptionRef);
+        // Metadata'dan userId'yi al
+        const userId = subscription.metadata?.userId;
         
-        if (subscriptionDoc.exists()) {
-          const { userId } = subscriptionDoc.data() as { userId: string };
-          
-          // Update subscription record
-          await updateDoc(subscriptionRef, {
+        if (userId) {
+          // Clerk metadata'sını güncelle - aboneliği iptal olarak işaretle
+          const updateResult = await updateUserSubscription(userId, {
             status: 'canceled',
-            updatedAt: serverTimestamp(),
+            plan: 'free',
+            id: subscription.id,
+            currentPeriodEnd: new Date(subscription.current_period_end * 1000)
           });
           
-          // Update user subscription status
-          const userRef = doc(db, 'users', userId);
-          await updateDoc(userRef, {
-            subscriptionStatus: 'canceled',
-            updatedAt: serverTimestamp(),
-          });
-          
-          console.log(`Subscription ${subscription.id} canceled for user ${userId}`);
+          if (updateResult) {
+            logInfo(`Subscription ${subscription.id} canceled and Clerk metadata updated for user ${userId}`);
+          } else {
+            console.error(`Failed to update Clerk metadata for user ${userId}`);
+          }
+        } else {
+          console.error(`UserId not found in subscription metadata for subscription ${subscription.id}`);
         }
         
         break;
       }
       
       default:
-        console.log(`Unhandled event type: ${event.type}`);
+        logInfo(`Unhandled event type: ${event.type}`);
     }
 
     return NextResponse.json({ received: true });
@@ -171,4 +196,27 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
+}
+
+// Fiyat ID'sine göre plan tipini belirle
+function determinePlanType(priceId: string): 'basic' | 'premium' | 'free' {
+  // Burada fiyat ID'lerini kontrol edip uygun plan tipini döndür
+  // Örnek kontrol (gerçek price ID'lerinize göre güncellenmeli)
+  const premiumPriceIds = [
+    'price_1RIoIVLhWC2oNMWwZZ7GOZhY', // Premium Monthly
+    'price_1RIoJ3LhWC2oNMWwBpw1oZTl'  // Premium Yearly
+  ];
+  
+  const basicPriceIds = [
+    'price_1RIS0fLhWC2oNMWwizDKv78o', // Basic Monthly
+    'price_1RIoHlLhWC2oNMWwKzOx9WBD'  // Basic Yearly
+  ];
+  
+  if (premiumPriceIds.includes(priceId)) {
+    return 'premium';
+  } else if (basicPriceIds.includes(priceId)) {
+    return 'basic';
+  }
+  
+  return 'free';
 } 

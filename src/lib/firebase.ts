@@ -1,6 +1,5 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getAnalytics } from "firebase/analytics";
 
@@ -16,15 +15,14 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
-
+// Initialize Firebase (only for blog functionality)
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
 const db = getFirestore(app);
 
 let analytics = null;
 if (typeof window !== 'undefined') {
-
   analytics = getAnalytics(app);
 }
 
-export { auth, db, analytics }; 
+// Only exporting Firestore for blog usage and analytics
+export { db, analytics }; 
