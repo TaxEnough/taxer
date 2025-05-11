@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyToken } from '@/lib/auth-firebase';
+import { verifyAuthToken } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { 
   getBlogPostBySlug, 
@@ -26,7 +26,7 @@ async function verifyAdminToken(request: NextRequest) {
   
   try {
     // Token'ı doğrula
-    const decodedToken = await verifyToken(token);
+    const decodedToken = await verifyAuthToken(token);
     
     if (!decodedToken || !decodedToken.email) {
       return { error: 'Geçersiz token', status: 401 };

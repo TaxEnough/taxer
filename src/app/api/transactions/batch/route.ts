@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { verifyToken } from '@/lib/auth-firebase';
+import { verifyAuthToken } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     const token = authHeader.split(' ')[1];
     
     // Token'ı doğrula
-    const decodedToken = await verifyToken(token);
+    const decodedToken = await verifyAuthToken(token);
     if (!decodedToken || !decodedToken.uid) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }

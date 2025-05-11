@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyToken } from '@/lib/auth-firebase';
+import { verifyAuthToken } from '@/lib/auth';
 import { headers } from 'next/headers';
 
 // API rotasını dinamik olarak işaretliyoruz
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     
     // Token'ı doğrula
     console.log('Token doğrulanıyor...');
-    const decodedToken = await verifyToken(token);
+    const decodedToken = await verifyAuthToken(token);
     
     if (!decodedToken) {
       console.log('Token geçerli değil, null değer döndü');

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, collection, getDocs, query, where, setDoc, serverTimestamp } from 'firebase/firestore';
-import { verifyToken } from '@/lib/auth-firebase';
+import { verifyAuthToken } from '@/lib/auth';
 
 // API rotasını dinamik olarak işaretliyoruz
 export const dynamic = 'force-dynamic';
@@ -121,7 +121,7 @@ export async function GET(request: NextRequest) {
     const token = authHeader.split(' ')[1];
     
     // Token'ı doğrula
-    const decodedToken = await verifyToken(token);
+    const decodedToken = await verifyAuthToken(token);
     if (!decodedToken || !decodedToken.uid) {
       return NextResponse.json({ error: 'Geçersiz token' }, { status: 401 });
     }

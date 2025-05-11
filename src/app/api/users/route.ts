@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, auth } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { collection, doc, getDoc, getDocs, query, setDoc, where, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { verifyToken } from '@/lib/auth-firebase';
+import { verifyAuthToken } from '@/lib/auth';
 
 // API rotasını dinamik olarak işaretliyoruz
 export const dynamic = 'force-dynamic';
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const token = authHeader.split(' ')[1];
     
     // Token'ı doğrula
-    const decodedToken = await verifyToken(token);
+    const decodedToken = await verifyAuthToken(token);
     if (!decodedToken || !decodedToken.uid) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
@@ -68,7 +68,7 @@ export async function PUT(request: NextRequest) {
     const token = authHeader.split(' ')[1];
     
     // Token'ı doğrula
-    const decodedToken = await verifyToken(token);
+    const decodedToken = await verifyAuthToken(token);
     if (!decodedToken || !decodedToken.uid) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }

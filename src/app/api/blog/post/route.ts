@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyToken } from '@/lib/auth-firebase';
+import { verifyAuthToken } from '@/lib/auth';
 import { collection, addDoc, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { headers } from 'next/headers';
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     
     // Token'ı doğrula
     console.log('Token doğrulanıyor...');
-    const decodedToken = await verifyToken(token);
+    const decodedToken = await verifyAuthToken(token);
     
     if (!decodedToken) {
       console.log('Token geçerli değil, null değer döndü');
