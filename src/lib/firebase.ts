@@ -1,10 +1,8 @@
-// Import the functions you need from the SDKs you need
+// Firebase sadece blog içeriklerinin saklanması için kullanılacak
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { getAnalytics } from "firebase/analytics";
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// Firebase yapılandırması
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -15,14 +13,11 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
-// Initialize Firebase (only for blog functionality)
+// Firebase uygulamasını başlat (sadece blog işlemleri için)
 const app = initializeApp(firebaseConfig);
+
+// Firestore veritabanı referansı (sadece blog içerikleri için)
 const db = getFirestore(app);
 
-let analytics = null;
-if (typeof window !== 'undefined') {
-  analytics = getAnalytics(app);
-}
-
-// Only exporting Firestore for blog usage and analytics
-export { db, analytics }; 
+// Sadece Firestore'u dışa aktar - Auth ve Analytics yok
+export { db }; 

@@ -249,36 +249,23 @@ export const updateBlogPost = async (
   post: Partial<Omit<BlogPost, 'id' | 'createdAt' | 'updatedAt'>>
 ): Promise<boolean> => {
   try {
-    // Slug değişti ise kontrolü yap
-    if (post.slug) {
-      const slugCheck = query(
-        collection(db, 'blogPosts'),
-        where('slug', '==', post.slug)
-      );
-      
-      const slugSnapshot = await getDocs(slugCheck);
-      
-      // Eğer aynı slug'a sahip başka bir yazı varsa (kendi ID'si dışında)
-      if (!slugSnapshot.empty && slugSnapshot.docs[0].id !== id) {
-        throw new Error('Bu URL (slug) zaten kullanılıyor. Lütfen başka bir URL seçin.');
-      }
-    }
-    
     const docRef = doc(db, 'blogPosts', id);
-    await updateDoc(docRef, {
+    
+    const updateData = {
       ...post,
       updatedAt: serverTimestamp()
-    });
+    };
     
+    await updateDoc(docRef, updateData);
     return true;
   } catch (error: any) {
     console.error('Blog yazısı güncellenirken hata oluştu:', error);
     
-    if (error.message && error.message.includes('slug')) {
-      throw error; // Slug hatası ise aynı hatayı gönder
+    if (error.code === 'permission-denied') {
+      throw new Error('Yetersiz izin: Blog yazısı güncellemek için yetkiniz yok.');
     }
     
-    throw new Error('Blog yazısı güncellenirken bir hata oluştu.');
+    throw new Error('Blog yazısı güncellenirken bir hata oluştu: ' + error.message);
   }
 };
 
@@ -288,9 +275,14 @@ export const deleteBlogPost = async (id: string): Promise<boolean> => {
     const docRef = doc(db, 'blogPosts', id);
     await deleteDoc(docRef);
     return true;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Blog yazısı silinirken hata oluştu:', error);
-    throw new Error('Blog yazısı silinirken bir hata oluştu.');
+    
+    if (error.code === 'permission-denied') {
+      throw new Error('Yetersiz izin: Blog yazısı silmek için yetkiniz yok.');
+    }
+    
+    throw new Error('Blog yazısı silinirken bir hata oluştu: ' + error.message);
   }
 };
 
@@ -316,5 +308,116 @@ export const getAllTags = async (): Promise<string[]> => {
   } catch (error) {
     console.error('Etiketler getirilirken hata oluştu:', error);
     return [];
+  }
+};
+
+// Blog içeriği Firestore'da saklanıyor
+export const getBlogPosts = async (limitCount = 10) => {
+  try {
+    const q = query(
+      collection(db, 'blog'),
+      orderBy('createdAt', 'desc'),
+      limit(limitCount)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const posts = [];
+    
+    querySnapshot.forEach((doc) => {
+      const post = {
+        id: doc.id,
+        ...doc.data()
+      };
+      
+      // Tarih alanlarını dönüştür
+      if (post.createdAt) {
+        post.createdAt = post.createdAt.toDate();
+      }
+      if (post.updatedAt) {
+        post.updatedAt = post.updatedAt.toDate();
+      }
+      
+      posts.push(post);
+    });
+    
+    return posts;
+  } catch (error) {
+    console.error('Error getting blog posts:', error);
+    throw error;
+  }
+};
+
+// Blog yazısı detayını getir
+export const getBlogPost = async (postId) => {
+  try {
+    const docRef = doc(db, 'blog', postId);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      const post = {
+        id: docSnap.id,
+        ...docSnap.data()
+      };
+      
+      // Tarih alanlarını dönüştür
+      if (post.createdAt) {
+        post.createdAt = post.createdAt.toDate();
+      }
+      if (post.updatedAt) {
+        post.updatedAt = post.updatedAt.toDate();
+      }
+      
+      return post;
+    } else {
+      return null;
+    }
+  } catch (error) {
+    console.error('Error getting blog post:', error);
+    throw error;
+  }
+};
+
+// Yeni blog yazısı ekle
+export const addBlogPost = async (postData) => {
+  try {
+    const docRef = await addDoc(collection(db, 'blog'), {
+      ...postData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    
+    return docRef.id;
+  } catch (error) {
+    console.error('Error adding blog post:', error);
+    throw error;
+  }
+};
+
+// Blog yazısını güncelle
+export const updateBlogPost = async (postId, postData) => {
+  try {
+    const docRef = doc(db, 'blog', postId);
+    await updateDoc(docRef, {
+      ...postData,
+      updatedAt: serverTimestamp()
+    });
+    
+    return true;
+  } catch (error) {
+    console.error('Error updating blog post:', error);
+    throw error;
+  }
+};
+
+// Blog yazısını sil
+export const deleteBlogPost = async (postId) => {
+  try {
+    const docRef = doc(db, 'blog', postId);
+    await deleteDoc(docRef);
+    
+    return true;
+  } catch (error) {
+    console.error('Error deleting blog post:', error);
+    throw error;
   }
 }; 
