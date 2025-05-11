@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { headers } from 'next/headers';
-import { clerkClient } from '@clerk/nextjs/server';
 
 // TypeScript türleri
 type SubscriptionUserMetadata = {
@@ -24,6 +23,59 @@ type ClerkUser = {
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-03-31.basil',
 });
+
+// Clerk API'ına yapılacak çağrılar için yardımcı fonksiyon
+async function updateClerkUserMetadata(
+  userId: string, 
+  privateMetadata: any, 
+  publicMetadata: any
+): Promise<boolean> {
+  try {
+    const response = await fetch(`https://api.clerk.com/v1/users/${userId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        private_metadata: privateMetadata,
+        public_metadata: publicMetadata
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Clerk güncelleme hatası:", errorData);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Clerk API çağrısı sırasında hata:", error);
+    return false;
+  }
+}
+
+// Clerk API'ından kullanıcı listesi almak için yardımcı fonksiyon
+async function getClerkUserList(limit: number = 100): Promise<{ data: ClerkUser[] }> {
+  try {
+    const response = await fetch(`https://api.clerk.com/v1/users?limit=${limit}`, {
+      headers: {
+        Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Clerk API error: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error("Kullanıcı listesi alınırken hata:", error);
+    return { data: [] };
+  }
+}
 
 export async function POST(req: Request) {
   const body = await req.text();
@@ -86,24 +138,22 @@ export async function POST(req: Request) {
         // Clerk kullanıcı verilerini güncelle - hem private hem public metadata
         console.log(`Kullanıcı ${userId} için abonelik bilgileri güncelleniyor: ${JSON.stringify(subscriptionDetails)}`);
         
-        try {
-          // Clerk kullanıcıyı güncelle
-          await clerkClient.users.updateUser(userId, {
-            privateMetadata: {
-              subscription: subscriptionDetails
-            },
-            publicMetadata: {
-              subscription: {
-                status: subscription.status,
-                plan: planType
-              }
+        const updateSuccess = await updateClerkUserMetadata(
+          userId,
+          { subscription: subscriptionDetails },
+          { 
+            subscription: {
+              status: subscription.status,
+              plan: planType
             }
-          });
-          
+          }
+        );
+        
+        if (updateSuccess) {
           console.log(`${subscription.id} aboneliği ${userId} kullanıcısı için başarıyla kaydedildi`);
-        } catch (clerkError) {
-          console.error(`Clerk güncelleme hatası:`, clerkError);
-          throw new Error(`Clerk user metadata update failed: ${clerkError}`);
+        } else {
+          console.error(`${subscription.id} aboneliği ${userId} kullanıcısı için kaydedilemedi`);
+          throw new Error('Clerk user metadata update failed');
         }
         
         break;
@@ -118,9 +168,7 @@ export async function POST(req: Request) {
           const subscription = await stripe.subscriptions.retrieve(subscriptionId) as any;
           
           // Bu abonelik ID'ye sahip kullanıcıyı bul
-          const userList = await clerkClient.users.getUserList({
-            limit: 100,  // Makul bir limit belirle
-          });
+          const userList = await getClerkUserList(100);
           
           // Abonelik ID'ye göre filtrele
           const matchingUsers = userList.data.filter((user: ClerkUser) => {
@@ -131,27 +179,33 @@ export async function POST(req: Request) {
           if (matchingUsers.length > 0) {
             const userId = matchingUsers[0].id;
             const userMetadata = matchingUsers[0].privateMetadata;
+            const currentPlan = userMetadata?.subscription?.plan || 'premium';
             
             // Kullanıcının abonelik bilgilerini güncelle
-            await clerkClient.users.updateUser(userId, {
-              privateMetadata: {
+            const updateSuccess = await updateClerkUserMetadata(
+              userId,
+              { 
                 subscription: {
                   id: subscription.id,
                   status: subscription.status,
-                  plan: userMetadata?.subscription?.plan || 'premium',
+                  plan: currentPlan,
                   currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
                   priceId: subscription.items.data[0].price.id
                 }
               },
-              publicMetadata: {
+              { 
                 subscription: {
                   status: subscription.status,
-                  plan: userMetadata?.subscription?.plan || 'premium'
+                  plan: currentPlan
                 }
               }
-            });
+            );
             
-            console.log(`${subscriptionId} aboneliği için ${userId} kullanıcısının ödemesi başarılı oldu`);
+            if (updateSuccess) {
+              console.log(`${subscriptionId} aboneliği için ${userId} kullanıcısının ödemesi başarılı oldu`);
+            } else {
+              console.error(`${subscriptionId} aboneliği için ${userId} kullanıcısının ödemesi kaydedilemedi`);
+            }
           } else {
             console.log(`${subscriptionId} abonelik ID'sine sahip kullanıcı bulunamadı`);
           }
@@ -166,9 +220,7 @@ export async function POST(req: Request) {
         const subscriptionId = subscription.id;
         
         // Bu abonelik ID'ye sahip kullanıcıyı bul
-        const userList = await clerkClient.users.getUserList({
-          limit: 100,  // Makul bir limit belirle
-        });
+        const userList = await getClerkUserList(100);
         
         // Eşleşen kullanıcıları manuel olarak filtrele
         const matchingUsers = userList.data.filter((user: ClerkUser) => {
@@ -182,8 +234,9 @@ export async function POST(req: Request) {
           const currentPlan = userMetadata?.subscription?.plan || 'premium';
           
           // Abonelik bilgilerini güncelle
-          await clerkClient.users.updateUser(userId, {
-            privateMetadata: {
+          const updateSuccess = await updateClerkUserMetadata(
+            userId,
+            { 
               subscription: {
                 id: subscription.id,
                 status: subscription.status,
@@ -192,15 +245,19 @@ export async function POST(req: Request) {
                 priceId: subscription.items.data[0].price.id
               }
             },
-            publicMetadata: {
+            { 
               subscription: {
                 status: subscription.status,
                 plan: currentPlan
               }
             }
-          });
+          );
           
-          console.log(`${subscriptionId} aboneliği ${userId} kullanıcısı için güncellendi`);
+          if (updateSuccess) {
+            console.log(`${subscriptionId} aboneliği ${userId} kullanıcısı için güncellendi`);
+          } else {
+            console.error(`${subscriptionId} aboneliği ${userId} kullanıcısı için güncellenemedi`);
+          }
         } else {
           console.log(`${subscriptionId} abonelik ID'sine sahip kullanıcı bulunamadı`);
         }
@@ -214,9 +271,7 @@ export async function POST(req: Request) {
         const subscriptionId = subscription.id;
         
         // Bu abonelik ID'ye sahip kullanıcıyı bul
-        const userList = await clerkClient.users.getUserList({
-          limit: 100,  // Makul bir limit belirle
-        });
+        const userList = await getClerkUserList(100);
         
         // Eşleşen kullanıcıları manuel olarak filtrele
         const matchingUsers = userList.data.filter((user: ClerkUser) => {
@@ -228,8 +283,9 @@ export async function POST(req: Request) {
           const userId = matchingUsers[0].id;
           
           // Abonelik bilgilerini iptal olarak güncelle
-          await clerkClient.users.updateUser(userId, {
-            privateMetadata: {
+          const updateSuccess = await updateClerkUserMetadata(
+            userId,
+            { 
               subscription: {
                 id: subscription.id,
                 status: 'canceled',
@@ -237,15 +293,19 @@ export async function POST(req: Request) {
                 canceledAt: new Date().toISOString()
               }
             },
-            publicMetadata: {
+            { 
               subscription: {
                 status: 'canceled',
                 plan: 'free'
               }
             }
-          });
+          );
           
-          console.log(`${subscriptionId} aboneliği ${userId} kullanıcısı için iptal edildi`);
+          if (updateSuccess) {
+            console.log(`${subscriptionId} aboneliği ${userId} kullanıcısı için iptal edildi`);
+          } else {
+            console.error(`${subscriptionId} aboneliği ${userId} kullanıcısı için iptal edilemedi`);
+          }
         } else {
           console.log(`${subscriptionId} abonelik ID'sine sahip kullanıcı bulunamadı`);
         }
