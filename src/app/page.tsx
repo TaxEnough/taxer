@@ -1,3 +1,5 @@
+"use client";
+
 import Navbar from '@/components/Navbar';
 import Hero from '@/components/Hero';
 import Footer from '@/components/Footer';
@@ -18,10 +20,10 @@ export default function Home() {
             All-in-one platform for tax calculation, portfolio management, and investment tracking. Simplify your financial decisions with our powerful tools and detailed analytics.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
-              <Link href="/register" className="btn bg-primary-600 hover:bg-primary-700 text-white px-8 py-3 rounded-lg font-medium text-center">
+              <Link href="/register" passHref className="btn bg-primary-600 hover:bg-primary-700 text-white px-8 py-3 rounded-lg font-medium text-center">
                 Start Free
               </Link>
-              <Link href="/pricing" className="btn bg-gray-100 hover:bg-gray-200 text-gray-800 px-8 py-3 rounded-lg font-medium text-center">
+              <Link href="/pricing" passHref className="btn bg-gray-100 hover:bg-gray-200 text-gray-800 px-8 py-3 rounded-lg font-medium text-center">
                 Pricing
               </Link>
             </div>
@@ -139,7 +141,7 @@ export default function Home() {
                   <span>Email support</span>
                 </li>
               </ul>
-              <Link href="/register" className="block w-full text-center bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 px-4 rounded-lg">
+              <Link href="/register" passHref className="block w-full text-center bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 px-4 rounded-lg">
                 Get Started
               </Link>
             </div>
@@ -188,14 +190,14 @@ export default function Home() {
                   <span>Multi-portfolio management</span>
                 </li>
               </ul>
-              <Link href="/register" className="block w-full text-center bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 px-4 rounded-lg">
+              <Link href="/register" passHref className="block w-full text-center bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 px-4 rounded-lg">
                 Get Started
               </Link>
             </div>
           </div>
 
           <div className="text-center mt-8">
-            <Link href="/pricing" className="inline-flex items-center text-primary-600 hover:text-primary-800">
+            <Link href="/pricing" passHref className="inline-flex items-center text-primary-600 hover:text-primary-800">
               View full pricing details
               <svg className="ml-2 w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
