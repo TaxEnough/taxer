@@ -20,11 +20,11 @@ export default function SubscribeButton({ priceId, className = '', children }: S
       
       console.log('Starting subscription process for price ID:', priceId);
       
-      // GET isteği için URL'yi ve parametreleri hazırla
+      // URL'nin doğru olduğundan emin olalım - tam (absolute) URL kullanalım
       const successUrl = `${window.location.origin}/dashboard?subscription=success`;
       const cancelUrl = `${window.location.origin}/pricing?subscription=cancelled`;
       
-      // GET isteği ile çalışacak yeni API endpoint'i
+      // API URL'sini düzelt - trailing slash ekle (Next.js'te bazen önemli)
       const API_URL = `/api/payment/checkout?priceId=${encodeURIComponent(priceId)}&successUrl=${encodeURIComponent(successUrl)}&cancelUrl=${encodeURIComponent(cancelUrl)}`;
       
       console.log('Sending request to:', API_URL);
@@ -37,15 +37,24 @@ export default function SubscribeButton({ priceId, className = '', children }: S
         },
       });
       
+      // Response tipini kontrol et
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('Non-JSON response received:', contentType);
+        const responseText = await response.text();
+        console.error('Response body:', responseText.substring(0, 200) + '...');
+        throw new Error(`Server returned ${response.status} with non-JSON response`);
+      }
+      
       // HTTP Status kodunu kontrol et
       if (!response.ok) {
-        const errorText = await response.text();
+        const errorData = await response.json().catch(() => ({}));
         console.error('Error response:', {
           status: response.status,
           statusText: response.statusText,
-          body: errorText
+          data: errorData
         });
-        throw new Error(`Ödeme sistemi yanıt vermedi (${response.status}). Lütfen daha sonra tekrar deneyin.`);
+        throw new Error(`Server responded with ${response.status}: ${errorData.error || response.statusText}`);
       }
       
       // Yanıtı JSON olarak parse et
@@ -56,7 +65,7 @@ export default function SubscribeButton({ priceId, className = '', children }: S
       // Check if we have a URL to redirect to
       if (!data.url) {
         console.error('No checkout URL received from server');
-        setError('Ödeme sayfası oluşturulamadı. Lütfen tekrar deneyin.');
+        setError('No checkout URL received. Please try again.');
         return;
       }
       
@@ -67,8 +76,8 @@ export default function SubscribeButton({ priceId, className = '', children }: S
     } catch (error: any) {
       console.error('Error subscribing:', error);
       
-      // Set a more generic but helpful error message
-      setError(`Ödeme işlemi başlatılamadı: ${error.message}`);
+      // İngilizce hata mesajı
+      setError(`Payment system error: ${error.message}. Please try again later or contact support.`);
     } finally {
       setLoading(false);
     }
@@ -81,7 +90,7 @@ export default function SubscribeButton({ priceId, className = '', children }: S
         disabled={loading}
         className={`${className} ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
       >
-        {loading ? 'İşleniyor...' : children || 'Abone Ol'}
+        {loading ? 'Processing...' : children || 'Subscribe'}
       </button>
       
       {error && (
