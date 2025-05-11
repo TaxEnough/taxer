@@ -5,6 +5,10 @@ import { Providers } from './providers'
 import LoadingTransition from '@/components/LoadingTransition'
 import React, { Suspense } from 'react'
 import { ClerkProvider } from '@clerk/nextjs'
+import { AuthProvider } from '@/context/AuthContext'
+import Footer from '@/components/Footer'
+import { Toaster } from 'react-hot-toast'
+import { Analytics } from '@vercel/analytics/react'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -57,17 +61,46 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <ClerkProvider>
-      <html lang="en-US">
-        <body className={inter.className}>
-          <LoadingTransition />
-          <Providers>
-            <main className="min-h-screen">
-              {children}
-            </main>
-          </Providers>
-        </body>
-      </html>
-    </ClerkProvider>
+    <html lang="en-US">
+      <body className={inter.className}>
+        <ClerkProvider
+          appearance={{
+            elements: { formButtonPrimary: 'bg-primary hover:bg-primary-dark' }
+          }}
+          publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+        >
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                // Basit bir token cache mekanizması manuel olarak ekle
+                // Bu, Clerk'in sayfa yenilemeleri arasında oturumu hatırlamasına yardımcı olur
+                try {
+                  const authToken = localStorage.getItem('clerk-auth-token');
+                  if (authToken) {
+                    window.__clerk_frontend_api = window.__clerk_frontend_api || {};
+                    window.__clerk_frontend_api.tokenCache = {
+                      core: { token: authToken, expiresAt: (new Date().getTime() + 3600000) }
+                    };
+                  }
+                } catch (e) {
+                  console.warn('Token cache initialization failed', e);
+                }
+              `
+            }}
+          />
+          <AuthProvider>
+            <Toaster position="top-center" />
+            <LoadingTransition />
+            <Providers>
+              <main className="min-h-screen">
+                {children}
+              </main>
+            </Providers>
+            <Footer />
+            <Analytics />
+          </AuthProvider>
+        </ClerkProvider>
+      </body>
+    </html>
   )
 } 
