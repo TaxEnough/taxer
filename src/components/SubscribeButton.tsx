@@ -21,19 +21,36 @@ export default function SubscribeButton({ priceId, className = '', children }: S
       
       console.log('Starting subscription process for price ID:', priceId);
       
+      // URL'yi başka bir endpoint olarak deneyelim
+      const API_URL = '/api/payment/create-checkout';
+      
+      // Kesin olarak JSON content type belirterek istek yapalım
       // Create a checkout session via the API
-      const { data } = await axios.post('/api/checkout', 
-        {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           priceId,
           successUrl: `${window.location.origin}/dashboard?subscription=success`,
           cancelUrl: `${window.location.origin}/pricing?subscription=cancelled`,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          }
-        }
-      );
+        })
+      });
+      
+      // HTTP Status kodunu kontrol et
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+      }
+      
+      // Yanıtı JSON olarak parse et
+      const data = await response.json();
       
       console.log('Checkout session created:', data);
       
@@ -51,28 +68,8 @@ export default function SubscribeButton({ priceId, className = '', children }: S
     } catch (error: any) {
       console.error('Error subscribing:', error);
       
-      // Detaylı hata mesajları
-      if (error.response) {
-        // Sunucu yanıtı varsa
-        console.error('Error status:', error.response.status);
-        console.error('Error headers:', error.response.headers);
-        console.error('Error data:', error.response.data);
-        
-        if (error.response.status === 405) {
-          setError(`API Error: Method not allowed. Please contact support.`);
-        } else {
-          const errorMessage = error.response.data?.error || `Server error: ${error.response.status}`;
-          setError(`Error: ${errorMessage}`);
-        }
-      } else if (error.request) {
-        // İstek yapıldı ama yanıt gelmedi
-        console.error('No response received:', error.request);
-        setError(`Network error: No response from server. Please check your connection.`);
-      } else {
-        // İstek yapılamadı
-        console.error('Error message:', error.message);
-        setError(`Error: ${error.message}`);
-      }
+      // Set a more generic but helpful error message
+      setError(`Payment system error: ${error.message}. Please try again later or contact support.`);
     } finally {
       setLoading(false);
     }
