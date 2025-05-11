@@ -5,6 +5,7 @@ import { Providers } from './providers'
 import LoadingTransition from '@/components/LoadingTransition'
 import React, { Suspense } from 'react'
 import { ClerkProvider } from '@clerk/nextjs'
+import { ToastProvider } from '@/components/ui/toast'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -61,11 +62,13 @@ export default function RootLayout({
       <html lang="en-US">
         <body className={inter.className}>
           <LoadingTransition />
-          <Providers>
-            <main className="min-h-screen">
-              {children}
-            </main>
-          </Providers>
+          <ToastProvider>
+            <Providers>
+              <main className="min-h-screen">
+                {children}
+              </main>
+            </Providers>
+          </ToastProvider>
         </body>
       </html>
     </ClerkProvider>
