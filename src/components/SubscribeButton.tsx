@@ -20,22 +20,37 @@ export default function SubscribeButton({ priceId, className = '', children }: S
       
       console.log('Starting subscription process for price ID:', priceId);
       
-      // URL'nin doğru olduğundan emin olalım - tam (absolute) URL kullanalım
+      // URL'nin doğru olduğundan emin olalım
       const successUrl = `${window.location.origin}/dashboard?subscription=success`;
       const cancelUrl = `${window.location.origin}/pricing?subscription=cancelled`;
       
-      // API URL'sini düzelt - trailing slash ekle (Next.js'te bazen önemli)
-      const API_URL = `/api/payment/checkout?priceId=${encodeURIComponent(priceId)}&successUrl=${encodeURIComponent(successUrl)}&cancelUrl=${encodeURIComponent(cancelUrl)}`;
+      // API'nin sonundaki trailing slash önemli olabilir
+      const API_URL = `/api/payment/create-session`;
       
       console.log('Sending request to:', API_URL);
       
-      // Basit bir GET isteği yap
+      // POST isteği yapalım (GET isteği ile rota çakışması oluyor)
       const response = await fetch(API_URL, {
-        method: 'GET',
+        method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
+        body: JSON.stringify({
+          priceId,
+          successUrl,
+          cancelUrl
+        })
       });
+      
+      console.log('Response status:', response.status);
+      
+      // Headers'ı güvenli bir şekilde log yapalım
+      const headersObj: Record<string, string> = {};
+      response.headers.forEach((value, key) => {
+        headersObj[key] = value;
+      });
+      console.log('Response headers:', headersObj);
       
       // Response tipini kontrol et
       const contentType = response.headers.get('content-type');
@@ -43,7 +58,7 @@ export default function SubscribeButton({ priceId, className = '', children }: S
         console.error('Non-JSON response received:', contentType);
         const responseText = await response.text();
         console.error('Response body:', responseText.substring(0, 200) + '...');
-        throw new Error(`Server returned ${response.status} with non-JSON response`);
+        throw new Error(`Server returned ${response.status} with non-JSON response. Check console for details.`);
       }
       
       // HTTP Status kodunu kontrol et
