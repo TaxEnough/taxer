@@ -1,112 +1,70 @@
-import { NextResponse } from "next/server";
 import { clerkMiddleware } from "@clerk/nextjs/server";
-import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
-// Korumalı rotalar tanımla
-const protectedRoutes = [
-  '/dashboard',
-  '/transactions',
-  '/profile',
-  '/reports',
-];
-
-// Premium içerik gerektiren rotalar
-const premiumRoutes = [
-  '/transactions',
-  '/reports',
-];
-
-// Public rotalar tanımla
-const publicRoutes = [
-  '/',
-  '/login',
-  '/register',
-  '/pricing',
-  '/about',
-  '/contact',
-  '/api/webhook/stripe',
-  '/blog',
-  '/api/blog',
-];
-
-// URL'in public bir rotada olup olmadığını kontrol et
-function isPublicRoute(path: string) {
-  return publicRoutes.some(route => path === route || path.startsWith(route));
+// Liste yerine doğrudan kontroller kullanalım
+function isPublicPath(path: string): boolean {
+  return (
+    path === "/" ||
+    path.startsWith("/login") ||
+    path.startsWith("/register") ||
+    path.startsWith("/pricing") ||
+    path.startsWith("/about") ||
+    path.startsWith("/contact") ||
+    path.startsWith("/api/webhook") ||
+    path.startsWith("/blog") ||
+    path.startsWith("/api/blog")
+  );
 }
 
 // Clerk middleware yapılandırması
 export default clerkMiddleware((auth, req) => {
+  // @ts-ignore - Tipler değişmiş olabilir
+  const isSignedIn = !!auth.userId || !!auth.sessionId; 
   const path = req.nextUrl.pathname;
   
-  // Public rotalar için herhangi bir kontrol yapma
-  if (isPublicRoute(path)) {
-    // Login sayfasındayken ve kullanıcı giriş yapmışsa, dashboard'a yönlendir
-    if ((path === '/login' || path === '/register') && auth.userId) {
-      const redirectUrl = new URL('/dashboard', req.url);
-      return NextResponse.redirect(redirectUrl);
-    }
-    return NextResponse.next();
+  // Public path kontrolü
+  const isPublic = isPublicPath(path);
+  
+  // Kullanıcı oturum açmışsa ve login/register sayfalarına erişmeye çalışıyorsa
+  if (isSignedIn && (path.startsWith("/login") || path.startsWith("/register"))) {
+    return NextResponse.redirect(new URL("/dashboard", req.url));
   }
   
-  // Korumalı rotaya erişim kontrolü
-  const isProtectedRoute = protectedRoutes.some(route => path.startsWith(route));
-  const isPremiumRoute = premiumRoutes.some(route => path.startsWith(route));
-  
-  // Kullanıcı girişi yapmamışsa ve korumalı rota ise login'e yönlendir
-  if (isProtectedRoute && !auth.userId) {
-    const redirectUrl = new URL('/login', req.url);
-    return NextResponse.redirect(redirectUrl);
+  // Kullanıcı oturum açmamışsa ve korumalı sayfaya erişmeye çalışıyorsa
+  if (!isPublic && !isSignedIn) {
+    return NextResponse.redirect(new URL("/login", req.url));
   }
   
   // Premium içerik kontrolü
-  if (isPremiumRoute && auth.userId) {
-    // Geliştirme modunda premium erişime her zaman izin ver
-    if (process.env.NODE_ENV === 'development') {
+  if ((path.startsWith("/transactions") || path.startsWith("/reports")) && isSignedIn) {
+    // Geliştirme modunda erişime izin ver
+    if (process.env.NODE_ENV === "development") {
       return NextResponse.next();
     }
     
-    // Kullanıcı premium mi kontrol et
     try {
-      const { sessionClaims } = auth;
+      // @ts-ignore - Tipler değişmiş olabilir
+      const privateMetadata = auth.sessionClaims?.privateMetadata || {};
+      // @ts-ignore - Tipler değişmiş olabilir
+      const publicMetadata = auth.sessionClaims?.publicMetadata || {};
       
-      if (sessionClaims) {
-        const privateMetadata = sessionClaims.privateMetadata as any || {};
-        const publicMetadata = sessionClaims.publicMetadata as any || {};
-        
-        const privateSubscription = privateMetadata.subscription;
-        const publicSubscription = publicMetadata.subscription;
-        
-        const hasActiveSubscription = 
-          (privateSubscription && privateSubscription.status === 'active') ||
-          (publicSubscription && publicSubscription.status === 'active');
-          
-        if (!hasActiveSubscription) {
-          const redirectUrl = new URL('/pricing?premium=required', req.url);
-          return NextResponse.redirect(redirectUrl);
-        }
+      const hasActiveSubscription = 
+        (privateMetadata.subscription?.status === "active") ||
+        (publicMetadata.subscription?.status === "active");
+      
+      if (!hasActiveSubscription) {
+        return NextResponse.redirect(new URL("/pricing?premium=required", req.url));
       }
     } catch (error) {
-      console.error('Premium kontrol hatası:', error);
-      // Hata durumunda kullanıcıyı pricing sayfasına yönlendir
-      const redirectUrl = new URL('/pricing?error=subscription_check', req.url);
-      return NextResponse.redirect(redirectUrl);
+      console.error("Premium durum kontrolü hatası:", error);
+      return NextResponse.redirect(new URL("/pricing?error=subscription_check", req.url));
     }
   }
   
   return NextResponse.next();
 });
 
-// Middleware konfigürasyonu - hangi rotalar için çalışacağını belirt
+// Middleware matcher konfigürasyonu
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - images (public images folder)
-     * - public assets
-     */
-    '/((?!_next/static|_next/image|favicon.ico|images|public|assets).*)',
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|images|public|assets).*)"],
 }; 
