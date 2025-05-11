@@ -42,21 +42,35 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
-// Handle OPTIONS request (preflight)
+// Handle OPTIONS request for CORS preflight
 export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+  return NextResponse.json({}, { 
+    status: 200,
+    headers: corsHeaders
+  });
+}
+
+// GET method to also handle browser navigation
+export async function GET() {
+  return NextResponse.json(
+    { error: 'Please use POST method to create checkout session' },
+    { status: 405, headers: corsHeaders }
+  );
 }
 
 export async function POST(req: NextRequest) {
   try {
+    debugLog('POST isteği alındı', { url: req.url });
+    
     // Get authenticated user from Clerk
     const session = await auth();
     const user = await currentUser();
     
-    // İstek verilerini al (req.json bir kez çağrılabilir)
+    // İstek verilerini al
     let requestData;
     try {
       requestData = await req.json();
+      debugLog('İstek verileri başarıyla alındı', requestData);
     } catch (parseError) {
       errorLog('İstek verisi JSON olarak çözümlenemedi', parseError);
       return NextResponse.json(

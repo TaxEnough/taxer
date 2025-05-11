@@ -22,11 +22,18 @@ export default function SubscribeButton({ priceId, className = '', children }: S
       console.log('Starting subscription process for price ID:', priceId);
       
       // Create a checkout session via the API
-      const { data } = await axios.post('/api/checkout', {
-        priceId,
-        successUrl: `${window.location.origin}/dashboard?subscription=success`,
-        cancelUrl: `${window.location.origin}/pricing?subscription=cancelled`,
-      });
+      const { data } = await axios.post('/api/checkout', 
+        {
+          priceId,
+          successUrl: `${window.location.origin}/dashboard?subscription=success`,
+          cancelUrl: `${window.location.origin}/pricing?subscription=cancelled`,
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      );
       
       console.log('Checkout session created:', data);
       
@@ -37,20 +44,35 @@ export default function SubscribeButton({ priceId, className = '', children }: S
         return;
       }
       
-      // Redirect to Stripe Checkout
-      const stripe = await getStripe();
-      if (stripe) {
-        console.log('Redirecting to Stripe checkout:', data.url);
-        window.location.href = data.url;
-      } else {
-        console.error('Stripe failed to initialize');
-        setError('Payment system failed to initialize. Please try again.');
-      }
+      // Doğrudan Stripe URL'sine yönlendir
+      console.log('Redirecting to Stripe checkout:', data.url);
+      window.location.href = data.url;
+      
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Something went wrong';
       console.error('Error subscribing:', error);
-      console.error('Response data:', error.response?.data);
-      setError(`Error: ${errorMessage}`);
+      
+      // Detaylı hata mesajları
+      if (error.response) {
+        // Sunucu yanıtı varsa
+        console.error('Error status:', error.response.status);
+        console.error('Error headers:', error.response.headers);
+        console.error('Error data:', error.response.data);
+        
+        if (error.response.status === 405) {
+          setError(`API Error: Method not allowed. Please contact support.`);
+        } else {
+          const errorMessage = error.response.data?.error || `Server error: ${error.response.status}`;
+          setError(`Error: ${errorMessage}`);
+        }
+      } else if (error.request) {
+        // İstek yapıldı ama yanıt gelmedi
+        console.error('No response received:', error.request);
+        setError(`Network error: No response from server. Please check your connection.`);
+      } else {
+        // İstek yapılamadı
+        console.error('Error message:', error.message);
+        setError(`Error: ${error.message}`);
+      }
     } finally {
       setLoading(false);
     }
