@@ -1,4 +1,4 @@
-import { auth, db } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, getDoc, doc, addDoc, updateDoc, deleteDoc, orderBy, DocumentData } from 'firebase/firestore';
 import { Transaction } from '@/types/transaction';
 
