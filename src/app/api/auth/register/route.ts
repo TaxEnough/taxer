@@ -60,32 +60,32 @@ export async function POST(request: NextRequest) {
       const lastName = names.length > 1 ? names.slice(1).join(' ') : '';
       
       const clerk = await clerkClient();
-      const user = await clerk.users.create({
+      const userResponse = await clerk.users.createUser({
         emailAddress: [body.email],
         password: body.password,
         firstName,
         lastName,
       });
       
-      console.log('User registration successful with Clerk:', user.id);
+      console.log('User registration successful with Clerk:', userResponse.id);
       
       // Generate token
       console.log('Generating token');
       const userData = {
-        uid: user.id,
+        uid: userResponse.id,
         email: body.email,
         name: body.name
       };
       console.log('Token created, content:', userData);
       
-      const token = await generateToken(user.id);
+      const token = await generateToken(userResponse.id);
       const { COOKIE_NAME } = await getConstants();
       
       // Create response
       const response = NextResponse.json({
         success: true,
         user: {
-          id: user.id,
+          id: userResponse.id,
           email: body.email,
           name: body.name
         },
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
       response.headers.set('Expires', '0');
       
       console.log('Returning successful response, user:', {
-        id: user.id,
+        id: userResponse.id,
         email: body.email,
         name: body.name
       });
