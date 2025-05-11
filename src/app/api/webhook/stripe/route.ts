@@ -15,6 +15,9 @@ type SubscriptionUserMetadata = {
 
 type ClerkUser = {
   id: string;
+  email?: string;
+  username?: string;
+  primaryEmail?: string;
   privateMetadata: SubscriptionUserMetadata;
   publicMetadata: SubscriptionUserMetadata;
 };
@@ -74,6 +77,26 @@ async function getClerkUserList(limit: number = 100): Promise<{ data: ClerkUser[
   } catch (error) {
     console.error("Kullanıcı listesi alınırken hata:", error);
     return { data: [] };
+  }
+}
+
+// Belirli bir kullanıcıyı email ile bulmak için yardımcı fonksiyon
+async function findUserByEmail(email: string): Promise<ClerkUser | null> {
+  try {
+    // Kullanıcı listesini al
+    const userList = await getClerkUserList(100);
+    
+    // Email'e göre kullanıcıyı bul
+    const user = userList.data.find(u => 
+      u.primaryEmail === email || 
+      u.email === email || 
+      (u.username && u.username.toLowerCase() === email.toLowerCase())
+    );
+    
+    return user || null;
+  } catch (error) {
+    console.error("Email ile kullanıcı arama hatası:", error);
+    return null;
   }
 }
 
@@ -154,6 +177,64 @@ export async function POST(req: Request) {
         } else {
           console.error(`${subscription.id} aboneliği ${userId} kullanıcısı için kaydedilemedi`);
           throw new Error('Clerk user metadata update failed');
+        }
+        
+        break;
+      }
+      
+      case 'customer.subscription.created': {
+        // Yeni abonelik oluşturulduğunda işle
+        const subscription = event.data.object as any;
+        const subscriptionId = subscription.id;
+        const customerId = subscription.customer;
+        
+        // Stripe'dan müşteri bilgilerini al
+        const customer = await stripe.customers.retrieve(customerId) as any;
+        
+        // Customer email'i kullanarak Clerk'te kullanıcıyı bul
+        const user = await findUserByEmail(customer.email);
+        
+        if (user) {
+          const userId = user.id;
+          
+          // Planı belirle
+          const priceId = subscription.items.data[0].price.id;
+          let planType = 'premium'; // varsayılan olarak premium
+          
+          // Fiyat ID'ye göre planı belirle - gerekirse ayarla
+          if (priceId === process.env.PRICE_ID_BASIC_MONTHLY || 
+              priceId === process.env.PRICE_ID_BASIC_YEARLY) {
+            planType = 'basic';
+          }
+          
+          // Abonelik detaylarını oluştur
+          const subscriptionDetails = {
+            id: subscription.id,
+            status: subscription.status,
+            plan: planType,
+            currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+            priceId: priceId
+          };
+          
+          // Clerk kullanıcı metadatasını güncelle
+          const updateSuccess = await updateClerkUserMetadata(
+            userId,
+            { subscription: subscriptionDetails },
+            { 
+              subscription: {
+                status: subscription.status,
+                plan: planType
+              }
+            }
+          );
+          
+          if (updateSuccess) {
+            console.log(`Yeni abonelik ${subscriptionId} kullanıcısı ${userId} için oluşturuldu`);
+          } else {
+            console.error(`Yeni abonelik ${subscriptionId} kullanıcı ${userId} için oluşturulamadı`);
+          }
+        } else {
+          console.error(`Kullanıcı bulunamadı: ${customer.email}`);
         }
         
         break;
