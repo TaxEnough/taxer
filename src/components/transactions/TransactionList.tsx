@@ -7,6 +7,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { getAuthTokenFromClient } from '@/lib/auth-client';
 import { useAuth } from '@/context/AuthContext';
 import { useClerkAuthCache, getQuickPremiumStatus } from '@/lib/clerk-utils';
+import PageWithToast from '@/components/PageWithToast';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -433,224 +434,226 @@ export default function TransactionList() {
   }
 
   return (
-    <div className="rounded-md border">
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <caption className="text-sm text-gray-500 mb-2">Transaction list</caption>
-          <thead>
-            <tr className="border-b">
-              <th className="w-10 py-3 px-2">
-                <input 
-                  type="checkbox" 
-                  className="h-4 w-4 rounded border-gray-300"
-                  checked={selectedTransactions.length === transactions.length && transactions.length > 0}
-                  onChange={(e) => handleSelectAll(e.target.checked)}
-                />
-              </th>
-              <th className="py-3 px-4 text-left font-medium">Date</th>
-              <th className="py-3 px-4 text-left font-medium">Symbol</th>
-              <th className="py-3 px-4 text-left font-medium">Type</th>
-              <th className="py-3 px-4 text-right font-medium">Quantity</th>
-              <th className="py-3 px-4 text-right font-medium">Price</th>
-              <th className="py-3 px-4 text-right font-medium">Total</th>
-              <th className="py-3 px-4 text-right font-medium">Fees</th>
-              <th className="py-3 px-4 text-center font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-          {transactions.map((transaction) => (
-              <tr key={transaction.id} className="border-b hover:bg-gray-50">
-                <td className="py-3 px-2">
+    <PageWithToast>
+      <div className="rounded-md border">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <caption className="text-sm text-gray-500 mb-2">Transaction list</caption>
+            <thead>
+              <tr className="border-b">
+                <th className="w-10 py-3 px-2">
                   <input 
                     type="checkbox" 
                     className="h-4 w-4 rounded border-gray-300"
-                    checked={selectedTransactions.includes(transaction.id)}
-                    onChange={(e) => handleSelectTransaction(transaction.id, e.target.checked)}
+                    checked={selectedTransactions.length === transactions.length && transactions.length > 0}
+                    onChange={(e) => handleSelectAll(e.target.checked)}
                   />
-                </td>
-                
-                {editingId === transaction.id ? (
-                  // Editing mode
-                  <>
-                    <td className="py-3 px-4">
-                      <input 
-                        type="date" 
-                        value={editedTransaction?.date ? editedTransaction.date.split('T')[0] : ''}
-                        onChange={(e) => handleEditChange('date', e.target.value)}
-                        className="w-full p-2 border rounded"
-                      />
-                    </td>
-                    <td className="py-3 px-4">
-                      <input 
-                        type="text" 
-                        value={editedTransaction?.ticker || ''} 
-                        onChange={(e) => handleEditChange('ticker', e.target.value)}
-                        className="w-full p-2 border rounded"
-                      />
-                    </td>
-                    <td className="py-3 px-4">
-                      <select 
-                        value={editedTransaction?.transactionType || 'BUY'}
-                        onChange={(e) => handleEditChange('transactionType', e.target.value)}
-                        className="w-full p-2 border rounded"
-                      >
-                        <option value="BUY">Buy</option>
-                        <option value="SELL">Sell</option>
-                      </select>
-                    </td>
-                    <td className="py-3 px-4">
-                      <input 
-                        type="number" 
-                        value={editedTransaction?.shares || 0}
-                        onChange={(e) => handleEditChange('shares', parseFloat(e.target.value) || 0)}
-                        className="w-full p-2 border rounded text-right"
-                      />
-                    </td>
-                    <td className="py-3 px-4">
-                      <input 
-                        type="number" 
-                        value={editedTransaction?.price || 0}
-                        onChange={(e) => handleEditChange('price', parseFloat(e.target.value) || 0)}
-                        className="w-full p-2 border rounded text-right"
-                        step="0.01"
-                      />
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      {formatCurrency((editedTransaction?.price || 0) * (editedTransaction?.shares || 0))}
-                    </td>
-                    <td className="py-3 px-4">
-                      <input 
-                        type="number" 
-                        value={editedTransaction?.fees || 0}
-                        onChange={(e) => handleEditChange('fees', parseFloat(e.target.value) || 0)}
-                        className="w-full p-2 border rounded text-right"
-                        step="0.01"
-                      />
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex justify-center space-x-2">
-                        <button 
-                          className="p-1 rounded-full hover:bg-gray-100"
-                          onClick={saveEdit}
-                        >
-                          <Save className="h-4 w-4 text-green-600" />
-                        </button>
-                        <button 
-                          className="p-1 rounded-full hover:bg-gray-100"
-                          onClick={cancelEditing}
-                        >
-                          <X className="h-4 w-4 text-red-600" />
-                        </button>
-                      </div>
-                    </td>
-                  </>
-                ) : (
-                  // View mode
-                  <>
-                    <td className="py-3 px-4">{formatDate(transaction.date ? new Date(transaction.date) : null)}</td>
-                    <td className="py-3 px-4 font-medium">{transaction.ticker}</td>
-                    <td className="py-3 px-4">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-md ${
-                        transaction.transactionType === 'SELL' 
-                          ? 'bg-red-50 text-red-600' 
-                          : 'bg-green-50 text-green-600'
-                      }`}>
-                        {transaction.transactionType}
-                </span>
-                    </td>
-                    <td className="py-3 px-4 text-right">{transaction.shares}</td>
-                    <td className="py-3 px-4 text-right">{formatCurrency(transaction.price)}</td>
-                    <td className="py-3 px-4 text-right">{formatCurrency(transaction.price * transaction.shares)}</td>
-                    <td className="py-3 px-4 text-right">{formatCurrency(transaction.fees)}</td>
-                    <td className="py-3 px-4">
-                <div className="flex justify-center space-x-2">
-                        <button 
-                          className="p-1 rounded-full hover:bg-gray-100"
-                          onClick={() => startEditing(transaction)}
-                        >
-                      <Edit className="h-4 w-4" />
-                        </button>
-                        <button 
-                          className="p-1 rounded-full hover:bg-gray-100"
-                          onClick={() => openDeleteConfirm(transaction.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                        </button>
-                </div>
-                    </td>
-                  </>
-                )}
+                </th>
+                <th className="py-3 px-4 text-left font-medium">Date</th>
+                <th className="py-3 px-4 text-left font-medium">Symbol</th>
+                <th className="py-3 px-4 text-left font-medium">Type</th>
+                <th className="py-3 px-4 text-right font-medium">Quantity</th>
+                <th className="py-3 px-4 text-right font-medium">Price</th>
+                <th className="py-3 px-4 text-right font-medium">Total</th>
+                <th className="py-3 px-4 text-right font-medium">Fees</th>
+                <th className="py-3 px-4 text-center font-medium">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {selectedTransactions.length > 0 && (
-        <div className="p-4 border-t flex justify-between items-center bg-gray-50">
-          <span className="text-sm text-gray-700">
-            {selectedTransactions.length} {selectedTransactions.length === 1 ? 'transaction' : 'transactions'} selected
-          </span>
-          <button 
-            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
-            onClick={() => setConfirmBatchDelete(true)}
-          >
-            Delete Selected
-          </button>
+            </thead>
+            <tbody>
+            {transactions.map((transaction) => (
+                <tr key={transaction.id} className="border-b hover:bg-gray-50">
+                  <td className="py-3 px-2">
+                    <input 
+                      type="checkbox" 
+                      className="h-4 w-4 rounded border-gray-300"
+                      checked={selectedTransactions.includes(transaction.id)}
+                      onChange={(e) => handleSelectTransaction(transaction.id, e.target.checked)}
+                    />
+                  </td>
+                  
+                  {editingId === transaction.id ? (
+                    // Editing mode
+                    <>
+                      <td className="py-3 px-4">
+                        <input 
+                          type="date" 
+                          value={editedTransaction?.date ? editedTransaction.date.split('T')[0] : ''}
+                          onChange={(e) => handleEditChange('date', e.target.value)}
+                          className="w-full p-2 border rounded"
+                        />
+                      </td>
+                      <td className="py-3 px-4">
+                        <input 
+                          type="text" 
+                          value={editedTransaction?.ticker || ''} 
+                          onChange={(e) => handleEditChange('ticker', e.target.value)}
+                          className="w-full p-2 border rounded"
+                        />
+                      </td>
+                      <td className="py-3 px-4">
+                        <select 
+                          value={editedTransaction?.transactionType || 'BUY'}
+                          onChange={(e) => handleEditChange('transactionType', e.target.value)}
+                          className="w-full p-2 border rounded"
+                        >
+                          <option value="BUY">Buy</option>
+                          <option value="SELL">Sell</option>
+                        </select>
+                      </td>
+                      <td className="py-3 px-4">
+                        <input 
+                          type="number" 
+                          value={editedTransaction?.shares || 0}
+                          onChange={(e) => handleEditChange('shares', parseFloat(e.target.value) || 0)}
+                          className="w-full p-2 border rounded text-right"
+                        />
+                      </td>
+                      <td className="py-3 px-4">
+                        <input 
+                          type="number" 
+                          value={editedTransaction?.price || 0}
+                          onChange={(e) => handleEditChange('price', parseFloat(e.target.value) || 0)}
+                          className="w-full p-2 border rounded text-right"
+                          step="0.01"
+                        />
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        {formatCurrency((editedTransaction?.price || 0) * (editedTransaction?.shares || 0))}
+                      </td>
+                      <td className="py-3 px-4">
+                        <input 
+                          type="number" 
+                          value={editedTransaction?.fees || 0}
+                          onChange={(e) => handleEditChange('fees', parseFloat(e.target.value) || 0)}
+                          className="w-full p-2 border rounded text-right"
+                          step="0.01"
+                        />
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex justify-center space-x-2">
+                          <button 
+                            className="p-1 rounded-full hover:bg-gray-100"
+                            onClick={saveEdit}
+                          >
+                            <Save className="h-4 w-4 text-green-600" />
+                          </button>
+                          <button 
+                            className="p-1 rounded-full hover:bg-gray-100"
+                            onClick={cancelEditing}
+                          >
+                            <X className="h-4 w-4 text-red-600" />
+                          </button>
+                        </div>
+                      </td>
+                    </>
+                  ) : (
+                    // View mode
+                    <>
+                      <td className="py-3 px-4">{formatDate(transaction.date ? new Date(transaction.date) : null)}</td>
+                      <td className="py-3 px-4 font-medium">{transaction.ticker}</td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2 py-1 text-xs font-medium rounded-md ${
+                          transaction.transactionType === 'SELL' 
+                            ? 'bg-red-50 text-red-600' 
+                            : 'bg-green-50 text-green-600'
+                        }`}>
+                          {transaction.transactionType}
+                    </span>
+                      </td>
+                      <td className="py-3 px-4 text-right">{transaction.shares}</td>
+                      <td className="py-3 px-4 text-right">{formatCurrency(transaction.price)}</td>
+                      <td className="py-3 px-4 text-right">{formatCurrency(transaction.price * transaction.shares)}</td>
+                      <td className="py-3 px-4 text-right">{formatCurrency(transaction.fees)}</td>
+                      <td className="py-3 px-4">
+                    <div className="flex justify-center space-x-2">
+                            <button 
+                              className="p-1 rounded-full hover:bg-gray-100"
+                              onClick={() => startEditing(transaction)}
+                            >
+                          <Edit className="h-4 w-4" />
+                            </button>
+                            <button 
+                              className="p-1 rounded-full hover:bg-gray-100"
+                              onClick={() => openDeleteConfirm(transaction.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                            </button>
+                    </div>
+                      </td>
+                    </>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      )}
 
-      {/* Single Delete Confirmation Dialog */}
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent className="max-w-md bg-white border border-gray-200 shadow-lg">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-gray-900">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
-              Delete Transaction
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-gray-600">
-              Are you sure you want to delete this transaction? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="border-t border-gray-100 pt-4">
-            <AlertDialogCancel className="border border-gray-200 bg-white text-gray-700 hover:bg-gray-50">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction 
-              className="bg-red-600 text-white hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-              onClick={handleDeleteConfirmed}
+        {selectedTransactions.length > 0 && (
+          <div className="p-4 border-t flex justify-between items-center bg-gray-50">
+            <span className="text-sm text-gray-700">
+              {selectedTransactions.length} {selectedTransactions.length === 1 ? 'transaction' : 'transactions'} selected
+            </span>
+            <button 
+              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
+              onClick={() => setConfirmBatchDelete(true)}
             >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              Delete Selected
+            </button>
+          </div>
+        )}
 
-      {/* Batch Delete Confirmation Dialog */}
-      <AlertDialog open={confirmBatchDelete} onOpenChange={setConfirmBatchDelete}>
-        <AlertDialogContent className="max-w-md bg-white border border-gray-200 shadow-lg">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-gray-900">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
-              Delete Multiple Transactions
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-gray-600">
-              Are you sure you want to delete {selectedTransactions.length} selected transactions? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="border-t border-gray-100 pt-4">
-            <AlertDialogCancel className="border border-gray-200 bg-white text-gray-700 hover:bg-gray-50">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction 
-              className="bg-red-600 text-white hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-              onClick={handleDeleteSelected}
-            >
-              Delete All Selected
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+        {/* Single Delete Confirmation Dialog */}
+        <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <AlertDialogContent className="max-w-md bg-white border border-gray-200 shadow-lg">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-gray-900">
+                <AlertTriangle className="h-5 w-5 text-red-500" />
+                Delete Transaction
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-gray-600">
+                Are you sure you want to delete this transaction? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="border-t border-gray-100 pt-4">
+              <AlertDialogCancel className="border border-gray-200 bg-white text-gray-700 hover:bg-gray-50">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction 
+                className="bg-red-600 text-white hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                onClick={handleDeleteConfirmed}
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Batch Delete Confirmation Dialog */}
+        <AlertDialog open={confirmBatchDelete} onOpenChange={setConfirmBatchDelete}>
+          <AlertDialogContent className="max-w-md bg-white border border-gray-200 shadow-lg">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-gray-900">
+                <AlertTriangle className="h-5 w-5 text-red-500" />
+                Delete Multiple Transactions
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-gray-600">
+                Are you sure you want to delete {selectedTransactions.length} selected transactions? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="border-t border-gray-100 pt-4">
+              <AlertDialogCancel className="border border-gray-200 bg-white text-gray-700 hover:bg-gray-50">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction 
+                className="bg-red-600 text-white hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                onClick={handleDeleteSelected}
+              >
+                Delete All Selected
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </PageWithToast>
   );
 } 

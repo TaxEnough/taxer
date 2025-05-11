@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { parse } from 'papaparse';
 import * as XLSX from 'xlsx';
 import { getAuthTokenFromClient } from '@/lib/auth-client';
+import PageWithToast from '@/components/PageWithToast';
 
 // İşlem verisini tanımlama
 interface ParsedTransaction {
@@ -323,185 +324,187 @@ export default function UploadTransactions() {
   };
 
   return (
-    <div className="container mx-auto py-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Upload Transactions</h1>
-        <Button variant="outline" onClick={() => router.push('/transactions')}>
-          Go Back
-        </Button>
-      </div>
-
-      {!isFileLoaded ? (
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <div 
-            className="border-2 border-dashed rounded-lg p-10 text-center cursor-pointer mb-5 hover:bg-gray-50"
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={handleDrop}
-            onClick={() => document.getElementById('file-upload')?.click()}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-            </svg>
-            <p className="mb-1">Drag your file here or click to select</p>
-            <p className="text-sm text-gray-500">CSV or Excel (.xlsx, .xls) formats are supported</p>
-            <input 
-              id="file-upload" 
-              type="file" 
-              className="hidden" 
-              accept=".csv,.xlsx,.xls" 
-              onChange={handleFileChange}
-            />
-          </div>
-          
-          {isAnalyzing && (
-            <div className="text-center py-4">
-              <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary-500 mx-auto"></div>
-              <p className="mt-2">Analyzing file...</p>
-            </div>
-          )}
-
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
-              <p className="font-medium">Error</p>
-              <p>{error}</p>
-            </div>
-          )}
+    <PageWithToast>
+      <div className="container mx-auto py-6">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">Upload Transactions</h1>
+          <Button variant="outline" onClick={() => router.push('/transactions')}>
+            Go Back
+          </Button>
         </div>
-      ) : (
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold mb-2">Column Mapping</h2>
-            <p className="text-sm text-gray-600 mb-4">Match the columns from your file with transaction fields</p>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Object.keys(columnMapping).map((field) => (
-                <div key={field} className="mb-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {field === 'ticker' ? 'Stock Symbol' : 
-                     field === 'transactionType' ? 'Transaction Type' :
-                     field === 'numberOfShares' ? 'Number of Shares' :
-                     field === 'sharePrice' ? 'Share Price' :
-                     field === 'date' ? 'Date' :
-                     field === 'fees' ? 'Fees' :
-                     field === 'notes' ? 'Notes' : field}
-                    {['ticker', 'transactionType', 'numberOfShares', 'sharePrice', 'date'].includes(field) && ' *'}
-                  </label>
-                  <select
-                    value={columnMapping[field as keyof ColumnMapping]}
-                    onChange={(e) => handleMappingChange(field as keyof ColumnMapping, e.target.value)}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                  >
-                    <option value="">Select...</option>
-                    {headers.map((header) => (
-                      <option key={header} value={header}>
-                        {header}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ))}
-            </div>
-          </div>
 
-          <div className="mb-6">
-            <div className="flex justify-between items-center mb-2">
-              <h2 className="text-lg font-semibold">Preview</h2>
-              <div>
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={selectedRows.length === fileData.length}
-                    onChange={toggleAllRows}
-                    className="rounded text-primary-600 mr-2"
-                  />
-                  Select All ({selectedRows.length}/{fileData.length})
-                </label>
+        {!isFileLoaded ? (
+          <div className="bg-white p-6 rounded-lg shadow-md">
+            <div 
+              className="border-2 border-dashed rounded-lg p-10 text-center cursor-pointer mb-5 hover:bg-gray-50"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleDrop}
+              onClick={() => document.getElementById('file-upload')?.click()}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              <p className="mb-1">Drag your file here or click to select</p>
+              <p className="text-sm text-gray-500">CSV or Excel (.xlsx, .xls) formats are supported</p>
+              <input 
+                id="file-upload" 
+                type="file" 
+                className="hidden" 
+                accept=".csv,.xlsx,.xls" 
+                onChange={handleFileChange}
+              />
+            </div>
+            
+            {isAnalyzing && (
+              <div className="text-center py-4">
+                <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary-500 mx-auto"></div>
+                <p className="mt-2">Analyzing file...</p>
+              </div>
+            )}
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+                <p className="font-medium">Error</p>
+                <p>{error}</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="bg-white p-6 rounded-lg shadow-md">
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold mb-2">Column Mapping</h2>
+              <p className="text-sm text-gray-600 mb-4">Match the columns from your file with transaction fields</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Object.keys(columnMapping).map((field) => (
+                  <div key={field} className="mb-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {field === 'ticker' ? 'Stock Symbol' : 
+                       field === 'transactionType' ? 'Transaction Type' :
+                       field === 'numberOfShares' ? 'Number of Shares' :
+                       field === 'sharePrice' ? 'Share Price' :
+                       field === 'date' ? 'Date' :
+                       field === 'fees' ? 'Fees' :
+                       field === 'notes' ? 'Notes' : field}
+                      {['ticker', 'transactionType', 'numberOfShares', 'sharePrice', 'date'].includes(field) && ' *'}
+                    </label>
+                    <select
+                      value={columnMapping[field as keyof ColumnMapping]}
+                      onChange={(e) => handleMappingChange(field as keyof ColumnMapping, e.target.value)}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                    >
+                      <option value="">Select...</option>
+                      {headers.map((header) => (
+                        <option key={header} value={header}>
+                          {header}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Seç
-                    </th>
-                    {headers.map((header) => (
-                      <th key={header} scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        {header}
+
+            <div className="mb-6">
+              <div className="flex justify-between items-center mb-2">
+                <h2 className="text-lg font-semibold">Preview</h2>
+                <div>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedRows.length === fileData.length}
+                      onChange={toggleAllRows}
+                      className="rounded text-primary-600 mr-2"
+                    />
+                    Select All ({selectedRows.length}/{fileData.length})
+                  </label>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Seç
                       </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {fileData.slice(0, 10).map((row, index) => (
-                    <tr key={index} className={selectedRows.includes(row) ? 'bg-blue-50' : ''}>
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        <input
-                          type="checkbox"
-                          checked={selectedRows.includes(row)}
-                          onChange={() => toggleRowSelection(index)}
-                          className="rounded text-primary-600"
-                        />
-                      </td>
                       {headers.map((header) => (
-                        <td key={header} className="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
-                          {row[header]?.toString() || '-'}
-                        </td>
+                        <th key={header} scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          {header}
+                        </th>
                       ))}
                     </tr>
-                  ))}
-                  {fileData.length > 10 && (
-                    <tr>
-                      <td colSpan={headers.length + 1} className="px-3 py-2 text-sm text-gray-500 text-center">
-                        {fileData.length - 10} satır daha...
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {fileData.slice(0, 10).map((row, index) => (
+                      <tr key={index} className={selectedRows.includes(row) ? 'bg-blue-50' : ''}>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          <input
+                            type="checkbox"
+                            checked={selectedRows.includes(row)}
+                            onChange={() => toggleRowSelection(index)}
+                            className="rounded text-primary-600"
+                          />
+                        </td>
+                        {headers.map((header) => (
+                          <td key={header} className="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
+                            {row[header]?.toString() || '-'}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                    {fileData.length > 10 && (
+                      <tr>
+                        <td colSpan={headers.length + 1} className="px-3 py-2 text-sm text-gray-500 text-center">
+                          {fileData.length - 10} satır daha...
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+                <p className="font-medium">Error</p>
+                <p>{error}</p>
+              </div>
+            )}
+
+            {success && (
+              <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded mb-4">
+                <p className="font-medium">Success</p>
+                <p>{success}</p>
+              </div>
+            )}
+
+            <div className="flex gap-3 mt-4">
+              <Button 
+                onClick={processSelectedRows} 
+                disabled={loading || selectedRows.length === 0}
+                className="w-full"
+              >
+                {loading ? 'İşleniyor...' : `Seçilen İşlemleri Kaydet (${selectedRows.length})`}
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setIsFileLoaded(false);
+                  setFile(null);
+                  setFileData([]);
+                  setHeaders([]);
+                  setSelectedRows([]);
+                  setError(null);
+                  setSuccess(null);
+                }}
+                className="w-1/3"
+              >
+                İptal
+              </Button>
             </div>
           </div>
-
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
-              <p className="font-medium">Error</p>
-              <p>{error}</p>
-            </div>
-          )}
-
-          {success && (
-            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded mb-4">
-              <p className="font-medium">Success</p>
-              <p>{success}</p>
-            </div>
-          )}
-
-          <div className="flex gap-3 mt-4">
-            <Button 
-              onClick={processSelectedRows} 
-              disabled={loading || selectedRows.length === 0}
-              className="w-full"
-            >
-              {loading ? 'İşleniyor...' : `Seçilen İşlemleri Kaydet (${selectedRows.length})`}
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setIsFileLoaded(false);
-                setFile(null);
-                setFileData([]);
-                setHeaders([]);
-                setSelectedRows([]);
-                setError(null);
-                setSuccess(null);
-              }}
-              className="w-1/3"
-            >
-              İptal
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </PageWithToast>
   );
 } 

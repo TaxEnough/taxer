@@ -7,6 +7,7 @@ import Footer from '@/components/Footer';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { getAuthTokenFromClient } from '@/lib/auth-client';
+import PageWithToast from '@/components/PageWithToast';
 
 export default function NewTransaction() {
   const router = useRouter();
@@ -108,7 +109,7 @@ export default function NewTransaction() {
   };
   
   return (
-    <>
+    <PageWithToast>
       <Navbar />
       <div className="min-h-screen bg-gray-100">
         <header className="bg-white shadow">
@@ -335,6 +336,6 @@ export default function NewTransaction() {
         </main>
       </div>
       <Footer />
-    </>
+    </PageWithToast>
   );
 } 
