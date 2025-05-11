@@ -173,14 +173,10 @@ export async function POST(req: NextRequest) {
         metadata: userMetadata,
         subscription_data: {
           metadata: userMetadata,
-          trial_period_days: 7,
         },
         allow_promotion_codes: true,
       });
       
-      // Webhook olayı simüle et
-      console.log(`🟢 WEBHOOK SİMÜLASYONU! Kullanıcı: ${userEmail}, Session: ${checkoutSession.id}`);
-
       debugLog('Ödeme oturumu oluşturuldu:', { 
         sessionId: checkoutSession.id,
         url: checkoutSession.url,
