@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { registerUser } from '@/lib/auth-firebase';
+import { clerkClient } from '@clerk/nextjs/server';
 import { generateToken, setAuthCookieOnServer, getConstants } from '@/lib/auth-server';
 
 // E-posta formatı doğrulama
@@ -50,32 +50,44 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Register user
-    console.log('Registering user:', body.email);
+    // Register user with Clerk
+    console.log('Registering user with Clerk:', body.email);
     
     try {
-      const user = await registerUser(body.name, body.email, body.password);
-      console.log('User registration successful:', user.uid);
+      // Clerk ile kullanıcı oluştur
+      const names = body.name.split(' ');
+      const firstName = names[0];
+      const lastName = names.length > 1 ? names.slice(1).join(' ') : '';
+      
+      const clerk = await clerkClient();
+      const user = await clerk.users.create({
+        emailAddress: [body.email],
+        password: body.password,
+        firstName,
+        lastName,
+      });
+      
+      console.log('User registration successful with Clerk:', user.id);
       
       // Generate token
       console.log('Generating token');
       const userData = {
-        uid: user.uid,
-        email: user.email,
-        name: user.displayName || body.name
+        uid: user.id,
+        email: body.email,
+        name: body.name
       };
       console.log('Token created, content:', userData);
       
-      const token = await generateToken(user.uid);
+      const token = await generateToken(user.id);
       const { COOKIE_NAME } = await getConstants();
       
       // Create response
       const response = NextResponse.json({
         success: true,
         user: {
-          id: user.uid,
-          email: user.email,
-          name: user.displayName || body.name
+          id: user.id,
+          email: body.email,
+          name: body.name
         },
         token: token, // Send token to client side too
         redirectUrl: '/dashboard'
@@ -93,14 +105,14 @@ export async function POST(request: NextRequest) {
       response.headers.set('Expires', '0');
       
       console.log('Returning successful response, user:', {
-        id: user.uid,
-        email: user.email,
-        name: user.displayName || body.name
+        id: user.id,
+        email: body.email,
+        name: body.name
       });
       
       return response;
     } catch (registerError: any) {
-      console.error('Firebase registration error:', registerError);
+      console.error('Clerk registration error:', registerError);
       return NextResponse.json(
         { error: registerError.message || 'Registration failed' },
         { status: 400 }
