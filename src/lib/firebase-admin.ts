@@ -1,6 +1,5 @@
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
-import { getAuth, Auth } from 'firebase-admin/auth';
 
 // Servis hesabı kimlik bilgilerini yapılandır
 interface ServiceAccount {
@@ -44,7 +43,6 @@ try {
 // Firebase Admin SDK'yı yalnızca bir kez başlat
 let adminApp;
 let db: Firestore;
-let auth: Auth;
 
 try {
   const apps = getApps();
@@ -61,14 +59,13 @@ try {
     adminApp = apps[0];
   }
   
-  // Firestore ve Auth referanslarını al
+  // Sadece Firestore referansını al
   db = getFirestore(adminApp);
-  auth = getAuth(adminApp);
   
-  console.log('Firebase Admin: Başarıyla yapılandırıldı');
+  console.log('Firebase Admin: Başarıyla yapılandırıldı (sadece Firestore)');
 } catch (error) {
   console.error('Firebase Admin: SDK başlatılırken hata:', error);
   throw new Error('Firebase Admin SDK başlatma hatası');
 }
 
-export { db, auth, adminApp }; 
+export { db, adminApp }; 

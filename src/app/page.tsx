@@ -1,10 +1,12 @@
 "use client";
 
-import Navbar from '@/components/Navbar';
-import Hero from '@/components/Hero';
-import Footer from '@/components/Footer';
+import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import Navbar from '@/components/Navbar';
+import Footer from '@/components/Footer';
+import { useRouter } from 'next/navigation';
+import Hero from '@/components/Hero';
 
 export default function Home() {
   return (

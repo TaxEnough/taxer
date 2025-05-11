@@ -2,7 +2,7 @@ import { compare, hash } from 'bcryptjs';
 import { sign, verify } from 'jsonwebtoken';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { auth } from './firebase-admin';
+import { clerkClient } from '@clerk/nextjs/server';
 
 // JWT için gerekli sabitleri tanımla (JWT_SECRET varsa)
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
@@ -114,9 +114,9 @@ export async function removeAuthCookieOnServer(): Promise<void> {
 }
 
 /**
- * Firebase kimlik doğrulama token'ını doğrular
+ * Clerk kimlik doğrulama token'ını doğrular
  * 
- * @param token Firebase kimlik doğrulama token'ı
+ * @param token Clerk kimlik doğrulama token'ı
  * @returns Doğrulanmış token bilgisi veya null
  */
 export async function verifyTokenServer(token: string) {
@@ -135,83 +135,110 @@ export async function verifyTokenServer(token: string) {
   console.log('Token doğrulama başlıyor, token uzunluğu:', token.length);
 
   try {
-    // Firebase Admin doğrulamasını öncelikle dene
+    // Clerk kullanıcısını doğrulama
     try {
-      // Firebase Admin SDK ile doğrula
-      console.log('Firebase Admin SDK ile token doğrulanıyor');
-      const decodedToken = await auth.verifyIdToken(token, true);
-      console.log('Token Firebase Admin ile başarıyla doğrulandı');
+      const clerk = await clerkClient();
+      // JWT'nin subject (sub) alanı Clerk kullanıcı ID'sidir
+      const decoded = verify(token, '', { algorithms: ['RS256'], complete: true }) as any;
       
-      // Account status'ü kontrol et, yoksa varsayılan olarak 'free' kullan
-      if (!decodedToken.accountStatus) {
-        decodedToken.accountStatus = 'free';
-      }
-      
-      return decodedToken;
-    } catch (firebaseError: any) {
-      // Hata detaylarını logla
-      console.error('Firebase token doğrulama hatası:',
-        firebaseError?.code || 'bilinmeyen hata kodu',
-        firebaseError?.message || 'hata mesajı yok'
-      );
-      
-      // JWT ile yedek doğrulama deneme
-      console.log('Firebase doğrulama başarısız, JWT doğrulamaya geçiliyor');
-      
-      try {
-        // İlk olarak süre kontrolünü devre dışı bırakarak deneyelim
-        const decoded = verify(token, JWT_SECRET, { ignoreExpiration: true }) as { 
-          userId: string, 
-          email?: string, 
-          name?: string, 
-          accountStatus?: string,
-          exp?: number
-        };
-        
-        // Token içeriğini logla
-        console.log('JWT token içeriği doğrulandı:', {
-          userId: decoded.userId,
-          accountStatus: decoded.accountStatus || 'free',
-          expired: decoded.exp && decoded.exp * 1000 < Date.now()
-        });
-        
-        // Eğer token süresi dolmuşsa yenile
-        if (decoded.exp && decoded.exp * 1000 < Date.now()) {
-          console.log('Token süresi dolmuş, yenileniyor');
+      if (decoded?.payload?.sub) {
+        try {
+          // Kullanıcıyı ID ile doğrula
+          const user = await clerk.users.getUser(decoded.payload.sub);
           
-          // Yeni token oluştur
-          const refreshedToken = sign({
-            userId: decoded.userId,
-            email: decoded.email || '',
-            name: decoded.name || '',
-            accountStatus: decoded.accountStatus || 'free'
-          }, JWT_SECRET, { expiresIn: '7d' });
-          
-          // Yeni token payload
-          return {
-            uid: decoded.userId,
-            email: decoded.email || '',
-            name: decoded.name || '',
-            accountStatus: decoded.accountStatus || 'free',
-            isNewToken: true,
-            refreshedToken: refreshedToken
-          };
+          if (user) {
+            // Kullanıcı bilgilerini döndür
+            return {
+              uid: user.id,
+              email: user.emailAddresses[0]?.emailAddress || '',
+              name: user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : '',
+              accountStatus: getUserSubscriptionStatus(user)
+            };
+          }
+        } catch (clerkError) {
+          console.error('Clerk kullanıcı doğrulama hatası:', clerkError);
         }
+      }
+    } catch (clerkError) {
+      console.error('Clerk token doğrulama hatası:', clerkError);
+    }
+    
+    // Clerk doğrulaması başarısız olduysa kendi JWT'lerimizi doğrula
+    try {
+      // JWT doğrula
+      const decoded = verify(token, JWT_SECRET) as { 
+        userId: string, 
+        email?: string, 
+        name?: string, 
+        accountStatus?: string,
+        exp?: number
+      };
+      
+      // Token içeriğini logla
+      console.log('JWT token içeriği doğrulandı:', {
+        userId: decoded.userId,
+        accountStatus: decoded.accountStatus || 'free',
+        expired: decoded.exp && decoded.exp * 1000 < Date.now()
+      });
+      
+      // Eğer token süresi dolmuşsa yenile
+      if (decoded.exp && decoded.exp * 1000 < Date.now()) {
+        console.log('Token süresi dolmuş, yenileniyor');
         
-        // Token geçerli, Firebase formatına dönüştür
+        // Yeni token oluştur
+        const refreshedToken = sign({
+          userId: decoded.userId,
+          email: decoded.email || '',
+          name: decoded.name || '',
+          accountStatus: decoded.accountStatus || 'free'
+        }, JWT_SECRET, { expiresIn: '7d' });
+        
+        // Yeni token payload
         return {
           uid: decoded.userId,
           email: decoded.email || '',
           name: decoded.name || '',
-          accountStatus: decoded.accountStatus || 'free'
+          accountStatus: decoded.accountStatus || 'free',
+          isNewToken: true,
+          refreshedToken: refreshedToken
         };
-      } catch (jwtError) {
-        console.error('JWT ile yedek doğrulama başarısız:', jwtError);
-        return null;
       }
+      
+      // Token geçerli
+      return {
+        uid: decoded.userId,
+        email: decoded.email || '',
+        name: decoded.name || '',
+        accountStatus: decoded.accountStatus || 'free'
+      };
+    } catch (jwtError) {
+      console.error('JWT ile yedek doğrulama başarısız:', jwtError);
+      return null;
     }
   } catch (error) {
     console.error('Beklenmeyen token doğrulama hatası:', error);
     return null;
+  }
+}
+
+// Clerk kullanıcısının abonelik durumunu belirle
+function getUserSubscriptionStatus(user: any): 'free' | 'basic' | 'premium' {
+  try {
+    // Önce private metadata'yı kontrol et
+    const privateSubscription = user.privateMetadata?.subscription;
+    if (privateSubscription && privateSubscription.status === 'active') {
+      return privateSubscription.plan === 'basic' ? 'basic' : 'premium';
+    }
+    
+    // Sonra public metadata'yı kontrol et
+    const publicSubscription = user.publicMetadata?.subscription;
+    if (publicSubscription && publicSubscription.status === 'active') {
+      return publicSubscription.plan === 'basic' ? 'basic' : 'premium';
+    }
+    
+    return 'free';
+  } catch (error) {
+    console.error('Abonelik durumu belirlenirken hata oluştu:', error);
+    return 'free';
   }
 } 

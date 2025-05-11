@@ -1,6 +1,8 @@
 import { compare, hash } from 'bcryptjs';
 import { sign, verify, decode } from 'jsonwebtoken';
 import { NextResponse } from 'next/server';
+import jwt from 'jsonwebtoken';
+import { clerkClient } from '@clerk/nextjs/server';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 export const COOKIE_NAME = 'auth-token';
@@ -20,17 +22,14 @@ interface TokenPayload {
   accountStatus?: 'free' | 'basic' | 'premium';
 }
 
-// Ek olarak, Firebase/Clerk token'ları için DecodedToken interface'i
+// Düzenlenmiş token ve kullanıcı tipleri
 export interface DecodedToken {
   uid?: string;
   sub?: string;
-  user_id?: string;
   userId?: string;
-  firebase?: {
-    identities?: {
-      [key: string]: string[];
-    };
-  };
+  user_id?: string;
+  email?: string;
+  name?: string;
   accountStatus?: string;
   [key: string]: any;
 }
@@ -89,93 +88,88 @@ export function verifyToken(token: string): TokenPayload | null {
   }
 }
 
-/**
- * Kimlik doğrulama token'ını doğrular (auth-firebase'den taşındı)
- * 
- * @param token Kimlik doğrulama token'ı
- * @returns Doğrulanmış token bilgisi veya null
- */
-export const verifyAuthToken = async (token: string): Promise<DecodedToken | null> => {
+// API kimlik doğrulama token'ını kontrol eden fonksiyon
+export async function verifyAuthToken(token: string): Promise<DecodedToken | null> {
+  if (!token) return null;
+  
   try {
-    // Token yoksa veya geçersizse hızlıca çık
-    if (!token || token.trim() === '') {
-      console.error('Geçersiz token: Boş veya null');
-      return null;
-    }
-    
-    console.log('Token doğrulama başlıyor, uzunluk:', token.length);
-    
-    // JWT token'ı decode et - doğrulama yapmadan sadece içeriğine bakıyoruz
-    const decoded = decode(token) as DecodedToken | null;
-    
-    // Decoded boşsa, token biçimi geçersiz demektir
-    if (!decoded) {
-      console.error('Token decode edilemedi, geçersiz biçim');
-      return null;
-    }
-    
-    // Şimdi payload'ı logla ve kontrol et
-    console.log('Token decode edildi, payload kontrolü yapılıyor');
-    
-    // UID kontrolü - token'ın içeriğindeki farklı alanlarda uid olabilir
-    if (!decoded.uid) {
-      console.log('UID bulunamadı, alternatif alanları kontrol ediyoruz');
+    // Clerk token'ı olarak doğrulama
+    try {
+      const clerk = await clerkClient();
+      // JWT'nin subject (sub) alanı Clerk kullanıcı ID'sidir
+      const decoded = jwt.decode(token) as { sub?: string } | null;
       
-      // sub alanını kontrol et (JWT standardı)
-      if (decoded.sub) {
-        decoded.uid = decoded.sub;
-      }
-      // user_id alanını kontrol et (Firebase'in kullandığı bir alan)
-      else if (decoded.user_id) {
-        decoded.uid = decoded.user_id;
-      }
-      // userId alanını kontrol et (özel bir alan)
-      else if (decoded.userId) {
-        decoded.uid = decoded.userId;
-      }
-      // Firebase identities içinde bakabilir
-      else if (decoded.firebase && decoded.firebase.identities && decoded.firebase.identities['firebase.com']) {
-        decoded.uid = decoded.firebase.identities['firebase.com'][0];
-      }
-    }
-    
-    // Hesap durumunu kontrol et ve varsayılan değer ata
-    if (!decoded.accountStatus) {
-      console.log('Account status bulunamadı, varsayılan değer atanıyor');
-      
-      // Client tarafında hesap durumunu localStorage'dan kontrol et
-      if (typeof window !== 'undefined') {
+      if (decoded?.sub) {
         try {
-          const userInfoStr = localStorage.getItem('user-info');
-          if (userInfoStr) {
-            const userInfo = JSON.parse(userInfoStr);
-            if (userInfo.accountStatus) {
-              decoded.accountStatus = userInfo.accountStatus;
-              console.log('Account status localStorage\'dan alındı:', decoded.accountStatus);
-            }
+          // Kullanıcıyı ID ile doğrula
+          const user = await clerk.users.getUser(decoded.sub);
+          
+          if (user) {
+            // Kullanıcı bilgilerini döndür
+            const accountStatus = getAccountStatusFromClerk(user);
+            
+            return {
+              uid: user.id,
+              sub: user.id,
+              email: user.emailAddresses[0]?.emailAddress,
+              name: user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : '',
+              accountStatus
+            };
           }
-        } catch (error) {
-          console.error('localStorage okuma hatası:', error);
+        } catch (clerkError) {
+          console.error('Clerk user verification error:', clerkError);
         }
       }
-      
-      // Hala yoksa varsayılan değer
-      if (!decoded.accountStatus) {
-        decoded.accountStatus = 'free';
-      }
+    } catch (clerkClientError) {
+      console.error('Clerk client initialization error:', clerkClientError);
     }
     
-    console.log('Token doğrulama tamamlandı:', {
-      uid: decoded.uid,
-      accountStatus: decoded.accountStatus
-    });
+    // Eğer Clerk token'ı değilse, JWT token olarak dene
+    try {
+      // JWT token doğrula
+      const decoded = jwt.verify(token, JWT_SECRET) as DecodedToken;
+      
+      // Kullanıcı ID'sini standardize et
+      if (!decoded.uid) {
+        if (decoded.sub) decoded.uid = decoded.sub;
+        else if (decoded.userId) decoded.uid = decoded.userId;
+        else if (decoded.user_id) decoded.uid = decoded.user_id;
+      }
+      
+      return decoded;
+    } catch (jwtError) {
+      console.error('JWT verification error:', jwtError);
+    }
     
-    return decoded;
+    return null;
   } catch (error) {
-    console.error('Token doğrulama hatası:', error);
+    console.error('Token verification error:', error);
     return null;
   }
-};
+}
+
+// Clerk kullanıcısından abonelik durumunu al
+function getAccountStatusFromClerk(user: any): 'free' | 'basic' | 'premium' {
+  try {
+    // Önce private metadata'yı kontrol et
+    const privateSubscription = user.privateMetadata?.subscription;
+    if (privateSubscription && privateSubscription.status === 'active') {
+      return privateSubscription.plan || 'premium';
+    }
+    
+    // Sonra public metadata'yı kontrol et
+    const publicSubscription = user.publicMetadata?.subscription;
+    if (publicSubscription && publicSubscription.status === 'active') {
+      return publicSubscription.plan || 'premium';
+    }
+    
+    // Varsayılan olarak ücretsiz hesap
+    return 'free';
+  } catch (error) {
+    console.error('Error determining account status:', error);
+    return 'free';
+  }
+}
 
 // Function to set cookie
 export function setAuthCookie(token: string, response: NextResponse): NextResponse {

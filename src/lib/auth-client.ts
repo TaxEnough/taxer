@@ -1,6 +1,7 @@
 'use client';
 
 import Cookie from 'js-cookie';
+import { useUser } from '@clerk/nextjs';
 
 // Client tarafında çerez işlemleri
 const COOKIE_NAME = 'auth-token';
@@ -47,66 +48,46 @@ export function removeClientCookie(name: string): void {
   console.log(`Cookie ${name} silindi`);
 }
 
-// Get token from client-side sources
-export function getAuthTokenFromClient(): string | null {
-  // Check if we're in a browser environment
-  if (typeof window === 'undefined') {
-    return null;
-  }
-  
-  // Try to get from cookie first
-  const cookieToken = Cookie.get(AUTH_TOKEN_KEY);
-  
-  // If not in cookie, try localStorage
-  if (!cookieToken) {
-    const localStorageToken = localStorage.getItem(AUTH_TOKEN_KEY);
+// Clerk'ten kullanıcı token'ı almayı dene
+export async function getAuthTokenFromClient(): Promise<string | null> {
+  try {
+    // Önce cookie'den token kontrol et
+    const existingToken = Cookie.get('clerk-token');
+    if (existingToken) {
+      return existingToken;
+    }
     
-    // If found in localStorage but not in cookie, restore cookie
-    if (localStorageToken) {
-      // Validate token format before setting
-      if (isValidJWT(localStorageToken)) {
-        Cookie.set(AUTH_TOKEN_KEY, localStorageToken, COOKIE_OPTIONS);
-        return localStorageToken;
-      } else {
-        console.error('Invalid token format in localStorage');
-        localStorage.removeItem(AUTH_TOKEN_KEY);
-        return null;
+    // Clerk tarayıcı tarafı API'siyle token almaya çalış
+    if (typeof window !== 'undefined') {
+      try {
+        // @ts-ignore - Global Clerk nesnesini kullan
+        const clerk = window.Clerk;
+        if (clerk && clerk.session) {
+          const token = await clerk.session.getToken();
+          if (token) {
+            // Token'ı kısa süreli cache'le (5 dakika)
+            Cookie.set('clerk-token', token, { expires: 1/288 }); // 5 dakika = 1/288 gün
+            return token;
+          }
+        }
+      } catch (browserError) {
+        console.error('Browser token error:', browserError);
+      }
+    }
+    
+    // Alternatif - localStorage'da kayıtlı token'ı kontrol et
+    if (typeof window !== 'undefined') {
+      const storedToken = localStorage.getItem('auth-token');
+      if (storedToken) {
+        return storedToken;
       }
     }
     
     return null;
-  }
-  
-  // Cookie token exists but verify it matches localStorage
-  const localStorageToken = localStorage.getItem(AUTH_TOKEN_KEY);
-  
-  // If tokens don't match, update localStorage (prefer cookie token)
-  if (localStorageToken !== cookieToken) {
-    if (isValidJWT(cookieToken)) {
-      localStorage.setItem(AUTH_TOKEN_KEY, cookieToken);
-    } else {
-      console.error('Invalid token format in cookie');
-      Cookie.remove(AUTH_TOKEN_KEY);
-      
-      // If localStorage token is valid, use it instead
-      if (localStorageToken && isValidJWT(localStorageToken)) {
-        Cookie.set(AUTH_TOKEN_KEY, localStorageToken, COOKIE_OPTIONS);
-        return localStorageToken;
-      }
-      
-      return null;
-    }
-  }
-  
-  // Ensure token is valid format before returning
-  if (!isValidJWT(cookieToken)) {
-    console.error('Invalid token format');
-    Cookie.remove(AUTH_TOKEN_KEY);
-    localStorage.removeItem(AUTH_TOKEN_KEY);
+  } catch (error) {
+    console.error('Error getting auth token:', error);
     return null;
   }
-  
-  return cookieToken;
 }
 
 // Set token in client-side storage
@@ -166,4 +147,63 @@ export function removeAuthTokenFromClient(): void {
   localStorage.removeItem('user-info');
   
   console.log('Token removed from client storage');
+}
+
+// Client tarafında premium durumunu kontrol etmek için
+export function getClientPremiumStatus(): { isPremium: boolean, plan?: string } {
+  try {
+    // 1. Clerk hook üzerinden kontrol et (React bileşenlerinde kullanılabilir)
+    try {
+      const { isSignedIn, user } = useUser();
+      if (isSignedIn && user) {
+        // @ts-ignore
+        const subscription = user.publicMetadata?.subscription || user.privateMetadata?.subscription;
+        if (subscription && subscription.status === 'active') {
+          return { isPremium: true, plan: subscription.plan || 'premium' };
+        }
+      }
+    } catch (hookError) {
+      // Hook dışında kullanıldığında hata verebilir, devam et
+    }
+    
+    // 2. Localstorage'da kayıtlı premium durumunu kontrol et
+    if (typeof window !== 'undefined') {
+      const premiumStatusStr = localStorage.getItem('clerk-premium-status');
+      if (premiumStatusStr) {
+        try {
+          const premiumStatus = JSON.parse(premiumStatusStr);
+          if (premiumStatus && premiumStatus.isPremium) {
+            // Son kullanma süresi kontrolü
+            const expiryStr = localStorage.getItem('clerk-premium-expiry');
+            if (expiryStr) {
+              const expiry = parseInt(expiryStr);
+              if (!isNaN(expiry) && expiry > Date.now()) {
+                return { isPremium: true, plan: premiumStatus.plan || 'premium' };
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Error parsing premium status:', e);
+        }
+      }
+    }
+    
+    // 3. Cookie'den kontrol et
+    const premiumCookie = Cookie.get('clerk-premium-status');
+    if (premiumCookie) {
+      try {
+        const premiumData = JSON.parse(premiumCookie);
+        if (premiumData && premiumData.isPremium) {
+          return { isPremium: true, plan: premiumData.plan || 'premium' };
+        }
+      } catch (e) {
+        console.error('Error parsing premium cookie:', e);
+      }
+    }
+    
+    return { isPremium: false };
+  } catch (error) {
+    console.error('Error checking premium status:', error);
+    return { isPremium: false };
+  }
 } 

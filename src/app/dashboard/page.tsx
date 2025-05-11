@@ -9,6 +9,7 @@ import { getAuthTokenFromClient } from '@/lib/auth-client';
 import Link from 'next/link';
 import { useUser } from '@clerk/nextjs';
 import { useClerkAuthCache } from '@/lib/clerk-utils';
+import { getClientPremiumStatus } from '@/lib/auth-client';
 
 // Lazy load edilmiş bileşenler için
 import dynamic from 'next/dynamic';
@@ -173,61 +174,64 @@ TSLA,Sell,7,200.50,2023-03-01,235.75,2023-07-15,1650.25,7.99`;
   const initRef = useRef(false);
 
   useEffect(() => {
-    // Gerekli render kontrolü
-    if (initRef.current) return;
-    initRef.current = true;
-    
-    // Debug loglama
-    console.log('Dashboard sayfa başlatılıyor');
-    console.log('Clerk auth durumu:', { 
-      isClerkLoaded: clerkLoaded, 
-      isClerkSignedIn: clerkSignedIn,
-      clerkCacheLoaded: clerkAuth.isLoaded,
-      clerkCacheSignedIn: clerkAuth.isSignedIn,
-      isPremium: clerkAuth.isPremium 
-    });
-    
-    // Auth durumunu localStorage'a cache'le
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('isLoggedIn', 'true');
-    }
-    
-    // Önce cachelenen bilgilerle hızlı kontrol
-    if (clerkAuth.isLoaded) {
-      if (clerkAuth.isSignedIn) {
-        console.log('Clerk cache ile oturum açılmış');
-        setPageLoading(false);
-        return;
-      } else if (!clerkAuth.isSignedIn && !clerkLoaded) {
-        // Eğer cache'de oturum yok ama Clerk yüklenmemişse, bekle
-        console.log('Clerk cache oturum yok, Clerk yüklenmesi bekleniyor');
-        // Burada bir şey yapma, normal Clerk kontrol akışına devam et
-      }
-    }
-    
-    // Normal Clerk ve Firebase kontrolü
-    // İlk önce Clerk kimlik doğrulamasını kontrol et
-    if (clerkLoaded) {
-      if (clerkSignedIn) {
-        console.log('Clerk ile oturum açılmış');
-        setPageLoading(false);
-      } else {
-        // Eski Firebase token'ı kontrol et 
-        const token = getAuthTokenFromClient();
-        if (token || (firebaseUser && !firebaseLoading)) {
-          console.log('Firebase token/user bulundu');
+    const checkAuthAndRoute = async () => {
+      setPageLoading(true);
+      
+      try {
+        // Önce Clerk ile kontrol et
+        if (clerkLoaded) {
+          if (clerkSignedIn && clerkUser) {
+            console.log('Clerk kullanıcısı bulundu');
+            setPageLoading(false);
+          } else {
+            console.log('Clerk kullanıcısı bulunamadı, yönlendiriliyor...');
+            router.push('/login');
+          }
+          return;
+        }
+        
+        // Alternatif olarak Auth Context kontrol et
+        if (firebaseUser && !firebaseLoading) {
+          console.log('Auth Context kullanıcısı bulundu');
+          setPageLoading(false);
+          return;
+        }
+        
+        // Token kontrolü yap
+        const token = await getAuthTokenFromClient();
+        if (token) {
+          console.log('Token bulundu');
           setPageLoading(false);
         } else {
-          console.log('Clerk veya Firebase ile giriş yapılmamış, giriş sayfasına yönlendiriliyor');
+          console.log('Oturum açılmamış, yönlendiriliyor...');
           router.push('/login');
         }
+      } catch (error) {
+        console.error('Auth check error:', error);
+        router.push('/login');
       }
-    } else if (!firebaseLoading && firebaseUser) {
-      // Clerk yüklenmemişse ama Firebase kullanıcısı varsa
-      console.log('Firebase ile oturum açılmış');
-      setPageLoading(false);
+    };
+    
+    checkAuthAndRoute();
+  }, [router, firebaseUser, firebaseLoading, clerkLoaded, clerkSignedIn, clerkUser]);
+
+  // Premium kontrolü için fonksiyon eklendi
+  useEffect(() => {
+    const checkPremiumStatus = async () => {
+      // Kullanıcının premium durumunu kontrol et
+      const premiumStatus = getClientPremiumStatus();
+      
+      if (!premiumStatus.isPremium) {
+        console.log('Premium hesap bulunamadı, yönlendiriliyor...');
+        router.push('/pricing?premium=required');
+      }
+    };
+    
+    // Kullanıcı oturum açtıysa premium durumunu kontrol et
+    if (firebaseUser && !firebaseLoading || (clerkLoaded && clerkSignedIn)) {
+      checkPremiumStatus();
     }
-  }, [clerkLoaded, clerkSignedIn, firebaseUser, firebaseLoading, router, clerkAuth]);
+  }, [router, firebaseUser, firebaseLoading, clerkLoaded, clerkSignedIn]);
 
   // Yükleniyor durumu göster
   if ((!clerkLoaded && firebaseLoading) || (pageLoading && !getAuthTokenFromClient() && !clerkSignedIn)) {
