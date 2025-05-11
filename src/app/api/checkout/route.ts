@@ -1,16 +1,13 @@
-import { NextResponse } from 'next/server';
-import { auth, currentUser } from '@clerk/nextjs/server';
+import { NextResponse, NextRequest } from 'next/server';
 import Stripe from 'stripe';
+import { auth, currentUser } from '@clerk/nextjs/server';
 import { PRICES } from '@/lib/stripe';
-import { getAuthCookieFromRequest, verifyToken } from '@/lib/auth-server';
-import { db } from '@/lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
 
-// CORS headers for Vercel
+// CORS headers
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Auth-Token',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
 // Handle OPTIONS request (preflight)
@@ -18,86 +15,73 @@ export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
 
-// Get user's email from Firestore
-async function getUserEmail(userId: string): Promise<string | null> {
-  try {
-    console.log('Fetching user email from Firestore for userId:', userId);
-    const userDoc = await getDoc(doc(db, 'users', userId));
-    
-    if (userDoc.exists()) {
-      const userData = userDoc.data();
-      console.log('User document found:', userData.email ? 'Email exists' : 'No email');
-      return userData.email || null;
-    }
-    
-    console.log('User document not found');
-    return null;
-  } catch (error) {
-    console.error('Error fetching user email:', error);
-    return null;
-  }
-}
-
-// Initialize Stripe client
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-03-31.basil',
-});
-
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     // Get authenticated user from Clerk
-    const session = await auth();
+    const session = auth();
     const user = await currentUser();
     
     if (!session || !session.userId) {
-      console.error('User not authenticated');
+      console.error('Kullanıcı kimliği doğrulanamadı');
       return NextResponse.json(
-        { error: 'User not authenticated' },
+        { error: 'Lütfen önce giriş yapın' },
         { status: 401, headers: corsHeaders }
       );
     }
 
-    // Get request data
+    // İstek verilerini al
     const { priceId, successUrl, cancelUrl } = await req.json();
-    console.log('Checkout request data:', { priceId, successUrl, cancelUrl });
+    console.log('Checkout isteği verileri:', { priceId, successUrl, cancelUrl, userId: session.userId });
 
-    // Validate priceId
+    // PriceId kontrolü
     if (!priceId) {
-      console.error('Missing priceId');
+      console.error('Eksik priceId');
       return NextResponse.json(
-        { error: 'Missing priceId' },
+        { error: 'Fiyat ID gerekli' },
         { status: 400, headers: corsHeaders }
       );
     }
 
-    // Get all valid price IDs from the PRICES configuration
+    // Geçerli fiyat ID'lerini kontrol et
     const validPriceIds = [
       PRICES.BASIC.MONTHLY.id,
       PRICES.BASIC.YEARLY.id,
       PRICES.PREMIUM.MONTHLY.id,
-      PRICES.PREMIUM.YEARLY.id,
+      PRICES.PREMIUM.YEARLY.id
     ];
 
     if (!validPriceIds.includes(priceId)) {
-      console.error('Invalid price ID:', priceId);
-      console.log('Valid price IDs:', validPriceIds);
+      console.error('Geçersiz fiyat ID:', priceId);
+      console.log('Geçerli fiyat ID\'leri:', validPriceIds);
       return NextResponse.json(
-        { error: 'Invalid price ID' },
+        { error: 'Geçersiz fiyat ID' },
         { status: 400, headers: corsHeaders }
       );
     }
     
-    // Get user email from Clerk
+    // Kullanıcı email'ini Clerk'ten al
     const userEmail = user?.emailAddresses[0]?.emailAddress;
     
-    // If email not found, create a fallback email
-    const customerEmail = userEmail || `user+${session.userId}@example.com`;
-    console.log('Using email for checkout:', customerEmail);
+    // Email bulunamazsa hata ver
+    if (!userEmail) {
+      console.error('Kullanıcı emaili bulunamadı');
+      return NextResponse.json(
+        { error: 'Kullanıcı bilgileri eksik. Lütfen hesap bilgilerinizi güncelleyin.' },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+    
+    console.log('Ödeme için kullanılacak email:', userEmail);
 
     try {
-      // Create Checkout Session
+      // Stripe ödeme oturumu oluştur
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+        apiVersion: '2025-03-31.basil'
+      });
+      
+      // Checkout session oluştur
       const checkoutSession = await stripe.checkout.sessions.create({
-        customer_email: customerEmail,
+        customer_email: userEmail,
         line_items: [
           {
             price: priceId,
@@ -110,24 +94,34 @@ export async function POST(req: Request) {
         metadata: {
           userId: session.userId,
         },
+        customer_creation: 'always',
+        subscription_data: {
+          metadata: {
+            userId: session.userId,
+          },
+        },
+        allow_promotion_codes: true,
       });
       
-      console.log('Checkout session created:', checkoutSession.id);
+      console.log('Ödeme oturumu oluşturuldu:', checkoutSession.id);
       console.log('Checkout URL:', checkoutSession.url);
 
-      return NextResponse.json({ url: checkoutSession.url }, { headers: corsHeaders });
+      return NextResponse.json({ 
+        url: checkoutSession.url,
+        sessionId: checkoutSession.id
+      }, { headers: corsHeaders });
     } catch (stripeError: any) {
-      console.error('Stripe error:', stripeError.message);
+      console.error('Stripe hatası:', stripeError.message);
       return NextResponse.json(
-        { error: `Stripe error: ${stripeError.message}` },
+        { error: `Stripe hatası: ${stripeError.message}` },
         { status: 500, headers: corsHeaders }
       );
     }
   } catch (error: any) {
-    console.error('Error creating checkout session:', error);
-    console.error('Error details:', error.message);
+    console.error('Ödeme oturumu oluşturma hatası:', error);
+    console.error('Hata detayları:', error.message);
     return NextResponse.json(
-      { error: `Something went wrong: ${error.message}` },
+      { error: `Bir şeyler yanlış gitti: ${error.message}` },
       { status: 500, headers: corsHeaders }
     );
   }
