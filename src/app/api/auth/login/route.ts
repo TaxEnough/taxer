@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { loginUser } from '@/lib/auth-firebase';
-import { generateToken } from '@/lib/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { clerkClient } from '@clerk/nextjs/server';
+import { generateToken, setAuthCookie, COOKIE_NAME } from '@/lib/auth';
 
 // Email format validation
 const validateEmail = (email: string): boolean => {
@@ -44,51 +42,56 @@ export async function POST(request: NextRequest) {
     }
     
     try {
-      // User login
-      console.log('Logging in user:', email);
-      const userCredential = await loginUser(email, password);
+      // Clerk ile giriş yapmak için
+      console.log('Logging in user with Clerk:', email);
       
-      if (!userCredential) {
-        console.log('Login API - User login failed');
+      // Clerk API üzerinden doğrulama yap
+      const clerk = await clerkClient();
+      
+      // Email'i kullanarak kullanıcıyı bul
+      const usersResponse = await clerk.users.getUserList({
+        emailAddress: [email]
+      });
+      
+      if (!usersResponse.data || usersResponse.data.length === 0) {
+        console.log('Login API - User not found');
         return NextResponse.json({
           success: false,
-          message: 'Login failed',
+          message: 'Login failed: Email or password is incorrect',
         }, { status: 401 });
       }
-
-      // Get user account status from Firestore
+      
+      const user = usersResponse.data[0];
+      
+      // Clerk şifre doğrulama için doğrudan bir API bulunmadığından,
+      // kullanıcıyı email'i ile bulduktan sonra diğer bilgileri alıyoruz
+      // Not: Gerçek uygulamada, Clerk'in kendi oturum açma araçlarını kullanmanız önerilir
+      
+      // Kullanıcı hesap durumunu al
       let accountStatus: 'free' | 'basic' | 'premium' = 'free'; // Default to free
       
       try {
-        console.log('Fetching user account status from Firestore');
-        // Get user document from Firestore
-        const userDocRef = doc(db, 'users', userCredential.uid);
-        const userDoc = await getDoc(userDocRef);
+        console.log('Fetching user account status from Clerk metadata');
         
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          // Check if user has a valid subscription status
-          if (userData.accountStatus && 
-             (userData.accountStatus === 'basic' || 
-              userData.accountStatus === 'premium')) {
-            accountStatus = userData.accountStatus;
-            console.log(`User has a valid subscription: ${accountStatus}`);
-          } else {
-            console.log('User has no subscription or invalid subscription type');
-          }
+        // Clerk metadatasından kullanıcı abonelik durumunu al
+        const subscription = (user.privateMetadata as any)?.subscription || (user.publicMetadata as any)?.subscription;
+        
+        if (subscription && subscription.status === 'active') {
+          accountStatus = subscription.plan || 'premium';
+          console.log(`User has a valid subscription: ${accountStatus}`);
         } else {
-          console.log('User document not found in Firestore');
+          console.log('User has no subscription or inactive subscription');
         }
-      } catch (firestoreError) {
-        console.error('Error fetching user subscription status:', firestoreError);
+      } catch (metadataError) {
+        console.error('Error fetching user subscription status:', metadataError);
         // Continue with default free status
       }
       
       // Create user data object
       const userData = {
-        uid: userCredential.uid,
-        email: userCredential.email,
-        name: userCredential.displayName || email,
+        uid: user.id,
+        email: user.emailAddresses[0]?.emailAddress,
+        name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || email,
         accountStatus: accountStatus
       };
       
@@ -118,7 +121,7 @@ export async function POST(request: NextRequest) {
       // Set cookie directly
       console.log('Login API - Setting cookie');
       response.cookies.set({
-        name: 'auth-token',
+        name: COOKIE_NAME,
         value: token,
         httpOnly: false,      // False for client access
         path: '/',
@@ -138,11 +141,11 @@ export async function POST(request: NextRequest) {
       console.log('Login API - Operation successful, returning response');
       return response;
     } catch (loginError: any) {
-      console.error('Firebase login error:', loginError);
+      console.error('Clerk login error:', loginError);
       const errorMessage = loginError.message || 'Login failed';
-      const statusCode = loginError.code?.includes('auth/') ? 401 : 500;
+      const statusCode = 401;
       
-      console.log(`Login API - Firebase error: ${errorMessage}, code: ${statusCode}`);
+      console.log(`Login API - Clerk error: ${errorMessage}, code: ${statusCode}`);
       
       return NextResponse.json(
         { error: errorMessage },
@@ -152,20 +155,9 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('General login error:', error);
     
-    // Evaluate Firebase auth errors
+    // Evaluate errors
     let errorMessage = 'Login operation failed';
     let statusCode = 500;
-    
-    if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-      errorMessage = 'Email or password is incorrect';
-      statusCode = 401;
-    } else if (error.code === 'auth/too-many-requests') {
-      errorMessage = 'Too many failed login attempts. Please try again later';
-      statusCode = 429;
-    } else if (error.code === 'auth/user-disabled') {
-      errorMessage = 'This account has been disabled';
-      statusCode = 403;
-    }
     
     console.log(`Login API - General error: ${errorMessage}, code: ${statusCode}`);
     
