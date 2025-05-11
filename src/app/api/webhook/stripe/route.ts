@@ -1,7 +1,24 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { headers } from 'next/headers';
-import { clerkClient as getClerkClient } from '@clerk/nextjs/server';
+import { clerkClient } from '@clerk/nextjs/server';
+
+// TypeScript türleri
+type SubscriptionUserMetadata = {
+  subscription?: {
+    id: string;
+    status: string;
+    plan: string;
+    currentPeriodEnd?: string;
+    priceId?: string;
+  }
+};
+
+type ClerkUser = {
+  id: string;
+  privateMetadata: SubscriptionUserMetadata;
+  publicMetadata: SubscriptionUserMetadata;
+};
 
 // Stripe API client'ı oluştur
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -31,83 +48,112 @@ export async function POST(req: Request) {
   }
 
   try {
-    // Handle different event types
+    // Event tipine göre işlem yap
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
         
-        // Extract user ID from metadata
+        // Kullanıcı ID'sini metadata'dan al
         const userId = session.metadata?.userId;
         if (!userId) {
           throw new Error('Missing userId in session metadata');
         }
 
-        // Get the subscription data from Stripe
+        // Stripe'dan abonelik bilgilerini al
         const subscription = await stripe.subscriptions.retrieve(session.subscription as string) as any;
         
-        // Get the price ID to determine the plan type (basic or premium)
+        // Planı belirlemek için price ID'yi al
         const priceId = subscription.items.data[0].price.id;
         
-        // Determine plan type based on the price ID
-        let planType = 'premium'; // default to premium
+        // Fiyat ID'ye göre plan tipini belirle
+        let planType = 'premium'; // varsayılan olarak premium
         
-        // You could determine plan based on price ID
-        if (priceId === 'price_1RIS0fLhWC2oNMWwizDKv78o' || priceId === 'price_1RIoHlLhWC2oNMWwKzOx9WBD') {
+        // Fiyat ID'ye göre planı belirle - gerekirse ayarla
+        if (priceId === process.env.PRICE_ID_BASIC_MONTHLY || 
+            priceId === process.env.PRICE_ID_BASIC_YEARLY) {
           planType = 'basic';
         }
         
-        // Update Clerk user metadata with subscription details
-        const clerk = await getClerkClient();
-        await clerk.users.updateUser(userId, {
-          privateMetadata: {
-            subscription: {
-              id: subscription.id,
-              status: subscription.status,
-              plan: planType,
-              currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
-              priceId: priceId
-            }
-          }
-        });
+        // Abonelik Detayları
+        const subscriptionDetails = {
+          id: subscription.id,
+          status: subscription.status,
+          plan: planType,
+          currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+          priceId: priceId
+        };
         
-        console.log(`Subscription ${subscription.id} created for user ${userId}`);
+        // Clerk kullanıcı verilerini güncelle - hem private hem public metadata
+        console.log(`Kullanıcı ${userId} için abonelik bilgileri güncelleniyor: ${JSON.stringify(subscriptionDetails)}`);
+        
+        try {
+          // Clerk kullanıcıyı güncelle
+          await clerkClient.users.updateUser(userId, {
+            privateMetadata: {
+              subscription: subscriptionDetails
+            },
+            publicMetadata: {
+              subscription: {
+                status: subscription.status,
+                plan: planType
+              }
+            }
+          });
+          
+          console.log(`${subscription.id} aboneliği ${userId} kullanıcısı için başarıyla kaydedildi`);
+        } catch (clerkError) {
+          console.error(`Clerk güncelleme hatası:`, clerkError);
+          throw new Error(`Clerk user metadata update failed: ${clerkError}`);
+        }
+        
         break;
       }
       
       case 'invoice.payment_succeeded': {
-        // Update subscription record when payment is successful
+        // Ödeme başarılı olduğunda abonelik kaydını güncelle
         const invoiceObj = event.data.object as any;
         const subscriptionId = invoiceObj.subscription as string;
         
         if (subscriptionId) {
           const subscription = await stripe.subscriptions.retrieve(subscriptionId) as any;
           
-          // Find user with this subscription ID in metadata
-          const clerk = await getClerkClient();
-          const userList = await clerk.users.getUserList();
-          // Filter users with matching subscription ID manually
-          const matchingUsers = userList.data.filter(user => {
-            const metadata = user.privateMetadata as any;
+          // Bu abonelik ID'ye sahip kullanıcıyı bul
+          const userList = await clerkClient.users.getUserList({
+            limit: 100,  // Makul bir limit belirle
+          });
+          
+          // Abonelik ID'ye göre filtrele
+          const matchingUsers = userList.data.filter((user: ClerkUser) => {
+            const metadata = user.privateMetadata;
             return metadata?.subscription?.id === subscriptionId;
           });
           
           if (matchingUsers.length > 0) {
             const userId = matchingUsers[0].id;
+            const userMetadata = matchingUsers[0].privateMetadata;
             
-            // Update the subscription metadata
-            await clerk.users.updateUser(userId, {
+            // Kullanıcının abonelik bilgilerini güncelle
+            await clerkClient.users.updateUser(userId, {
               privateMetadata: {
                 subscription: {
                   id: subscription.id,
                   status: subscription.status,
+                  plan: userMetadata?.subscription?.plan || 'premium',
                   currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+                  priceId: subscription.items.data[0].price.id
+                }
+              },
+              publicMetadata: {
+                subscription: {
+                  status: subscription.status,
+                  plan: userMetadata?.subscription?.plan || 'premium'
                 }
               }
             });
             
-            console.log(`Subscription ${subscriptionId} payment succeeded for user ${userId}`);
+            console.log(`${subscriptionId} aboneliği için ${userId} kullanıcısının ödemesi başarılı oldu`);
           } else {
-            console.log(`No user found with subscription ID ${subscriptionId}`);
+            console.log(`${subscriptionId} abonelik ID'sine sahip kullanıcı bulunamadı`);
           }
         }
         
@@ -115,79 +161,105 @@ export async function POST(req: Request) {
       }
       
       case 'customer.subscription.updated': {
-        // Handle subscription status changes
+        // Abonelik durumu değişikliklerini yönet
         const subscription = event.data.object as any;
         const subscriptionId = subscription.id;
         
-        // Find user with this subscription ID in metadata
-        const clerk = await getClerkClient();
-        const userList = await clerk.users.getUserList();
-        // Filter users with matching subscription ID manually
-        const matchingUsers = userList.data.filter(user => {
-          const metadata = user.privateMetadata as any;
+        // Bu abonelik ID'ye sahip kullanıcıyı bul
+        const userList = await clerkClient.users.getUserList({
+          limit: 100,  // Makul bir limit belirle
+        });
+        
+        // Eşleşen kullanıcıları manuel olarak filtrele
+        const matchingUsers = userList.data.filter((user: ClerkUser) => {
+          const metadata = user.privateMetadata;
           return metadata?.subscription?.id === subscriptionId;
         });
         
         if (matchingUsers.length > 0) {
           const userId = matchingUsers[0].id;
+          const userMetadata = matchingUsers[0].privateMetadata;
+          const currentPlan = userMetadata?.subscription?.plan || 'premium';
           
-          // Update the subscription metadata
-          await clerk.users.updateUser(userId, {
+          // Abonelik bilgilerini güncelle
+          await clerkClient.users.updateUser(userId, {
             privateMetadata: {
               subscription: {
                 id: subscription.id,
                 status: subscription.status,
+                plan: currentPlan,
                 currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+                priceId: subscription.items.data[0].price.id
+              }
+            },
+            publicMetadata: {
+              subscription: {
+                status: subscription.status,
+                plan: currentPlan
               }
             }
           });
           
-          console.log(`Subscription ${subscriptionId} updated for user ${userId}`);
+          console.log(`${subscriptionId} aboneliği ${userId} kullanıcısı için güncellendi`);
+        } else {
+          console.log(`${subscriptionId} abonelik ID'sine sahip kullanıcı bulunamadı`);
         }
         
         break;
       }
       
       case 'customer.subscription.deleted': {
-        // Handle subscription cancellation
+        // Abonelik iptalini yönet
         const subscription = event.data.object as any;
         const subscriptionId = subscription.id;
         
-        // Find user with this subscription ID in metadata
-        const clerk = await getClerkClient();
-        const userList = await clerk.users.getUserList();
-        // Filter users with matching subscription ID manually
-        const matchingUsers = userList.data.filter(user => {
-          const metadata = user.privateMetadata as any;
+        // Bu abonelik ID'ye sahip kullanıcıyı bul
+        const userList = await clerkClient.users.getUserList({
+          limit: 100,  // Makul bir limit belirle
+        });
+        
+        // Eşleşen kullanıcıları manuel olarak filtrele
+        const matchingUsers = userList.data.filter((user: ClerkUser) => {
+          const metadata = user.privateMetadata;
           return metadata?.subscription?.id === subscriptionId;
         });
         
         if (matchingUsers.length > 0) {
           const userId = matchingUsers[0].id;
           
-          // Update the subscription metadata to show canceled status
-          await clerk.users.updateUser(userId, {
+          // Abonelik bilgilerini iptal olarak güncelle
+          await clerkClient.users.updateUser(userId, {
             privateMetadata: {
               subscription: {
                 id: subscription.id,
                 status: 'canceled',
+                plan: 'free',
+                canceledAt: new Date().toISOString()
+              }
+            },
+            publicMetadata: {
+              subscription: {
+                status: 'canceled',
+                plan: 'free'
               }
             }
           });
           
-          console.log(`Subscription ${subscriptionId} canceled for user ${userId}`);
+          console.log(`${subscriptionId} aboneliği ${userId} kullanıcısı için iptal edildi`);
+        } else {
+          console.log(`${subscriptionId} abonelik ID'sine sahip kullanıcı bulunamadı`);
         }
         
         break;
       }
       
       default:
-        console.log(`Unhandled event type: ${event.type}`);
+        console.log(`İşlenmeyen event tipi: ${event.type}`);
     }
 
     return NextResponse.json({ received: true });
   } catch (error) {
-    console.error('Error processing webhook:', error);
+    console.error('Webhook işleme hatası:', error);
     return NextResponse.json(
       { error: 'Error processing webhook' },
       { status: 500 }

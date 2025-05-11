@@ -63,6 +63,7 @@ export async function getUserSubscription(userId?: string): Promise<Subscription
 
 /**
  * Kullanıcının abonelik durumunu günceller
+ * Artık hem private hem de public metadata'ya kaydedilecek
  */
 export async function updateUserSubscription(
   userId: string, 
@@ -74,7 +75,15 @@ export async function updateUserSubscription(
   }
 ): Promise<boolean> {
   try {
-    // Kullanıcı meta verilerini güncelle - fetch kullanarak
+    // Abonelik bilgilerini hazırla
+    const subscriptionInfo = {
+      status: subscriptionData.status,
+      plan: subscriptionData.plan,
+      id: subscriptionData.id,
+      currentPeriodEnd: subscriptionData.currentPeriodEnd
+    };
+    
+    // Kullanıcı meta verilerini güncelle - hem private hem de public metadata'ya kaydet
     const response = await fetch(`https://api.clerk.com/v1/users/${userId}`, {
       method: 'PATCH',
       headers: {
@@ -83,17 +92,25 @@ export async function updateUserSubscription(
       },
       body: JSON.stringify({
         private_metadata: {
+          subscription: subscriptionInfo
+        },
+        public_metadata: {
           subscription: {
             status: subscriptionData.status,
-            plan: subscriptionData.plan,
-            id: subscriptionData.id,
-            currentPeriodEnd: subscriptionData.currentPeriodEnd
+            plan: subscriptionData.plan
           }
         }
       }),
     });
     
-    return response.ok;
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Error updating user subscription in Clerk:", errorData);
+      return false;
+    }
+    
+    console.log(`Abonelik bilgileri güncellendi - Kullanıcı: ${userId}, Durum: ${subscriptionData.status}, Plan: ${subscriptionData.plan}`);
+    return true;
   } catch (error) {
     console.error("Error updating user subscription in Clerk:", error);
     return false;
