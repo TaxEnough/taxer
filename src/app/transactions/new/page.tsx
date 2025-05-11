@@ -7,7 +7,7 @@ import Footer from '@/components/Footer';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { getAuthTokenFromClient } from '@/lib/auth-client';
-import PageWithToast from '@/components/PageWithToast';
+import ClientToastWrapper, { useClientToast } from '@/components/ui/client-toast';
 
 export default function NewTransaction() {
   const router = useRouter();
@@ -15,6 +15,7 @@ export default function NewTransaction() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const { toast } = useClientToast();
   
   // Form state
   const [formData, setFormData] = useState({
@@ -95,6 +96,13 @@ export default function NewTransaction() {
         note: ''
       });
       
+      if (typeof toast === 'function') {
+        toast({
+          title: 'Success',
+          description: 'Transaction added successfully.',
+        });
+      }
+      
       // 2 saniye sonra işlemler sayfasına yönlendir
       setTimeout(() => {
         router.push('/transactions');
@@ -103,13 +111,21 @@ export default function NewTransaction() {
     } catch (err: any) {
       console.error('Error adding transaction:', err);
       setError(err.message || 'Transaction could not be added. Please try again later.');
+      
+      if (typeof toast === 'function') {
+        toast({
+          title: 'Error',
+          description: err.message || 'Transaction could not be added. Please try again later.',
+          variant: 'destructive'
+        });
+      }
     } finally {
       setLoading(false);
     }
   };
   
   return (
-    <PageWithToast>
+    <ClientToastWrapper>
       <Navbar />
       <div className="min-h-screen bg-gray-100">
         <header className="bg-white shadow">
@@ -336,6 +352,6 @@ export default function NewTransaction() {
         </main>
       </div>
       <Footer />
-    </PageWithToast>
+    </ClientToastWrapper>
   );
 } 

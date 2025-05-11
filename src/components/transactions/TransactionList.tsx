@@ -3,11 +3,10 @@
 import { useState, useEffect } from 'react';
 import { Edit, Trash2, AlertTriangle, Save, X } from 'lucide-react';
 import { formatDate, formatCurrency } from '@/lib/utils';
-import { useToast } from '@/components/ui/use-toast';
-import { getAuthTokenFromClient } from '@/lib/auth-client';
 import { useAuth } from '@/context/AuthContext';
 import { useClerkAuthCache, getQuickPremiumStatus } from '@/lib/clerk-utils';
-import PageWithToast from '@/components/PageWithToast';
+import ClientToastWrapper, { useClientToast } from '@/components/ui/client-toast';
+import { getAuthTokenFromClient } from '@/lib/auth-client';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,7 +59,7 @@ export default function TransactionList() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editedTransaction, setEditedTransaction] = useState<Transaction | null>(null);
   const [confirmBatchDelete, setConfirmBatchDelete] = useState(false);
-  const { toast } = useToast();
+  const { toast } = useClientToast();
   const [error, setError] = useState<string | null>(null);
   const [selectedStockFilter, setSelectedStockFilter] = useState<string>('');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('');
@@ -434,7 +433,7 @@ export default function TransactionList() {
   }
 
   return (
-    <PageWithToast>
+    <ClientToastWrapper>
       <div className="rounded-md border">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -654,6 +653,6 @@ export default function TransactionList() {
           </AlertDialogContent>
         </AlertDialog>
       </div>
-    </PageWithToast>
+    </ClientToastWrapper>
   );
 } 

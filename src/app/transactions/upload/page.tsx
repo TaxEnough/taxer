@@ -2,13 +2,12 @@
 
 import { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { useToast } from '@/components/ui/use-toast';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { parse } from 'papaparse';
 import * as XLSX from 'xlsx';
 import { getAuthTokenFromClient } from '@/lib/auth-client';
-import PageWithToast from '@/components/PageWithToast';
+import ClientToastWrapper, { useClientToast } from '@/components/ui/client-toast';
 
 // İşlem verisini tanımlama
 interface ParsedTransaction {
@@ -49,7 +48,7 @@ export default function UploadTransactions() {
   });
   
   const router = useRouter();
-  const { toast } = useToast();
+  const { toast } = useClientToast();
 
   // Standart sütun adları (varyasyonları içerir)
   const standardColumns = {
@@ -300,10 +299,13 @@ export default function UploadTransactions() {
 
       const result = await response.json();
       setSuccess(`${result.count || processedTransactions.length} transactions successfully saved.`);
-      toast({
-        title: 'Success',
-        description: `${result.count || processedTransactions.length} transactions successfully saved.`,
-      });
+      
+      if (typeof toast === 'function') {
+        toast({
+          title: 'Success',
+          description: `${result.count || processedTransactions.length} transactions successfully saved.`,
+        });
+      }
       
       // 2 saniye sonra işlemler sayfasına yönlendir
       setTimeout(() => {
@@ -313,18 +315,21 @@ export default function UploadTransactions() {
     } catch (err) {
       console.error('Error saving transactions:', err);
       setError(err instanceof Error ? err.message : 'An error occurred while saving transactions.');
-      toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : 'An error occurred while saving transactions.',
-        variant: 'destructive'
-      });
+      
+      if (typeof toast === 'function') {
+        toast({
+          title: 'Error',
+          description: err instanceof Error ? err.message : 'An error occurred while saving transactions.',
+          variant: 'destructive'
+        });
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <PageWithToast>
+    <ClientToastWrapper>
       <div className="container mx-auto py-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Upload Transactions</h1>
@@ -505,6 +510,6 @@ export default function UploadTransactions() {
           </div>
         )}
       </div>
-    </PageWithToast>
+    </ClientToastWrapper>
   );
 } 
