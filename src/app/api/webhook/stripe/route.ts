@@ -142,8 +142,30 @@ async function findUserByEmail(email: string): Promise<ClerkUser | null> {
       errorLog("❌ Email adresi belirtilmemiş!");
       return null;
     }
+
+    // Email adresinin formatını kontrol et
+    if (!email.includes('@')) {
+      errorLog(`❌ Geçersiz email formatı: '${email}'`);
+      return null;
+    }
     
     debugLog(`🔍 '${email}' email adresi için kullanıcı araması başlatılıyor`);
+    
+    // DOĞRUDAN USER_ID BELİRTİLMİŞ Mİ KONTROL ET
+    // Bazen email yerine user_id gönderilmiş olabilir
+    if (email.startsWith('user_')) {
+      debugLog(`⚠️ Email yerine user_id formatı tespit edildi: ${email}, doğrudan kullanıcıyı getirmeyi deneyeceğim`);
+      try {
+        const user = await getClerkUserById(email);
+        if (user) {
+          debugLog(`✅ ID ile kullanıcı başarıyla bulundu: ${email}`);
+          return user;
+        }
+        debugLog(`❌ ID ile kullanıcı bulunamadı: ${email}`);
+      } catch (idError) {
+        errorLog(`❌ ID ile kullanıcı arama hatası: ${email}`, idError);
+      }
+    }
     
     // 1. ADIM: Doğrudan Clerk API sorgusu ile kullanıcıyı bulmayı dene
     try {
@@ -171,6 +193,17 @@ async function findUserByEmail(email: string): Promise<ClerkUser | null> {
         if (result.data && result.data.length > 0) {
           const foundUser = result.data[0];
           debugLog(`✅ API sorgusu ile kullanıcı bulundu: ${foundUser.id}`);
+          
+          // Email adresini logla
+          const emailAddresses = foundUser.emailAddresses || [];
+          debugLog(`📧 Bulunan kullanıcının email adresleri:`, 
+            emailAddresses.map((e: any) => ({ 
+              emailAddress: e.emailAddress, 
+              id: e.id, 
+              verified: e.verification?.status === 'verified' 
+            }))
+          );
+          
           return foundUser;
         }
         
@@ -185,7 +218,7 @@ async function findUserByEmail(email: string): Promise<ClerkUser | null> {
     
     // 2. ADIM: Tüm kullanıcıları getir ve manuel olarak ara
     debugLog("📋 Tüm kullanıcılar listesi alınıyor (manuel arama için)");
-    const userList = await getClerkUserList(200); // Daha fazla kullanıcı al
+    const userList = await getClerkUserList(500); // Daha fazla kullanıcı al, emin olalım
     
     if (!userList.data || userList.data.length === 0) {
       errorLog("❌ Kullanıcı listesi alınamadı veya boş");
@@ -194,8 +227,24 @@ async function findUserByEmail(email: string): Promise<ClerkUser | null> {
     
     debugLog(`📊 Manuel arama için ${userList.data.length} kullanıcı alındı`);
     
+    // Tüm kullanıcıları detaylı logla
+    const userEmailData = userList.data.map(u => {
+      const emails = (u as any).emailAddresses?.map((e: any) => e.emailAddress) || [];
+      return { 
+        id: u.id,
+        emails,
+        primaryEmail: (u as any).primaryEmailAddress?.emailAddress,
+        username: (u as any).username
+      };
+    });
+    
+    debugLog(`📊 Tüm kullanıcıların email bilgileri:`, userEmailData);
+    
     // Arama için normalize email
     const normalizedEmail = email.toLowerCase().trim();
+    const normalizedUsername = normalizedEmail.split('@')[0].toLowerCase();
+    const emailDomain = normalizedEmail.split('@')[1]?.toLowerCase() || '';
+    
     let bestMatch: ClerkUser | null = null;
     
     // Eşleşme skorlarını tutacak dizi oluştur
@@ -206,14 +255,20 @@ async function findUserByEmail(email: string): Promise<ClerkUser | null> {
       let score = 0;
       let matchReason = "";
       
-      // Primary email tam eşleşme (en yüksek öncelik)
-      if (user.primaryEmail?.toLowerCase() === normalizedEmail) {
+      // any tipini kullanmak zorundayız çünkü Clerk tiplerindeki bu bilgilere
+      // doğrudan erişemiyoruz
+      const userObj = user as any;
+      const userEmails = userObj.emailAddresses || [];
+      const userPrimaryEmail = userObj.primaryEmailAddress?.emailAddress?.toLowerCase();
+      const userUsername = userObj.username?.toLowerCase();
+      
+      // 1. Birincil email tam eşleşme (en yüksek öncelik)
+      if (userPrimaryEmail === normalizedEmail) {
         score += 100;
         matchReason += "Birincil email tam eşleşme, ";
       }
       
-      // Herhangi bir email tam eşleşme
-      const userEmails = (user as any).emailAddresses || [];
+      // 2. Herhangi bir email tam eşleşme
       for (const emailObj of userEmails) {
         if (emailObj.emailAddress?.toLowerCase() === normalizedEmail) {
           score += 90;
@@ -222,19 +277,37 @@ async function findUserByEmail(email: string): Promise<ClerkUser | null> {
         }
       }
       
-      // Username eşleşmesi (email'in @ öncesi kısmı)
-      const emailUsername = normalizedEmail.split('@')[0];
-      if (user.username?.toLowerCase() === emailUsername) {
+      // 3. Username tam eşleşmesi (email'in @ öncesi kısmı)
+      if (userUsername === normalizedUsername) {
         score += 40;
-        matchReason += "Username eşleşme, ";
+        matchReason += "Username tam eşleşme, ";
       }
       
-      // Kısmi email eşleşmesi
+      // 4. Kısmi email eşleşmesi - alan adı dahil
       for (const emailObj of userEmails) {
-        if (emailObj.emailAddress?.toLowerCase().includes(emailUsername)) {
-          score += 30;
-          matchReason += "Kısmi email eşleşme, ";
+        const userEmail = emailObj.emailAddress?.toLowerCase() || '';
+        if (userEmail.includes(normalizedUsername) && userEmail.includes(emailDomain)) {
+          score += 35;
+          matchReason += "Kısmi email (kullanıcı+domain) eşleşme, ";
           break;
+        }
+      }
+      
+      // 5. Sadece username kısmı eşleşiyor
+      for (const emailObj of userEmails) {
+        const userEmail = emailObj.emailAddress?.toLowerCase() || '';
+        if (userEmail.includes(normalizedUsername)) {
+          score += 20;
+          matchReason += "Email kullanıcı adı eşleşme, ";
+          break;
+        }
+      }
+      
+      // 6. Username benzerlik kontrolü (tam eşleşme olmayan durumlar için)
+      if (userUsername && normalizedUsername && userUsername.length > 3 && normalizedUsername.length > 3) {
+        if (userUsername.includes(normalizedUsername) || normalizedUsername.includes(userUsername)) {
+          score += 15;
+          matchReason += "Username benzerlik, ";
         }
       }
       
@@ -247,8 +320,8 @@ async function findUserByEmail(email: string): Promise<ClerkUser | null> {
     // Eşleşmeleri skora göre sırala
     matchScores.sort((a, b) => b.score - a.score);
     
-    // En iyi eşleşmeyi al
-    if (matchScores.length > 0) {
+    // En iyi eşleşmeyi al - yüksek eşleşme skoruna sahipse (en az 30 puan)
+    if (matchScores.length > 0 && matchScores[0].score >= 30) {
       bestMatch = matchScores[0].user;
       debugLog(`✅ Kullanıcı eşleşmesi bulundu: ${bestMatch.id}`, {
         score: matchScores[0].score,
@@ -269,18 +342,21 @@ async function findUserByEmail(email: string): Promise<ClerkUser | null> {
       return bestMatch;
     }
     
-    // Kullanıcı bulunamadı, mevcut tüm kullanıcıların email bilgilerini logla
-    const userEmailData = userList.data.map(u => {
-      const emails = (u as any).emailAddresses?.map((e: any) => e.emailAddress) || [];
-      return { 
-        id: u.id,
-        emails,
-        primaryEmail: u.primaryEmail,
-        username: u.username
-      };
+    // 30 puan altındaki en iyi eşleşmeyi de logla, belki gerekebilir
+    if (matchScores.length > 0) {
+      debugLog(`⚠️ Düşük skorlu eşleşme bulundu (${matchScores[0].score} puan): ${matchScores[0].user.id}`, {
+        reason: matchScores[0].reason
+      });
+    }
+    
+    // Kullanıcı bulunamadı, yardımcı olabilecek ek bilgileri logla
+    debugLog(`⛔ '${email}' için kullanıcı bulunamadı. Aramada kullanılan değerler:`, {
+      normalizedEmail,
+      normalizedUsername,
+      emailDomain,
+      userCount: userList.data.length
     });
     
-    debugLog(`⛔ '${email}' için kullanıcı bulunamadı. Mevcut kullanıcılar:`, userEmailData);
     return null;
   } catch (error) {
     errorLog(`❌ findUserByEmail HATA: '${email}' araması başarısız oldu`, error);
@@ -364,144 +440,227 @@ export async function POST(req: Request) {
         case 'checkout.session.completed': {
           const session = event.data.object as Stripe.Checkout.Session;
           
-          // Tüm metadata ve bağlantılı bilgileri logla
+          // Tüm checkout session bilgilerini detaylı logla
+          debugLog('🔄 Checkout Session işleme başladı', {
+            id: session.id,
+            customer: session.customer,
+            customer_email: session.customer_email,
+            subscription: session.subscription,
+            mode: session.mode
+          });
           debugLog('📦 Checkout Session Metadata:', session.metadata);
-          debugLog('👤 Checkout Session Customer:', session.customer);
-          debugLog('📧 Checkout Session Customer Email:', session.customer_email);
-          debugLog('🔄 Checkout Session Mode:', session.mode);
           
           try {
-            // Kullanıcı ID'sini metadata'dan al
-            const userId = session.metadata?.userId;
+            // Kullanıcı ID'sini önce metadata'dan almayı dene
+            const sessionUserId = session.metadata?.userId;
             
-            // Eğer metadata'da userId yoksa alternatif yöntemler dene
-            if (!userId) {
-              errorLog('❌ Checkout session metadata kullanıcı ID içermiyor!', session);
-              
-              // Customer email ile kullanıcıyı bulmayı dene
-              let foundUserId = null;
-              let findMethod = "unknown";
-              
-              if (session.customer_email) {
+            // Kullanıcıyı bulmak için farklı yolları dene
+            let foundUser: ClerkUser | null = null;
+            let findMethod = "unknown";
+            
+            // 1. Eğer metadata'da userId varsa, doğrudan kullanıcıyı bul
+            if (sessionUserId && sessionUserId.startsWith('user_')) {
+              try {
+                debugLog(`🔍 Metadata'daki ID ile kullanıcı aranıyor: ${sessionUserId}`);
+                foundUser = await getClerkUserById(sessionUserId);
+                
+                if (foundUser) {
+                  findMethod = "metadata_userId";
+                  debugLog(`✅ Metadata userId ile kullanıcı bulundu: ${foundUser.id}`);
+                } else {
+                  debugLog(`⚠️ Metadata userId (${sessionUserId}) ile kullanıcı bulunamadı!`);
+                }
+              } catch (idError) {
+                errorLog(`❌ UserId arama hatası:`, idError);
+              }
+            }
+            
+            // 2. Email ile kullanıcıyı bulmayı dene
+            if (!foundUser && session.customer_email) {
+              try {
                 debugLog(`📧 Müşteri email ile kullanıcı aranıyor: ${session.customer_email}`);
-                try {
-                  const userFromEmail = await findUserByEmail(session.customer_email);
-                  
-                  if (userFromEmail) {
-                    foundUserId = userFromEmail.id;
-                    findMethod = "email";
-                    debugLog(`✅ Email ile kullanıcı bulundu: ${foundUserId}`);
-                  } else {
-                    debugLog(`⚠️ Email (${session.customer_email}) ile kullanıcı bulunamadı!`);
-                  }
-                } catch (emailError) {
-                  errorLog(`❌ Email arama hatası:`, emailError);
+                const userFromEmail = await findUserByEmail(session.customer_email);
+                
+                if (userFromEmail) {
+                  foundUser = userFromEmail;
+                  findMethod = "customer_email";
+                  debugLog(`✅ Müşteri email ile kullanıcı bulundu: ${foundUser.id}`);
+                } else {
+                  debugLog(`⚠️ Email (${session.customer_email}) ile kullanıcı bulunamadı!`);
                 }
+              } catch (emailError) {
+                errorLog(`❌ Email arama hatası:`, emailError);
               }
-              
-              // Customer ID ile müşteri bilgilerini alma ve onun emailini kullanmayı dene
-              if (!foundUserId && session.customer) {
-                try {
-                  debugLog(`🔍 Customer ID'den müşteri bilgileri alınıyor: ${session.customer}`);
-                  const customer = await stripe.customers.retrieve(session.customer as string) as any;
-                  
-                  if (customer.metadata?.userId) {
-                    foundUserId = customer.metadata.userId;
-                    findMethod = "customer_metadata";
-                    debugLog(`✅ Müşteri metadatasından userId bulundu: ${foundUserId}`);
-                  } else if (customer.email) {
-                    debugLog(`📧 Stripe müşteri emaili ile kullanıcı aranıyor: ${customer.email}`);
-                    try {
-                      const userFromCustomer = await findUserByEmail(customer.email);
-                      
-                      if (userFromCustomer) {
-                        foundUserId = userFromCustomer.id;
-                        findMethod = "customer_email";
-                        debugLog(`✅ Stripe müşteri emaili ile kullanıcı bulundu: ${foundUserId}`);
-                      } else {
-                        debugLog(`⚠️ Stripe müşteri emaili (${customer.email}) ile kullanıcı bulunamadı!`);
-                      }
-                    } catch (emailError) {
-                      errorLog(`❌ Müşteri email arama hatası:`, emailError);
+            }
+            
+            // 3. Customer ID ile müşteri bilgilerini alma ve onun emailini ya da metadatasını kullanma
+            if (!foundUser && session.customer) {
+              try {
+                debugLog(`🔍 Customer ID'den müşteri bilgileri alınıyor: ${session.customer}`);
+                const customer = await stripe.customers.retrieve(session.customer as string) as any;
+                
+                // a. Müşteri metadatasından userId kontrolü
+                if (customer.metadata?.userId && customer.metadata.userId.startsWith('user_')) {
+                  try {
+                    debugLog(`🔍 Müşteri metadatasındaki userId ile kullanıcı aranıyor: ${customer.metadata.userId}`);
+                    const userFromMetadata = await getClerkUserById(customer.metadata.userId);
+                    
+                    if (userFromMetadata) {
+                      foundUser = userFromMetadata;
+                      findMethod = "customer_metadata_userId";
+                      debugLog(`✅ Müşteri metadata'sı ile kullanıcı bulundu: ${foundUser.id}`);
+                    } else {
+                      debugLog(`⚠️ Müşteri metadata'sındaki ID (${customer.metadata.userId}) ile kullanıcı bulunamadı!`);
                     }
-                  } else {
-                    errorLog(`❌ Stripe müşteri email bilgisi bulunamadı! Customer ID: ${session.customer}`);
+                  } catch (idError) {
+                    errorLog(`❌ Müşteri metadata userId arama hatası:`, idError);
                   }
-                } catch (customerError: any) {
-                  errorLog(`❌ Müşteri bilgileri alınamadı: ${session.customer}`, customerError);
-                }
-              }
-              
-              // KULLANICI BULUNMASA BİLE DEVAM ET
-              if (!foundUserId) {
-                errorLog(`⚠️⚠️ Hiçbir şekilde kullanıcı bulunamadı. Müşteri ID'si ile geçici kayıt oluşturulacak!`);
-                
-                // Stripe'dan abonelik bilgilerini al
-                if (!session.subscription) {
-                  errorLog('❌ Checkout session abonelik ID içermiyor!', session);
-                  return NextResponse.json({ 
-                    status: "error", 
-                    message: "No subscription found in checkout session"
-                  }, { status: 500 });
                 }
                 
-                // Müşteri ID'si veya email ile ilişkilendirme yapılır
-                debugLog(`📝 Geçici kayıt ile abonelik bilgileri kaydediliyor. Müşteri: ${session.customer || session.customer_email}`);
-                
-                // Burada veritabanına ya da dosya sistemine kayıt yapılabilir (şu an API yanıtına ekliyoruz)
-                return NextResponse.json({
-                  status: "pending",
-                  message: "Kullanıcı bulunamadı, checkout bilgileri kaydedildi",
-                  checkout: {
-                    sessionId: session.id,
-                    subscriptionId: session.subscription,
-                    customer: session.customer,
-                    email: session.customer_email,
-                    created: new Date().toISOString()
+                // b. Stripe müşteri emaili ile kullanıcı arama
+                if (!foundUser && customer.email) {
+                  try {
+                    debugLog(`📧 Stripe müşteri emaili ile kullanıcı aranıyor: ${customer.email}`);
+                    const userFromCustomer = await findUserByEmail(customer.email);
+                    
+                    if (userFromCustomer) {
+                      foundUser = userFromCustomer;
+                      findMethod = "customer_email";
+                      debugLog(`✅ Stripe müşteri emaili ile kullanıcı bulundu: ${foundUser.id}`);
+                    } else {
+                      debugLog(`⚠️ Stripe müşteri emaili (${customer.email}) ile kullanıcı bulunamadı!`);
+                    }
+                  } catch (emailError) {
+                    errorLog(`❌ Müşteri email arama hatası:`, emailError);
                   }
-                });
+                } else if (!foundUser && !customer.email) {
+                  errorLog(`❌ Stripe müşteri email bilgisi bulunamadı! Customer ID: ${session.customer}`);
+                }
+              } catch (customerError: any) {
+                errorLog(`❌ Müşteri bilgileri alınamadı: ${session.customer}`, customerError);
               }
-              
-              // Kullanıcı bulunduysa işleme devam et
-              debugLog(`👤 Kullanıcı bulundu (${findMethod}): ${foundUserId}, checkout işleniyor...`);
+            }
+            
+            // !!! ÖNEMLİ DEĞİŞİKLİK: KULLANICI BULUNMASA BİLE DEVAM ET !!!
+            if (!foundUser) {
+              // Kullanıcı bulunamadı - geçici kayıt oluştur
+              debugLog(`⚠️⚠️ Kullanıcı bulunamadı. Abonelik kaydı yine de oluşturulacak!`);
               
               // Stripe'dan abonelik bilgilerini al
               if (!session.subscription) {
-                errorLog('❌ Checkout session abonelik ID içermiyor!', session);
-                throw new Error('Missing subscription in session');
-              }
-              
-              try {
-                await processCheckoutSessionWithUser(foundUserId, session);
-                debugLog(`✅ Checkout işlemi tamamlandı: ${session.id} -> ${foundUserId}`);
-                return NextResponse.json({ success: true, userId: foundUserId });
-              } catch (processError) {
-                errorLog(`❌ Checkout işleme hatası:`, processError);
+                errorLog('❌ Checkout session abonelik ID içermiyor, işlem yapılamıyor!', session);
                 return NextResponse.json({ 
                   status: "error", 
-                  message: "Checkout processing failed",
-                  userId: foundUserId
+                  message: "Abonelik bilgisi bulunamadı. Lütfen destek ekibine başvurun: support@taxenough.com"
+                }, { status: 500 });
+              }
+              
+              // Geçici kayıt oluştur
+              const tempLogId = `temp_${session.id.substring(0, 8)}_${Date.now()}`;
+              debugLog(`📝 Geçici kayıt (${tempLogId}) oluşturuluyor. Müşteri: ${session.customer || session.customer_email}`);
+              
+              try {
+                // Abonelik bilgilerini getir
+                const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
+                
+                // Planı belirle
+                const priceId = subscription.items.data[0].price.id;
+                let planType = 'premium'; // varsayılan olarak premium
+                
+                // Fiyat ID'ye göre planı belirle
+                if (priceId === process.env.PRICE_ID_BASIC_MONTHLY || 
+                    priceId === process.env.PRICE_ID_BASIC_YEARLY) {
+                  planType = 'basic';
+                }
+                
+                // Müşteri bilgilerini kontrol et
+                let customerEmail = session.customer_email || '';
+                let customerName = '';
+                
+                if (session.customer) {
+                  try {
+                    const customer = await stripe.customers.retrieve(session.customer as string);
+                    if (typeof customer !== 'string' && !customer.deleted) {
+                      customerEmail = customerEmail || customer.email || '';
+                      customerName = (customer as any).name || '';
+                    }
+                  } catch (error) {
+                    debugLog(`⚠️ Geçici kayıt için müşteri bilgileri alınamadı`, error);
+                  }
+                }
+                
+                // Geçici kayıt bilgilerini oluştur ve logla
+                const tempRecord = {
+                  id: tempLogId,
+                  type: "checkout_without_user",
+                  session_id: session.id,
+                  subscription_id: session.subscription,
+                  customer_id: session.customer,
+                  customer_email: customerEmail,
+                  customer_name: customerName,
+                  plan: planType,
+                  status: subscription.status,
+                  created_at: new Date().toISOString(),
+                  billing_period_end: new Date((subscription as any).current_period_end * 1000).toISOString(),
+                };
+                
+                debugLog(`📋 Geçici abonelik kaydı oluşturuldu:`, tempRecord);
+                
+                // Bu bilgileri bir veritabanına kaydetmek için kod eklenebilir
+                // (şu an için sadece logla)
+                
+                // İşlemin kısmen başarıyla tamamlandığını bildir
+                return NextResponse.json({
+                  status: "partial_success",
+                  message: "Abonelik oluşturuldu ancak kullanıcı hesabı bulunamadı",
+                  checkout: tempRecord
+                });
+              } catch (error) {
+                errorLog(`❌ Geçici kayıt oluşturma hatası:`, error);
+                return NextResponse.json({ 
+                  status: "error", 
+                  message: "Abonelik kaydı oluşturulamadı. Lütfen destek ekibine başvurun: support@taxenough.com"
                 }, { status: 500 });
               }
             }
             
-            // Normal userId ile işleme devam et
-            debugLog(`👤 Checkout tamamlandı - userId: ${userId}`);
+            // Kullanıcı bulunduysa, abonelik işlemlerini yap
+            const userId = foundUser.id;
+            debugLog(`👤 Kullanıcı bulundu (${findMethod}): ${userId}, abonelik işleniyor...`);
             
             // Stripe'dan abonelik bilgilerini al
             if (!session.subscription) {
               errorLog('❌ Checkout session abonelik ID içermiyor!', session);
-              throw new Error('Missing subscription in session');
+              return NextResponse.json({ 
+                status: "error", 
+                message: "Abonelik bilgisi bulunamadı"
+              }, { status: 500 });
             }
             
-            await processCheckoutSessionWithUser(userId, session);
-            debugLog(`✅ Checkout işlemi tamamlandı: ${session.id} -> ${userId}`);
-            return NextResponse.json({ success: true, userId });
+            try {
+              // Abonelik işlemlerini yap
+              await processCheckoutSessionWithUser(userId, session);
+              debugLog(`✅ Abonelik işlemi başarıyla tamamlandı: ${session.id} -> ${userId}`);
+              
+              return NextResponse.json({ 
+                success: true, 
+                message: "Abonelik başarıyla kaydedildi", 
+                userId,
+                subscriptionId: session.subscription
+              });
+            } catch (processError) {
+              errorLog(`❌ Abonelik işleme hatası:`, processError);
+              return NextResponse.json({ 
+                status: "error", 
+                message: "Abonelik işlenemedi, lütfen daha sonra tekrar deneyin",
+                userId
+              }, { status: 500 });
+            }
           } catch (error) {
-            errorLog(`❌ Checkout işleme üst düzey hatası:`, error);
+            errorLog(`❌ Checkout session işleme hatası:`, error);
             return NextResponse.json({ 
-              status: "error", 
-              message: "Fatal error in checkout processing"
+              status: "fatal_error", 
+              message: "Beklenmeyen bir hata oluştu, lütfen destek ekibine başvurun"
             }, { status: 500 });
           }
         }
