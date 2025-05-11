@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { getStripe } from '@/lib/stripe';
-import axios from 'axios';
 
 interface SubscribeButtonProps {
   priceId: string;
@@ -21,21 +20,21 @@ export default function SubscribeButton({ priceId, className = '', children }: S
       
       console.log('Starting subscription process for price ID:', priceId);
       
-      // URL'yi başka bir endpoint olarak deneyelim
-      const API_URL = '/api/payment/create-checkout';
+      // GET isteği için URL'yi ve parametreleri hazırla
+      const successUrl = `${window.location.origin}/dashboard?subscription=success`;
+      const cancelUrl = `${window.location.origin}/pricing?subscription=cancelled`;
       
-      // Kesin olarak JSON content type belirterek istek yapalım
-      // Create a checkout session via the API
+      // GET isteği ile çalışacak yeni API endpoint'i
+      const API_URL = `/api/payment/checkout?priceId=${encodeURIComponent(priceId)}&successUrl=${encodeURIComponent(successUrl)}&cancelUrl=${encodeURIComponent(cancelUrl)}`;
+      
+      console.log('Sending request to:', API_URL);
+      
+      // Basit bir GET isteği yap
       const response = await fetch(API_URL, {
-        method: 'POST',
+        method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
-        body: JSON.stringify({
-          priceId,
-          successUrl: `${window.location.origin}/dashboard?subscription=success`,
-          cancelUrl: `${window.location.origin}/pricing?subscription=cancelled`,
-        })
       });
       
       // HTTP Status kodunu kontrol et
@@ -46,7 +45,7 @@ export default function SubscribeButton({ priceId, className = '', children }: S
           statusText: response.statusText,
           body: errorText
         });
-        throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+        throw new Error(`Ödeme sistemi yanıt vermedi (${response.status}). Lütfen daha sonra tekrar deneyin.`);
       }
       
       // Yanıtı JSON olarak parse et
@@ -57,7 +56,7 @@ export default function SubscribeButton({ priceId, className = '', children }: S
       // Check if we have a URL to redirect to
       if (!data.url) {
         console.error('No checkout URL received from server');
-        setError('No checkout URL received. Please try again.');
+        setError('Ödeme sayfası oluşturulamadı. Lütfen tekrar deneyin.');
         return;
       }
       
@@ -69,7 +68,7 @@ export default function SubscribeButton({ priceId, className = '', children }: S
       console.error('Error subscribing:', error);
       
       // Set a more generic but helpful error message
-      setError(`Payment system error: ${error.message}. Please try again later or contact support.`);
+      setError(`Ödeme işlemi başlatılamadı: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -82,7 +81,7 @@ export default function SubscribeButton({ priceId, className = '', children }: S
         disabled={loading}
         className={`${className} ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
       >
-        {loading ? 'Processing...' : children || 'Subscribe'}
+        {loading ? 'İşleniyor...' : children || 'Abone Ol'}
       </button>
       
       {error && (
