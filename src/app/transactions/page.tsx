@@ -13,8 +13,6 @@ import { getAuthTokenFromClient } from '@/lib/auth-client';
 import { parse } from 'papaparse';
 import * as XLSX from 'xlsx';
 import { useUser } from '@clerk/nextjs';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy, where, limit, deleteDoc, doc, Timestamp } from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
 import { useClerkAuthCache, getQuickPremiumStatus } from '@/lib/clerk-utils';
 
@@ -42,7 +40,7 @@ interface Transaction {
   numberOfShares: number;
   pricePerShare: number;
   totalAmount: number;
-  transactionDate: string | Timestamp;
+  transactionDate: string;
   commissionFees?: number;
   notes?: string;
 }
@@ -107,29 +105,32 @@ export default function TransactionsPage() {
         return;
       }
       
-      // Get user ID - prefer Clerk, fallback to Firebase
-      const userId = clerkUser?.id || user?.id;
+      // Get token (prefer Clerk, fallback to custom auth)
+      const token = await getAuthTokenFromClient();
       
-      if (!userId) {
-        setError('User ID not available');
+      if (!token) {
+        setError('Authentication token not available');
         setPageLoading(false);
         return;
       }
       
-      console.log('Fetching transactions for user:', userId);
+      console.log('Fetching transactions for user');
       
-      // Firestore transactions collection
-      const transactionsRef = collection(db, 'transactions');
-      const userTransactionsQuery = query(
-        transactionsRef,
-        where('userId', '==', userId),
-        orderBy('transactionDate', 'desc'),
-        limit(50)
-      );
+      // API'den işlemleri çek
+      const response = await fetch('/api/transactions', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       
-      const querySnapshot = await getDocs(userTransactionsQuery);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch transactions');
+      }
       
-      if (querySnapshot.empty) {
+      const transactionsData = await response.json();
+      
+      if (!transactionsData || !Array.isArray(transactionsData)) {
         console.log('No transactions found for user');
         setTransactionCount(0);
         setTransactions([]);
@@ -137,32 +138,18 @@ export default function TransactionsPage() {
         return;
       }
       
-      // Transform Firestore data to Transaction objects
-      const fetchedTransactions: Transaction[] = [];
-      
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        
-        // Format transaction date
-        let formattedDate = '';
-        if (data.transactionDate instanceof Timestamp) {
-          formattedDate = data.transactionDate.toDate().toISOString().split('T')[0];
-        } else if (typeof data.transactionDate === 'string') {
-          formattedDate = data.transactionDate;
-        }
-        
-        fetchedTransactions.push({
-          id: doc.id,
-          ticker: data.ticker || '',
-          transactionType: data.transactionType || 'Buy',
-          numberOfShares: data.numberOfShares || 0,
-          pricePerShare: data.pricePerShare || 0,
-          totalAmount: data.totalAmount || 0,
-          transactionDate: formattedDate,
-          commissionFees: data.commissionFees || 0,
-          notes: data.notes || '',
-        });
-      });
+      // Format transaction data
+      const fetchedTransactions: Transaction[] = transactionsData.map((item: any) => ({
+        id: item.id,
+        ticker: item.ticker || '',
+        transactionType: item.type === 'buy' ? 'Buy' : 'Sell',
+        numberOfShares: item.shares || 0,
+        pricePerShare: item.price || 0,
+        totalAmount: item.amount || 0,
+        transactionDate: item.date || '',
+        commissionFees: item.fee || 0,
+        notes: item.notes || '',
+      }));
       
       setTransactions(fetchedTransactions);
       setTransactionCount(fetchedTransactions.length);
@@ -172,7 +159,7 @@ export default function TransactionsPage() {
       setError(err.message || 'Failed to load transactions');
       setPageLoading(false);
     }
-  }, [router, user, clerkAuth.isSignedIn, clerkUser, isPremium]);
+  }, [router, user, clerkAuth.isSignedIn, isPremium]);
 
   // Initialize and load transactions
   useEffect(() => {
@@ -189,8 +176,26 @@ export default function TransactionsPage() {
     }
     
     try {
-      const transactionRef = doc(db, 'transactions', id);
-      await deleteDoc(transactionRef);
+      // Get auth token
+      const token = await getAuthTokenFromClient();
+      
+      if (!token) {
+        toast.error('Authentication token not available');
+        return;
+      }
+      
+      // Call API to delete transaction
+      const response = await fetch(`/api/transactions/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete transaction');
+      }
       
       // Update UI
       fetchTransactions();
@@ -252,6 +257,7 @@ export default function TransactionsPage() {
     setColumnMapping(newMapping);
     setIsFileLoaded(true);
     setIsAnalyzing(false);
+    setSuccess('File processed successfully. Please map the columns below.');
   };
   
   // Process CSV file
@@ -394,78 +400,92 @@ export default function TransactionsPage() {
   };
 
   const processSelectedRows = async () => {
-    if (selectedRows.length === 0) {
-      setError('Please select at least one transaction to import');
-      return;
-    }
-    
-    // Check if required fields are mapped
-    const requiredFields: (keyof ColumnMapping)[] = ['ticker', 'date', 'transactionType', 'numberOfShares', 'sharePrice'];
-    const missingFields = requiredFields.filter(field => !columnMapping[field]);
-    
-    if (missingFields.length > 0) {
-      setError(`Please map the following required fields: ${missingFields.join(', ')}`);
-      return;
-    }
-    
     setUploadLoading(true);
     setError(null);
     
     try {
-      const token = getAuthTokenFromClient();
+      // Check if required fields are mapped
+      const requiredFields: (keyof ColumnMapping)[] = ['ticker', 'transactionType', 'numberOfShares', 'sharePrice', 'date'];
+      const missingFields = requiredFields.filter(field => !columnMapping[field]);
+      
+      if (missingFields.length > 0) {
+        throw new Error(`Required columns not mapped: ${missingFields.join(', ')}`);
+      }
+      
+      // Get token
+      const token = await getAuthTokenFromClient();
+      
       if (!token) {
-        setError('Authentication token is missing. Please log in again.');
-        setUploadLoading(false);
-        return;
+        throw new Error('Authentication token not available');
       }
       
       // Prepare transactions for API
       const transactions = selectedRows.map(row => {
-        const shares = parseFloat(row[columnMapping.numberOfShares] || '0');
-        const price = parseFloat(row[columnMapping.sharePrice] || '0');
+        const ticker = row[columnMapping.ticker]?.toString().trim();
+        const typeRaw = row[columnMapping.transactionType]?.toString().toLowerCase().trim();
+        const sharesRaw = row[columnMapping.numberOfShares]?.toString().replace(/,/g, '');
+        const priceRaw = row[columnMapping.sharePrice]?.toString().replace(/[^0-9.-]+/g, '');
+        const dateRaw = row[columnMapping.date];
+        const feesRaw = columnMapping.fees ? row[columnMapping.fees]?.toString().replace(/[^0-9.-]+/g, '') : '0';
+        const notes = columnMapping.notes ? row[columnMapping.notes]?.toString() : '';
         
-        const transaction = {
-          ticker: row[columnMapping.ticker] || '',
-          type: mapTransactionType(row[columnMapping.transactionType] || ''),
-          shares: shares,
-          price: price,
-          amount: shares * price,
-          date: formatDate(row[columnMapping.date] || ''),
-          fee: columnMapping.fees ? parseFloat(row[columnMapping.fees] || '0') : undefined,
-          notes: columnMapping.notes ? (row[columnMapping.notes] || '') : undefined
+        if (!ticker || !typeRaw || !sharesRaw || !priceRaw || !dateRaw) {
+          throw new Error('Missing required transaction data in selected rows');
+        }
+        
+        const shares = parseFloat(sharesRaw);
+        const price = parseFloat(priceRaw);
+        const amount = shares * price;
+        const fee = feesRaw ? parseFloat(feesRaw) : 0;
+        
+        return {
+          ticker: ticker.toUpperCase(),
+          type: mapTransactionType(typeRaw),
+          shares,
+          price,
+          amount,
+          date: formatDate(dateRaw),
+          fee,
+          notes
         };
-        
-        return transaction;
       });
       
-      // Send to API
+      if (transactions.length === 0) {
+        throw new Error('No valid transactions to upload');
+      }
+      
+      // Upload to API
       const response = await fetch('/api/transactions/batch', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ transactions })
       });
       
-      if (response.ok) {
-        const result = await response.json();
-        setSuccess(`Successfully imported ${result.count} transactions`);
-        setShowUploadPanel(false);
-        resetUploadPanel();
-        
-        // Refresh transaction count
-        fetchTransactions();
-        
-        // Reload transactions list
-        window.location.reload();
-      } else {
+      if (!response.ok) {
         const errorData = await response.json();
-        setError(errorData.error || 'Failed to import transactions');
+        throw new Error(errorData.error || 'Failed to upload transactions');
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error processing transactions');
-    } finally {
+      
+      const resultData = await response.json();
+      
+      // Successfully uploaded
+      setSuccess(`${resultData.count || transactions.length} transactions uploaded successfully!`);
+      setUploadLoading(false);
+      
+      // Refresh transaction list
+      fetchTransactions();
+      
+      // Reset upload panel after a short delay
+      setTimeout(() => {
+        resetUploadPanel();
+      }, 2000);
+      
+    } catch (err: any) {
+      console.error('Error processing transactions:', err);
+      setError(err.message || 'Failed to process transactions');
       setUploadLoading(false);
     }
   };
