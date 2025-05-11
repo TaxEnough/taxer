@@ -18,7 +18,7 @@ export async function OPTIONS() {
 export async function POST(req: NextRequest) {
   try {
     // Get authenticated user from Clerk
-    const session = auth();
+    const session = await auth();
     const user = await currentUser();
     
     if (!session || !session.userId) {

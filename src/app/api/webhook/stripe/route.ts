@@ -307,7 +307,7 @@ export async function POST(req: Request) {
               { status: 404 }
             );
           }
-        } catch (customerError) {
+        } catch (customerError: any) {
           console.error("Müşteri bilgileri alınırken hata:", customerError);
           return NextResponse.json(
             { error: `Error retrieving customer: ${customerError.message}` },
