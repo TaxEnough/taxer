@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserData, verifyToken } from '@/lib/auth-firebase';
+import { verifyAuthToken } from '@/lib/auth';
 import { headers } from 'next/headers';
+import { clerkClient } from '@clerk/nextjs/server';
 
 export const dynamic = 'force-dynamic'; // Endpointin statik olarak optimize edilmesini engelle
 
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
     
     try {
       // Token'ı doğrula
-      const decodedToken = await verifyToken(token);
+      const decodedToken = await verifyAuthToken(token);
       
       // Kullanıcı ID'si kontrolü
       if (!decodedToken || !decodedToken.uid) {
@@ -36,8 +37,7 @@ export async function GET(request: NextRequest) {
           email: decodedToken?.email ? '[GİZLİ]' : undefined,
           sub: decodedToken?.sub ? '[VAR]' : undefined,
           user_id: decodedToken?.user_id ? '[VAR]' : undefined,
-          userId: decodedToken?.userId ? '[VAR]' : undefined,
-          firebase: decodedToken?.firebase ? '[VAR]' : undefined,
+          userId: decodedToken?.userId ? '[VAR]' : undefined
         }));
         
         return NextResponse.json(
@@ -48,19 +48,20 @@ export async function GET(request: NextRequest) {
       
       console.log('Token doğrulandı, kullanıcı ID:', decodedToken.uid);
       
-      // Firestore'dan kullanıcı bilgilerini al
+      // Clerk'den kullanıcı bilgilerini al
       try {
-        const userData = await getUserData(decodedToken.uid);
+        const clerk = await clerkClient();
+        const user = await clerk.users.getUser(decodedToken.uid);
         
-        if (userData) {
-          console.log('Firestore\'dan kullanıcı bilgileri alındı');
+        if (user) {
+          console.log('Clerk\'den kullanıcı bilgileri alındı');
           
           // Cache-Control başlığını ekle (10 saniyelik kısa süre cache'de tut)
           return NextResponse.json(
             {
               id: decodedToken.uid,
-              email: decodedToken.email,
-              name: userData.name || decodedToken.email?.split('@')[0] || '',
+              email: user.emailAddresses[0]?.emailAddress || decodedToken.email,
+              name: user.firstName || decodedToken.email?.split('@')[0] || '',
             },
             {
               status: 200,
@@ -87,33 +88,25 @@ export async function GET(request: NextRequest) {
             }
           );
         }
-      } catch (firestoreError: any) {
-        console.error('Kullanıcı bilgileri hatası:', firestoreError);
+      } catch (clerkError: any) {
+        console.error('Kullanıcı bilgileri hatası:', clerkError);
         
-        // Firestore izin hatası durumunda direkt token bilgilerini kullan
-        if (firestoreError.code === 'permission-denied') {
-          console.log('Kullanıcı verileri bulunamadı, token bilgileriyle devam ediliyor');
-          
-          // Kullacını bilgileri yoksa token bilgilerini kullan
-          return NextResponse.json(
-            {
-              id: decodedToken.uid,
-              email: decodedToken.email,
-              name: decodedToken.name || decodedToken.email?.split('@')[0] || '',
-            },
-            {
-              status: 200,
-              headers: {
-                'Cache-Control': 'private, max-age=10', // 10 saniye client tarafında cache'lenebilir
-              },
-            }
-          );
-        }
+        // Clerk izin hatası durumunda direkt token bilgilerini kullan
+        console.log('Kullanıcı verileri bulunamadı, token bilgileriyle devam ediliyor');
         
-        // Diğer firestore hataları için 500 döndür
+        // Kullacını bilgileri yoksa token bilgilerini kullan
         return NextResponse.json(
-          { error: 'Kullanıcı bilgileri alınırken hata oluştu' },
-          { status: 500 }
+          {
+            id: decodedToken.uid,
+            email: decodedToken.email,
+            name: decodedToken.name || decodedToken.email?.split('@')[0] || '',
+          },
+          {
+            status: 200,
+            headers: {
+              'Cache-Control': 'private, max-age=10', // 10 saniye client tarafında cache'lenebilir
+            },
+          }
         );
       }
     } catch (tokenError) {

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/firebase';
-import { getUserData, updateUserProfile } from '@/lib/auth-firebase';
+import { clerkClient } from '@clerk/nextjs/server';
 import { getAuthCookieFromRequest } from '@/lib/auth-server';
 import { verifyToken } from '@/lib/auth';
 
@@ -18,8 +17,7 @@ export async function POST(request: NextRequest) {
     
     // Token doğrulama
     try {
-      // Firebase Admin SDK olmadığı için client tarafında token doğrulama
-      // Bu fonksiyon, API rotalarında kullanılacak basit bir doğrulama sağlar
+      // Token doğrulama
       const decoded = verifyToken(token);
       
       if (!decoded || !decoded.userId) {
@@ -39,18 +37,16 @@ export async function POST(request: NextRequest) {
       }
       
       try {
-        // Kullanıcı profilini güncelle
-        const updateResult = await updateUserProfile(userId, { name });
+        // Clerk ile kullanıcı profilini güncelle
+        const names = name.split(' ');
+        const firstName = names[0] || '';
+        const lastName = names.length > 1 ? names.slice(1).join(' ') : '';
         
-        if (updateResult === null) {
-          // Firestore yetki hatası - client tarafında işlem yap
-          return NextResponse.json({
-            error: 'Sunucu tarafında güncelleme yapılamadı',
-            shouldUseClientSide: true,
-            userId: userId,
-            name: name
-          }, { status: 202 });
-        }
+        const clerk = await clerkClient();
+        await clerk.users.updateUser(userId, {
+          firstName: firstName,
+          lastName: lastName
+        });
         
         console.log('Profil güncellendi:', userId);
         
@@ -58,15 +54,14 @@ export async function POST(request: NextRequest) {
           success: true, 
           message: 'Profil başarıyla güncellendi' 
         });
-      } catch (dbError) {
-        console.error('Veritabanı hatası:', dbError);
-        // Firestore yetki hatası - client tarafında işlem yap
+      } catch (clerkError) {
+        console.error('Clerk API hatası:', clerkError);
         return NextResponse.json({
-          error: 'Sunucu tarafında güncelleme yapılamadı',
+          error: 'Profil güncellenirken bir hata oluştu',
           shouldUseClientSide: true,
           userId: userId,
           name: name
-        }, { status: 202 });
+        }, { status: 500 });
       }
     } catch (tokenError) {
       console.error('Token çözme hatası:', tokenError);

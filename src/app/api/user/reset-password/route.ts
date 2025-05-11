@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sendResetPasswordEmail } from '@/lib/auth-firebase';
 
 // Email format validation
 const validateEmail = (email: string): boolean => {
@@ -41,13 +40,14 @@ export async function POST(request: NextRequest) {
     }
     
     try {
-      // Send Firebase password reset email
-      await sendResetPasswordEmail(body.email);
+      // Doğrudan Clerk'in sağladığı şifre sıfırlama bağlantısına yönlendirme bilgileri
+      const redirectUrl = process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL || 'https://accounts.taxer.com.tr/sign-in';
       
-      // Successful response
+      // Successful response - Kullanıcıyı Clerk'in şifre sıfırlama sayfasına yönlendirme bilgisi
       return NextResponse.json({ 
         success: true,
-        message: 'Password reset link has been sent to your email address'
+        message: 'Please use the Clerk sign-in page to reset your password',
+        redirectUrl: redirectUrl
       });
     } catch (resetError: any) {
       console.error('Password reset error:', resetError);
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
       // This prevents leaking whether the email address exists
       return NextResponse.json({ 
         success: true,
-        message: 'If this email address is registered in our system, a password reset link will be sent'
+        message: 'If this email address is registered in our system, you can reset your password through the sign-in page'
       });
     }
   } catch (error: any) {
