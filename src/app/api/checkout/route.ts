@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
           },
         ],
         mode: 'subscription',
-        success_url: successUrl || `${process.env.NEXT_PUBLIC_APP_URL}/profile?tab=subscription&status=success`,
+        success_url: successUrl || `${process.env.NEXT_PUBLIC_APP_URL}/profile?tab=subscription&status=success&userId=${session.userId}`,
         cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_APP_URL}/pricing?status=cancelled`,
         metadata: userMetadata,
         subscription_data: {

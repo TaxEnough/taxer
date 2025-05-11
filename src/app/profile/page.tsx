@@ -15,14 +15,43 @@ const SimpleSubscriptionInfo = () => {
     renewalDate: null as string | null
   });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+  
+  // Sayfadaki query parametrelerini kontrol et
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const status = params.get('status');
+      
+      // URL'de başarı durumu var mı kontrol et
+      if (status === 'success') {
+        setSuccess(true);
+      }
+    }
+  }, []);
   
   useEffect(() => {
     if (isLoaded && user) {
       try {
+        console.log('Checking subscription data for user:', user.id);
+        
+        // Clerk metadatasını kontrol edelim - hem public hem private
+        console.log('Public metadata:', user.publicMetadata);
+        console.log('User object:', user);
+        
         // any tipini kullanmak zorundayız çünkü Clerk tiplerindeki privateMetadata'yı
         // doğrudan erişemiyoruz
-        const subData = (user as any).privateMetadata?.subscription || 
-                        (user as any).publicMetadata?.subscription;
+        const privateMetadata = (user as any).privateMetadata;
+        const publicMetadata = (user as any).publicMetadata;
+        
+        console.log('Private Metadata:', privateMetadata);
+        console.log('Public Metadata:', publicMetadata);
+        
+        // Önce privateMetadata'daki abonelik bilgilerini kontrol et 
+        const subData = privateMetadata?.subscription || publicMetadata?.subscription;
+        
+        console.log('Subscription data:', subData);
         
         if (subData && subData.status === 'active') {
           let endDate = null;
@@ -40,14 +69,25 @@ const SimpleSubscriptionInfo = () => {
             status: 'Active',
             renewalDate: endDate
           });
+        } else {
+          // Abonelik yoksa veya aktif değilse
+          setSubscription({
+            plan: 'Free Plan',
+            status: 'Free',
+            renewalDate: null
+          });
         }
       } catch (error) {
         console.error('Error fetching subscription:', error);
+        setError('Abonelik bilgileri alınamadı. Lütfen daha sonra tekrar deneyin.');
       } finally {
         setLoading(false);
       }
-    } else {
+    } else if (isLoaded && !user) {
+      setError('Kullanıcı bilgileri bulunamadı.');
       setLoading(false);
+    } else {
+      // İstemci tarafı henüz yüklenmiyorsa beklemeye devam et
     }
   }, [isLoaded, user]);
   
@@ -59,8 +99,25 @@ const SimpleSubscriptionInfo = () => {
     );
   }
   
+  if (error) {
+    return (
+      <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
+        <strong className="font-bold">Hata! </strong>
+        <span className="block sm:inline">{error}</span>
+      </div>
+    );
+  }
+  
   return (
     <div>
+      {/* Başarı mesajı */}
+      {success && (
+        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6 relative">
+          <strong className="font-bold">Başarılı! </strong>
+          <span className="block sm:inline">Aboneliğiniz başarıyla oluşturuldu. Abonelik bilgilerinizi birkaç dakika içinde göreceksiniz.</span>
+        </div>
+      )}
+
       <div className="bg-gray-50 p-6 rounded-lg mb-6">
         <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
           <div className="sm:col-span-1">
@@ -119,6 +176,27 @@ export default function ProfilePage() {
   const { openUserProfile } = useClerk();
   const [pageLoading, setPageLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('profile');
+  const [error, setError] = useState('');
+
+  // URL'den query parametrelerini kontrol et
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get('tab');
+      const status = params.get('status');
+
+      // URL'den gelen sekme parametresi varsa o sekmeyi aktif et
+      if (tab === 'subscription' || tab === 'profile' || tab === 'security') {
+        setActiveTab(tab);
+      }
+      
+      // Ödeme başarılı olduysa bir başarı mesajı gösterebiliriz
+      if (status === 'success') {
+        // Burada başarı mesajı gösterebiliriz
+        console.log('Payment successful!');
+      }
+    }
+  }, []);
 
   // Kullanıcı oturum açmadıysa veya veri yüklenemiyorsa, ana sayfaya yönlendirme
   useEffect(() => {
@@ -127,6 +205,13 @@ export default function ProfilePage() {
         router.push('/');
       } else {
         setPageLoading(false);
+        
+        // Clerk kullanıcı ID'si ile kontrol
+        if ((clerkUser as any).id) {
+          console.log('Clerk User ID:', (clerkUser as any).id);
+        } else {
+          setError('Kullanıcı bilgileri alınamadı.');
+        }
       }
     }
   }, [isLoaded, clerkUser, router]);
@@ -152,6 +237,14 @@ export default function ProfilePage() {
       <main className="flex-grow container mx-auto py-10 px-4">
         <div className="max-w-5xl mx-auto">
           <h1 className="text-3xl font-bold text-gray-900 mb-6">Account Settings</h1>
+          
+          {/* Hata mesajı varsa göster */}
+          {error && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+              <strong className="font-bold">Hata!</strong>
+              <span className="block sm:inline"> {error}</span>
+            </div>
+          )}
           
           {/* Tab Navigation */}
           <div className="border-b border-gray-200 mb-6">
