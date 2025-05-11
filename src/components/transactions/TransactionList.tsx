@@ -6,6 +6,7 @@ import { formatDate, formatCurrency } from '@/lib/utils';
 import { useToast } from '@/components/ui/use-toast';
 import { getAuthTokenFromClient } from '@/lib/auth-client';
 import { useAuth } from '@/context/AuthContext';
+import { useClerkAuthCache, getQuickPremiumStatus } from '@/lib/clerk-utils';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -64,6 +65,10 @@ export default function TransactionList() {
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('');
   const [dateRange, setDateRange] = useState<{startDate: Date | null, endDate: Date | null}>({startDate: null, endDate: null});
   const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
+  
+  // Clerk auth ve premium durumu için
+  const clerkAuth = useClerkAuthCache();
+  const isPremium = getQuickPremiumStatus();
 
   useEffect(() => {
     fetchTransactions();
@@ -82,8 +87,9 @@ export default function TransactionList() {
         return;
       }
       
-      if (!user.accountStatus || user.accountStatus === 'free') {
-        console.error('Kullanıcının premium hesabı yok:', user.accountStatus);
+      // Premium durumunu kontrol et
+      if (!isPremium) {
+        console.error('Kullanıcının premium hesabı yok');
         setError('Premium account required to view transactions.');
         setLoading(false);
         return;
@@ -185,10 +191,10 @@ export default function TransactionList() {
               
               if (refreshResponse.ok) {
                 const refreshData = await refreshResponse.json();
-                console.log('Kullanıcı bilgileri yenilendi:', refreshData.user?.accountStatus);
+                console.log('Kullanıcı bilgileri yenilendi');
                 
-                // Yeni bir token aldıysak, devam et
-                if (refreshData.user && refreshData.user.accountStatus !== 'free') {
+                // Yeni bir token aldıysak devam et
+                if (refreshData.success) {
                   continue; // Döngünün sonraki yinelemesine geç
                 }
               }
