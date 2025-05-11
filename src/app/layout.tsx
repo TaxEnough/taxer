@@ -62,6 +62,58 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en-US">
+      <head>
+        {/* Clerk oturum sürdürme için özel script */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              // Session token yönetimi ve sürdürme
+              (function() {
+                function setClerkTokenObserver() {
+                  try {
+                    // LocalStorage'ı kullanabilirliği kontrol et
+                    if (typeof localStorage === 'undefined') return;
+                    
+                    // JWT token ve session gözlemcisi
+                    setInterval(function() {
+                      // Clerk session_jwt token'ını ara
+                      const allCookies = document.cookie.split(';').map(c => c.trim());
+                      const sessionTokenCookie = allCookies.find(c => c.startsWith('__session=') || c.startsWith('__clerk_db_jwt='));
+                      
+                      if (sessionTokenCookie) {
+                        const token = sessionTokenCookie.split('=')[1];
+                        if (token) {
+                          // Token güncellemesi
+                          localStorage.setItem('clerk-auth-token', token);
+                          console.log('Clerk token refreshed');
+                          
+                          // Window nesnesine de ekle
+                          if (window.__clerk_frontend_api) {
+                            window.__clerk_frontend_api.tokenCache = window.__clerk_frontend_api.tokenCache || {};
+                            window.__clerk_frontend_api.tokenCache.core = {
+                              token: token,
+                              expiresAt: (new Date().getTime() + 3600000)
+                            };
+                          }
+                        }
+                      }
+                    }, 5000); // 5 saniyede bir kontrol et
+                  } catch (e) {
+                    console.warn('Clerk token observer error:', e);
+                  }
+                }
+                
+                // Sayfa yüklendiğinde başlat
+                if (document.readyState === 'complete') {
+                  setClerkTokenObserver();
+                } else {
+                  window.addEventListener('load', setClerkTokenObserver);
+                }
+              })();
+            `
+          }}
+        />
+      </head>
       <body className={inter.className}>
         <ClerkProvider
           appearance={{
@@ -69,25 +121,6 @@ export default function RootLayout({
           }}
           publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
         >
-          <script
-            dangerouslySetInnerHTML={{
-              __html: `
-                // Basit bir token cache mekanizması manuel olarak ekle
-                // Bu, Clerk'in sayfa yenilemeleri arasında oturumu hatırlamasına yardımcı olur
-                try {
-                  const authToken = localStorage.getItem('clerk-auth-token');
-                  if (authToken) {
-                    window.__clerk_frontend_api = window.__clerk_frontend_api || {};
-                    window.__clerk_frontend_api.tokenCache = {
-                      core: { token: authToken, expiresAt: (new Date().getTime() + 3600000) }
-                    };
-                  }
-                } catch (e) {
-                  console.warn('Token cache initialization failed', e);
-                }
-              `
-            }}
-          />
           <AuthProvider>
             <Toaster position="top-center" />
             <LoadingTransition />
