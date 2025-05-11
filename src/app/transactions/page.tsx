@@ -40,7 +40,7 @@ interface Transaction {
   numberOfShares: number;
   pricePerShare: number;
   totalAmount: number;
-  transactionDate: string;
+  transactionDate: string | any;
   commissionFees?: number;
   notes?: string;
 }
@@ -99,7 +99,7 @@ export default function TransactionsPage() {
       }
       
       // Hızlı premium kontrolü yap
-      if (!isPremium && !user?.accountStatus) {
+      if (!isPremium) {
         console.log('User does not have premium access, redirecting to pricing page');
         router.push('/pricing?premium=required');
         return;
@@ -818,11 +818,9 @@ export default function TransactionsPage() {
                         {formatCurrency(transaction.totalAmount)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {typeof transaction.transactionDate === 'string'
-                          ? transaction.transactionDate
-                          : transaction.transactionDate instanceof Timestamp
-                          ? transaction.transactionDate.toDate().toISOString().split('T')[0]
-                          : 'Invalid date'}
+                        {typeof transaction.transactionDate === 'string' 
+                          ? transaction.transactionDate 
+                          : formatDate(String(transaction.transactionDate))}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <button
