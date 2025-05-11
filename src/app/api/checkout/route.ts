@@ -3,6 +3,38 @@ import Stripe from 'stripe';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { PRICES } from '@/lib/stripe';
 
+// Debug loglama fonksiyonu
+function debugLog(message: string, data?: any) {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] CHECKOUT DEBUG: ${message}`);
+  if (data) {
+    try {
+      if (typeof data === 'object') {
+        console.log(JSON.stringify(data, null, 2));
+      } else {
+        console.log(data);
+      }
+    } catch (e) {
+      console.log('Veri loglanamadı:', e);
+    }
+  }
+}
+
+// Hata loglama fonksiyonu
+function errorLog(message: string, error?: any) {
+  const timestamp = new Date().toISOString();
+  console.error(`[${timestamp}] CHECKOUT ERROR: ${message}`);
+  if (error) {
+    if (error instanceof Error) {
+      console.error(`Hata türü: ${error.name}`);
+      console.error(`Hata mesajı: ${error.message}`);
+      console.error(`Stack trace: ${error.stack}`);
+    } else {
+      console.error(error);
+    }
+  }
+}
+
 // CORS headers
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -22,20 +54,28 @@ export async function POST(req: NextRequest) {
     const user = await currentUser();
     
     if (!session || !session.userId) {
-      console.error('Kullanıcı kimliği doğrulanamadı');
+      errorLog('Kullanıcı kimliği doğrulanamadı', { session });
       return NextResponse.json(
         { error: 'Lütfen önce giriş yapın' },
         { status: 401, headers: corsHeaders }
       );
     }
 
+    debugLog('Clerk kullanıcı bilgileri:', {
+      userId: session.userId,
+      emailAddresses: user?.emailAddresses,
+      username: user?.username,
+      firstName: user?.firstName,
+      lastName: user?.lastName
+    });
+
     // İstek verilerini al
     const { priceId, successUrl, cancelUrl } = await req.json();
-    console.log('Checkout isteği verileri:', { priceId, successUrl, cancelUrl, userId: session.userId });
+    debugLog('Checkout isteği verileri:', { priceId, successUrl, cancelUrl, userId: session.userId });
 
     // PriceId kontrolü
     if (!priceId) {
-      console.error('Eksik priceId');
+      errorLog('Eksik priceId');
       return NextResponse.json(
         { error: 'Fiyat ID gerekli' },
         { status: 400, headers: corsHeaders }
@@ -51,8 +91,7 @@ export async function POST(req: NextRequest) {
     ];
 
     if (!validPriceIds.includes(priceId)) {
-      console.error('Geçersiz fiyat ID:', priceId);
-      console.log('Geçerli fiyat ID\'leri:', validPriceIds);
+      errorLog('Geçersiz fiyat ID:', { priceId, validPriceIds });
       return NextResponse.json(
         { error: 'Geçersiz fiyat ID' },
         { status: 400, headers: corsHeaders }
@@ -60,24 +99,40 @@ export async function POST(req: NextRequest) {
     }
     
     // Kullanıcı email'ini Clerk'ten al
-    const userEmail = user?.emailAddresses[0]?.emailAddress;
+    const primaryEmailAddress = user?.emailAddresses?.find(email => email.id === user.primaryEmailAddressId);
+    const userEmail = primaryEmailAddress?.emailAddress || user?.emailAddresses?.[0]?.emailAddress;
     
     // Email bulunamazsa hata ver
     if (!userEmail) {
-      console.error('Kullanıcı emaili bulunamadı');
+      errorLog('Kullanıcı emaili bulunamadı', { user });
       return NextResponse.json(
         { error: 'Kullanıcı bilgileri eksik. Lütfen hesap bilgilerinizi güncelleyin.' },
         { status: 400, headers: corsHeaders }
       );
     }
     
-    console.log('Ödeme için kullanılacak email:', userEmail);
+    debugLog('Ödeme için kullanılacak bilgiler:', { 
+      email: userEmail, 
+      userId: session.userId,
+      username: user?.username,
+      fullName: `${user?.firstName || ''} ${user?.lastName || ''}`.trim()
+    });
 
     try {
       // Stripe ödeme oturumu oluştur
       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
         apiVersion: '2025-03-31.basil'
       });
+      
+      // Kullanıcı bilgilerini metadata olarak hazırla
+      const userMetadata = {
+        userId: session.userId,
+        email: userEmail,
+        username: user?.username || '',
+        name: `${user?.firstName || ''} ${user?.lastName || ''}`.trim()
+      };
+      
+      debugLog('Stripe için hazırlanan kullanıcı metadata:', userMetadata);
       
       // Checkout session oluştur
       const checkoutSession = await stripe.checkout.sessions.create({
@@ -91,34 +146,32 @@ export async function POST(req: NextRequest) {
         mode: 'subscription',
         success_url: successUrl || `${process.env.NEXT_PUBLIC_APP_URL}/profile?tab=subscription&status=success`,
         cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_APP_URL}/pricing?status=cancelled`,
-        metadata: {
-          userId: session.userId,
-        },
+        metadata: userMetadata,
         subscription_data: {
-          metadata: {
-            userId: session.userId,
-          },
+          metadata: userMetadata,
         },
         allow_promotion_codes: true,
       });
       
-      console.log('Ödeme oturumu oluşturuldu:', checkoutSession.id);
-      console.log('Checkout URL:', checkoutSession.url);
+      debugLog('Ödeme oturumu oluşturuldu:', { 
+        sessionId: checkoutSession.id,
+        url: checkoutSession.url,
+        metadata: checkoutSession.metadata
+      });
 
       return NextResponse.json({ 
         url: checkoutSession.url,
         sessionId: checkoutSession.id
       }, { headers: corsHeaders });
     } catch (stripeError: any) {
-      console.error('Stripe hatası:', stripeError.message);
+      errorLog('Stripe hatası:', stripeError);
       return NextResponse.json(
         { error: `Stripe hatası: ${stripeError.message}` },
         { status: 500, headers: corsHeaders }
       );
     }
   } catch (error: any) {
-    console.error('Ödeme oturumu oluşturma hatası:', error);
-    console.error('Hata detayları:', error.message);
+    errorLog('Ödeme oturumu oluşturma hatası:', error);
     return NextResponse.json(
       { error: `Bir şeyler yanlış gitti: ${error.message}` },
       { status: 500, headers: corsHeaders }
