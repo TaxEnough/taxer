@@ -11,6 +11,8 @@ function isPublicPath(path: string): boolean {
     path.startsWith("/about") ||
     path.startsWith("/contact") ||
     path.startsWith("/api/webhook") ||
+    path.startsWith("/api/payment") ||
+    path.startsWith("/api/checkout") ||
     path.startsWith("/blog") ||
     path.startsWith("/api/blog")
   );
@@ -22,6 +24,11 @@ export default clerkMiddleware((auth, req) => {
   const isSignedIn = !!auth.userId || !!auth.sessionId; 
   const path = req.nextUrl.pathname;
   
+  // Debug log ekleyelim
+  if (path.includes("/api/payment") || path.includes("/api/checkout")) {
+    console.log(`[Auth Debug] API Path: ${path}, Public: true, SignedIn: ${isSignedIn}`);
+  }
+  
   // Public path kontrolü
   const isPublic = isPublicPath(path);
   
@@ -32,6 +39,7 @@ export default clerkMiddleware((auth, req) => {
   
   // Kullanıcı oturum açmamışsa ve korumalı sayfaya erişmeye çalışıyorsa
   if (!isPublic && !isSignedIn) {
+    console.log(`[Auth Redirect] Path: ${path} not public and not signed in, redirecting to login`);
     return NextResponse.redirect(new URL("/login", req.url));
   }
   
