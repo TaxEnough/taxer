@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { getStripe } from '@/lib/stripe';
+import { useUser } from '@clerk/nextjs';
 
 interface SubscribeButtonProps {
   priceId: string;
@@ -12,7 +13,8 @@ interface SubscribeButtonProps {
 export default function SubscribeButton({ priceId, className = '', children }: SubscribeButtonProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
+  const { isSignedIn, user } = useUser();
+  
   const handleSubscription = async () => {
     try {
       setLoading(true);
@@ -23,6 +25,16 @@ export default function SubscribeButton({ priceId, className = '', children }: S
       // URL'leri hazırla
       const successUrl = `${window.location.origin}/dashboard?subscription=success`;
       const cancelUrl = `${window.location.origin}/pricing?subscription=cancelled`;
+      
+      // Kullanıcı bilgilerini alıp istek verilerine ekle
+      let userId = '';
+      let email = '';
+      
+      if (isSignedIn && user) {
+        userId = user.id;
+        email = user.primaryEmailAddress?.emailAddress || '';
+        console.log('User info for payment:', { userId, email });
+      }
       
       // Birden fazla API endpoint'i ayarla ve sırayla dene
       // Bu Vercel'deki sorunları çözmek için fallback mekanizması oluşturur
@@ -49,7 +61,9 @@ export default function SubscribeButton({ priceId, className = '', children }: S
             body: JSON.stringify({
               priceId,
               successUrl,
-              cancelUrl
+              cancelUrl,
+              userId, // Kullanıcı ID'sini ekliyoruz
+              email    // Kullanıcı email'ini ekliyoruz
             })
           });
           

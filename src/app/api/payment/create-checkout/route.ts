@@ -1,6 +1,5 @@
 import { NextResponse, NextRequest } from 'next/server';
 import Stripe from 'stripe';
-import { auth, currentUser } from '@clerk/nextjs/server';
 import { PRICES } from '@/lib/stripe';
 
 // Debug loglama fonksiyonu
@@ -40,6 +39,7 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Content-Type': 'application/json'
 };
 
 // Handle OPTIONS request for CORS preflight
@@ -54,10 +54,6 @@ export async function POST(req: NextRequest) {
   try {
     debugLog('POST isteği alındı', { url: req.url });
     
-    // Get authenticated user from Clerk
-    const session = await auth();
-    const user = await currentUser();
-    
     // İstek verilerini al
     let requestData;
     try {
@@ -65,60 +61,30 @@ export async function POST(req: NextRequest) {
       debugLog('İstek verileri başarıyla alındı', requestData);
     } catch (parseError) {
       errorLog('İstek verisi JSON olarak çözümlenemedi', parseError);
-      return NextResponse.json(
-        { error: 'Geçersiz istek verisi' },
+      return new Response(
+        JSON.stringify({ error: 'Geçersiz istek verisi' }),
         { status: 400, headers: corsHeaders }
       );
     }
     
-    const { priceId, successUrl, cancelUrl, email: requestEmail } = requestData;
+    const { priceId, successUrl, cancelUrl, email: requestEmail, userId: requestUserId } = requestData;
     
-    // Kullanıcı ID'sini önce session'dan, sonra manuel olarak alma
-    let userId = session?.userId;
-    let userEmail = '';
+    // Email bilgisini hazırla
+    let userEmail = requestEmail || '';
+    let userId = requestUserId || '';
 
-    if (!userId) {
-      debugLog('Clerk session üzerinden kullanıcı ID bulunamadı, alternatif yöntemler deneniyor');
-      
-      // Kullanıcı email'ini Clerk'ten almayı dene
-      if (user) {
-        const primaryEmailAddress = user.emailAddresses?.find(email => email.id === user.primaryEmailAddressId);
-        userEmail = primaryEmailAddress?.emailAddress || user.emailAddresses?.[0]?.emailAddress || '';
-        
-        if (userEmail) {
-          debugLog(`Email bulundu: ${userEmail}, ödeme sayfası oluşturuluyor`);
-        } else {
-          debugLog('Kullanıcı email bilgisi bulunamadı');
-        }
-      }
-      
-      // Gelen istekten email alma
-      if (!userEmail) {
-        userEmail = requestEmail || '';
-        if (userEmail) {
-          debugLog(`Request body'den email bulundu: ${userEmail}`);
-        }
-      }
-
-      // Hala email bulunamadıysa ve kimlik doğrulaması yapılamadıysa hata ver
-      if (!userEmail) {
-        errorLog('Kullanıcı kimliği veya email bulunamadı', { session });
-        return NextResponse.json(
-          { error: 'Lütfen giriş yapın veya email adresinizi girin' },
-          { status: 401, headers: corsHeaders }
-        );
-      }
-    } else {
-      // Kullanıcı bilgisini alıp email'i çıkar
-      const primaryEmailAddress = user?.emailAddresses?.find(email => email.id === user.primaryEmailAddressId);
-      userEmail = primaryEmailAddress?.emailAddress || user?.emailAddresses?.[0]?.emailAddress || '';
+    // Email kontrolü
+    if (!userEmail) {
+      errorLog('Kullanıcı email adresi bulunamadı');
+      return new Response(
+        JSON.stringify({ error: 'Ödeme için email adresi gerekli' }),
+        { status: 400, headers: corsHeaders }
+      );
     }
 
     debugLog('İşlemde kullanılacak bilgiler:', {
-      userId: userId || 'N/A',
-      email: userEmail,
-      username: user?.username || 'N/A',
-      fullName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'N/A'
+      userId: userId || 'Belirtilmedi',
+      email: userEmail
     });
     
     debugLog('Checkout isteği verileri:', { priceId, successUrl, cancelUrl, userId, userEmail });
@@ -126,8 +92,8 @@ export async function POST(req: NextRequest) {
     // PriceId kontrolü
     if (!priceId) {
       errorLog('Eksik priceId');
-      return NextResponse.json(
-        { error: 'Fiyat ID gerekli' },
+      return new Response(
+        JSON.stringify({ error: 'Fiyat ID gerekli' }),
         { status: 400, headers: corsHeaders }
       );
     }
@@ -142,8 +108,8 @@ export async function POST(req: NextRequest) {
 
     if (!validPriceIds.includes(priceId)) {
       errorLog('Geçersiz fiyat ID:', { priceId, validPriceIds });
-      return NextResponse.json(
-        { error: 'Geçersiz fiyat ID' },
+      return new Response(
+        JSON.stringify({ error: 'Geçersiz fiyat ID' }),
         { status: 400, headers: corsHeaders }
       );
     }
@@ -157,9 +123,7 @@ export async function POST(req: NextRequest) {
       // Kullanıcı bilgilerini metadata olarak hazırla
       const userMetadata = {
         userId: userId || '',
-        email: userEmail,
-        username: user?.username || '',
-        name: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : ''
+        email: userEmail
       };
       
       debugLog('Stripe için hazırlanan kullanıcı metadata:', userMetadata);
@@ -189,24 +153,27 @@ export async function POST(req: NextRequest) {
         metadata: checkoutSession.metadata
       });
 
-      return NextResponse.json({ 
-        url: checkoutSession.url,
-        sessionId: checkoutSession.id,
-        email: userEmail,
-        success: true,
-        message: "Ödeme sayfası oluşturuldu. Başarılı ödeme sonrası 7 günlük deneme süresi başlayacak."
-      }, { headers: corsHeaders });
+      return new Response(
+        JSON.stringify({ 
+          url: checkoutSession.url,
+          sessionId: checkoutSession.id,
+          email: userEmail,
+          success: true,
+          message: "Ödeme sayfası oluşturuldu. Başarılı ödeme sonrası 7 günlük deneme süresi başlayacak."
+        }),
+        { status: 200, headers: corsHeaders }
+      );
     } catch (stripeError: any) {
       errorLog('Stripe hatası:', stripeError);
-      return NextResponse.json(
-        { error: `Stripe hatası: ${stripeError.message}` },
+      return new Response(
+        JSON.stringify({ error: `Stripe hatası: ${stripeError.message}` }),
         { status: 500, headers: corsHeaders }
       );
     }
   } catch (error: any) {
     errorLog('Ödeme oturumu oluşturma hatası:', error);
-    return NextResponse.json(
-      { error: `Bir şeyler yanlış gitti: ${error.message}` },
+    return new Response(
+      JSON.stringify({ error: `Bir şeyler yanlış gitti: ${error.message}` }),
       { status: 500, headers: corsHeaders }
     );
   }
