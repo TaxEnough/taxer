@@ -91,29 +91,61 @@ async function findUserByEmail(email: string): Promise<ClerkUser | null> {
   try {
     console.log(`${email} email adresi için kullanıcı aranıyor`);
     
-    // Kullanıcı listesini al
-    const userList = await getClerkUserList(100);
-    
-    // Email'e göre kullanıcıyı bul
-    const user = userList.data.find(u => {
-      const matchesPrimaryEmail = u.primaryEmail === email;
-      const matchesEmail = u.email === email;
-      const matchesUsername = u.username && u.username.toLowerCase() === email.toLowerCase();
-      
-      if (matchesPrimaryEmail) console.log(`Kullanıcı primaryEmail ile eşleşti: ${u.id}`);
-      if (matchesEmail) console.log(`Kullanıcı email ile eşleşti: ${u.id}`);
-      if (matchesUsername) console.log(`Kullanıcı username ile eşleşti: ${u.id}`);
-      
-      return matchesPrimaryEmail || matchesEmail || matchesUsername;
-    });
-    
-    if (user) {
-      console.log(`${email} için kullanıcı bulundu: ${user.id}`);
-    } else {
-      console.log(`${email} için kullanıcı bulunamadı`);
+    if (!email) {
+      console.error("Email adresi belirtilmemiş");
+      return null;
     }
     
-    return user || null;
+    // Önce doğrudan email ile arama yapmayı dene (Clerk API sorgu parametresi)
+    try {
+      const response = await fetch(`https://api.clerk.com/v1/users?email_address=${encodeURIComponent(email)}`, {
+        headers: {
+          Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (result && result.data && result.data.length > 0) {
+          console.log(`API Email sorgusu ile kullanıcı bulundu: ${result.data[0].id}`);
+          return result.data[0];
+        }
+        console.log("API Email sorgusu sonuç vermedi, kullanıcı listesi taramasına geçiliyor");
+      }
+    } catch (apiError) {
+      console.error("Email API sorgusu sırasında hata:", apiError);
+      // Hata olursa liste taramasına geç
+    }
+    
+    // Kullanıcı listesini al (yedek yöntem)
+    const userList = await getClerkUserList(100);
+    const normalizedEmail = email.toLowerCase();
+    
+    // Email'e göre kullanıcıları bul (daha ayrıntılı eşleştirme)
+    const matchingUsers = userList.data.filter(u => {
+      // Clerk'teki tüm email adresi yapılarını kontrol et
+      const primaryEmailMatch = u.primaryEmail?.toLowerCase() === normalizedEmail;
+      const emailMatch = u.email?.toLowerCase() === normalizedEmail;
+      
+      // Email adreslerinin domain kısmı öncesi kontrolü (örn. test@domain.com -> test)
+      const emailUsername = normalizedEmail.split('@')[0];
+      const usernameMatch = u.username?.toLowerCase() === emailUsername;
+      
+      if (primaryEmailMatch) console.log(`Kullanıcı primaryEmail ile eşleşti: ${u.id}`);
+      if (emailMatch) console.log(`Kullanıcı email ile eşleşti: ${u.id}`);
+      if (usernameMatch) console.log(`Kullanıcı username ile kısmen eşleşti: ${u.id}`);
+      
+      return primaryEmailMatch || emailMatch || usernameMatch;
+    });
+    
+    if (matchingUsers.length > 0) {
+      console.log(`${email} için ${matchingUsers.length} kullanıcı bulundu, ilk eşleşen seçiliyor: ${matchingUsers[0].id}`);
+      return matchingUsers[0];
+    }
+    
+    console.log(`${email} için kullanıcı bulunamadı`);
+    return null;
   } catch (error) {
     console.error("Email ile kullanıcı arama hatası:", error);
     return null;
@@ -240,58 +272,48 @@ export async function POST(req: Request) {
         
         console.log(`Yeni abonelik oluşturuldu - ID: ${subscriptionId}, Customer: ${customerId}`);
         
-        // Stripe'dan müşteri bilgilerini al
-        const customer = await stripe.customers.retrieve(customerId) as any;
-        console.log(`Müşteri bilgileri alındı - Email: ${customer.email}`);
-        
-        // Customer email'i kullanarak Clerk'te kullanıcıyı bul
-        const user = await findUserByEmail(customer.email);
-        
-        if (user) {
-          const userId = user.id;
-          console.log(`Email'e göre kullanıcı bulundu - ID: ${userId}`);
+        try {
+          // Stripe'dan müşteri bilgilerini al
+          const customer = await stripe.customers.retrieve(customerId) as any;
+          console.log(`Müşteri bilgileri alındı - Email: ${customer.email}`);
           
-          // Planı belirle
-          const priceId = subscription.items.data[0].price.id;
-          let planType = 'premium'; // varsayılan olarak premium
-          
-          // Fiyat ID'ye göre planı belirle - gerekirse ayarla
-          if (priceId === process.env.PRICE_ID_BASIC_MONTHLY || 
-              priceId === process.env.PRICE_ID_BASIC_YEARLY) {
-            planType = 'basic';
-          }
-          
-          // Abonelik detaylarını oluştur
-          const subscriptionDetails = {
-            id: subscription.id,
-            status: subscription.status,
-            plan: planType,
-            currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
-            priceId: priceId
-          };
-          
-          // Clerk kullanıcı metadatasını güncelle
-          const updateSuccess = await updateClerkUserMetadata(
-            userId,
-            { subscription: subscriptionDetails },
-            { 
-              subscription: {
-                status: subscription.status,
-                plan: planType
-              }
+          // Metadata bilgilerini kontrol et
+          if (customer.metadata && customer.metadata.userId) {
+            console.log(`Müşteri metadata'sında userId bulundu: ${customer.metadata.userId}`);
+            const user = await getClerkUserById(customer.metadata.userId);
+            
+            if (user) {
+              // Kullanıcı metadata üzerinden bulundu, abonelik işlemlerine devam et
+              // ... subscription processing code ...
+              const updateSuccess = await processSubscriptionForUser(user, subscription);
+              return NextResponse.json({ success: updateSuccess });
+            } else {
+              console.log("Metadata'daki userId geçerli bir kullanıcıya ait değil, email ile arama yapılacak");
             }
-          );
-          
-          if (updateSuccess) {
-            console.log(`Yeni abonelik ${subscriptionId} kullanıcısı ${userId} için oluşturuldu`);
-          } else {
-            console.error(`Yeni abonelik ${subscriptionId} kullanıcı ${userId} için oluşturulamadı`);
           }
-        } else {
-          console.error(`Kullanıcı bulunamadı: ${customer.email}`);
+          
+          // Customer email'i kullanarak Clerk'te kullanıcıyı bul
+          const user = await findUserByEmail(customer.email);
+          
+          if (user) {
+            // Kullanıcı bulundu, abonelik işlemlerine devam et
+            const updateSuccess = await processSubscriptionForUser(user, subscription);
+            return NextResponse.json({ success: updateSuccess });
+          } else {
+            // Kullanıcı bulunamadı
+            console.error(`Kullanıcı bulunamadı: ${customer.email}`);
+            return NextResponse.json(
+              { error: `User not found for email: ${customer.email}` },
+              { status: 404 }
+            );
+          }
+        } catch (customerError) {
+          console.error("Müşteri bilgileri alınırken hata:", customerError);
+          return NextResponse.json(
+            { error: `Error retrieving customer: ${customerError.message}` },
+            { status: 500 }
+          );
         }
-        
-        break;
       }
       
       case 'customer.created': {
@@ -595,5 +617,55 @@ export async function POST(req: Request) {
       { error: 'Error processing webhook' },
       { status: 500 }
     );
+  }
+}
+
+// Abonelik işleme yardımcı fonksiyonu
+async function processSubscriptionForUser(user: ClerkUser, subscription: any): Promise<boolean> {
+  try {
+    const userId = user.id;
+    console.log(`Email'e göre kullanıcı bulundu - ID: ${userId}`);
+    
+    // Planı belirle
+    const priceId = subscription.items.data[0].price.id;
+    let planType = 'premium'; // varsayılan olarak premium
+    
+    // Fiyat ID'ye göre planı belirle - gerekirse ayarla
+    if (priceId === process.env.PRICE_ID_BASIC_MONTHLY || 
+        priceId === process.env.PRICE_ID_BASIC_YEARLY) {
+      planType = 'basic';
+    }
+    
+    // Abonelik detaylarını oluştur
+    const subscriptionDetails = {
+      id: subscription.id,
+      status: subscription.status,
+      plan: planType,
+      currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+      priceId: priceId
+    };
+    
+    // Clerk kullanıcı metadatasını güncelle
+    const updateSuccess = await updateClerkUserMetadata(
+      userId,
+      { subscription: subscriptionDetails },
+      { 
+        subscription: {
+          status: subscription.status,
+          plan: planType
+        }
+      }
+    );
+    
+    if (updateSuccess) {
+      console.log(`Yeni abonelik ${subscription.id} kullanıcısı ${userId} için oluşturuldu`);
+      return true;
+    } else {
+      console.error(`Yeni abonelik ${subscription.id} kullanıcı ${userId} için oluşturulamadı`);
+      return false;
+    }
+  } catch (error) {
+    console.error("Abonelik işleme hatası:", error);
+    return false;
   }
 } 
