@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthCookieFromRequest } from '@/lib/auth-server';
-import { verifyToken, hashPassword } from '@/lib/auth';
-import { reauthenticateWithCredential, EmailAuthProvider, updatePassword } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { verifyToken } from '@/lib/auth';
+import { clerkClient } from '@clerk/nextjs/server';
 
 // Şifre değiştirme API'si
 export async function POST(request: NextRequest) {
@@ -10,7 +9,6 @@ export async function POST(request: NextRequest) {
   
   try {
     // Şifre değiştirme API güvenlik katmanı
-    // Firebase Admin SDK yetkisi olmadığı için token kontrolü ve client-side işlemler kullanıyoruz
     
     // Token kontrolü
     const token = await getAuthCookieFromRequest(request);
@@ -45,13 +43,29 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Password must be at least 6 characters long' }, { status: 400 });
       }
       
-      // Not: Firebase Auth şifre değiştirme işlemleri sunucu tarafında Firebase Admin SDK gerektirir
-      // Server-side işlem yapamıyoruz, client tarafında işlem yapılmasını sağlayalım
-      return NextResponse.json({
-        message: 'Client-side authentication required for password change',
-        shouldUseClientSide: true,
-        userId: userId
-      }, { status: 202 }); // 202 Accepted, client'ın işlemi devam ettirmesi gerektiğini belirtir
+      // Clerk API ile şifre değiştirme işlemleri doğrudan sunucudan yapılamaz
+      // Kullanıcıyı Clerk'in şifre değiştirme sayfasına yönlendiriyoruz
+      
+      try {
+        // Kullanıcıyı doğrula
+        const clerk = await clerkClient();
+        const user = await clerk.users.getUser(userId);
+        
+        if (!user) {
+          return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+        
+        // Kullanıcı bulundu, client tarafında işlem yapılmasını sağlayalım
+        return NextResponse.json({
+          message: 'Please use the Clerk account settings to change your password',
+          shouldUseClientSide: true,
+          userId: userId,
+          redirectUrl: process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL || '/sign-in'
+        }, { status: 202 }); // 202 Accepted, client'ın işlemi devam ettirmesi gerektiğini belirtir
+      } catch (clerkError) {
+        console.error('Clerk API error:', clerkError);
+        return NextResponse.json({ error: 'Unable to verify user account' }, { status: 500 });
+      }
       
     } catch (tokenError) {
       console.error('Token decryption error:', tokenError);
