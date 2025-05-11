@@ -173,10 +173,14 @@ export async function POST(req: NextRequest) {
         metadata: userMetadata,
         subscription_data: {
           metadata: userMetadata,
+          trial_period_days: 7,
         },
         allow_promotion_codes: true,
       });
       
+      // Webhook olayı simüle et
+      console.log(`🟢 WEBHOOK SİMÜLASYONU! Kullanıcı: ${userEmail}, Session: ${checkoutSession.id}`);
+
       debugLog('Ödeme oturumu oluşturuldu:', { 
         sessionId: checkoutSession.id,
         url: checkoutSession.url,
@@ -185,7 +189,10 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({ 
         url: checkoutSession.url,
-        sessionId: checkoutSession.id
+        sessionId: checkoutSession.id,
+        email: userEmail,
+        success: true,
+        message: "Ödeme sayfası oluşturuldu. Başarılı ödeme sonrası 7 günlük deneme süresi başlayacak."
       }, { headers: corsHeaders });
     } catch (stripeError: any) {
       errorLog('Stripe hatası:', stripeError);
