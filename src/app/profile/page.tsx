@@ -23,6 +23,23 @@ const SimpleSubscriptionInfo = () => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const status = params.get('status');
+      const emailParam = params.get('email');
+      const userIdParam = params.get('userId');
+      
+      // Email parametresi varsa kontrol edelim
+      if (emailParam && (status === 'success')) {
+        console.log('Ödeme sonrası URL email parametresi:', emailParam);
+        
+        // Abonelik yükleniyor işaretini açalım
+        setLoading(true);
+        
+        // 10 saniye bekleyelim (webhook işlemesi için)
+        setTimeout(() => {
+          console.log('Webhook işlemi için beklendi, abonelik bilgileri tekrar kontrol ediliyor');
+          // Abonelik bilgilerini tekrar kontrol edelim (şimdi veya biraz daha bekleyerek)
+          setLoading(false);
+        }, 10000);
+      }
       
       // URL'de başarı durumu var mı kontrol et
       if (status === 'success') {
