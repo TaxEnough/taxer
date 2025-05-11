@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { auth, db } from '@/lib/firebase';
-import { deleteUser } from 'firebase/auth';
+import { db } from '@/lib/firebase';
 import { doc, deleteDoc } from 'firebase/firestore';
+import { useClerk } from '@clerk/nextjs';
 
 export default function DeleteAccountButton() {
   const { user, logout } = useAuth();
+  const { signOut } = useClerk();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -28,42 +29,30 @@ export default function DeleteAccountButton() {
       if (response.status === 202 && data.shouldUseClientSide) {
         console.log('Client-side hesap silme işlemi yapılıyor');
         
-        // Kullanıcı oturum açmış mı?
-        if (!auth.currentUser) {
-          setError('Güvenlik nedeniyle tekrar giriş yapmanız gerekiyor');
-          setLoading(false);
-          return;
-        }
-        
         try {
           // Kullanıcı verileri Firestore'dan siliniyor
           try {
-            const userDoc = doc(db, 'users', data.userId);
-            await deleteDoc(userDoc);
-            console.log('Kullanıcı verileri Firestore\'dan silindi');
+            if (data.userId) {
+              const userDoc = doc(db, 'users', data.userId);
+              await deleteDoc(userDoc);
+              console.log('Kullanıcı verileri Firestore\'dan silindi');
+            }
           } catch (firestoreError) {
             console.error('Firestore veri silme hatası:', firestoreError);
             // Veri silme başarısız olsa bile devam et
           }
           
-          // Firebase Auth'dan kullanıcıyı sil
-          await deleteUser(auth.currentUser);
-          console.log('Kullanıcı Firebase Auth\'dan silindi');
-          
-          // Oturumu kapat ve login sayfasına yönlendir
+          // Clerk ile oturumu kapat
+          await signOut();
           await logout();
           
-        } catch (authError: any) {
-          console.error('Authentication hesap silme hatası:', authError);
-          
-          if (authError.code === 'auth/requires-recent-login') {
-            setError('Güvenlik nedeniyle tekrar giriş yapmanız gerekiyor');
-          } else {
-            setError('Hesap silme hatası: ' + (authError.message || 'Bilinmeyen hata'));
-          }
+        } catch (clerkError: any) {
+          console.error('Clerk hesap silme hatası:', clerkError);
+          setError('Hesap silme hatası: ' + (clerkError.message || 'Bilinmeyen hata'));
         }
       } else if (response.ok) {
         // API tarafında başarıyla silindi
+        await signOut();
         await logout();
       } else {
         setError(data.error || 'Hesap silinemedi');
