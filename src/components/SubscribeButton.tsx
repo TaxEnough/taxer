@@ -24,24 +24,30 @@ export default function SubscribeButton({ priceId, className = '', children }: S
       const successUrl = `${window.location.origin}/dashboard?subscription=success`;
       const cancelUrl = `${window.location.origin}/pricing?subscription=cancelled`;
       
-      // API'nin sonundaki trailing slash önemli olabilir
-      const API_URL = `/api/payment/create-session`;
+      // Ana API endpoint
+      const PRIMARY_API_URL = `/api/checkout`;
       
-      console.log('Sending request to:', API_URL);
+      console.log('Sending request to:', PRIMARY_API_URL);
       
-      // POST isteği yapalım (GET isteği ile rota çakışması oluyor)
-      const response = await fetch(API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify({
-          priceId,
-          successUrl,
-          cancelUrl
-        })
-      });
+      // POST isteği yapalım
+      let response;
+      try {
+        response = await fetch(PRIMARY_API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({
+            priceId,
+            successUrl,
+            cancelUrl
+          })
+        });
+      } catch (fetchError: any) {
+        console.error('Error fetching from primary API:', fetchError);
+        throw new Error(`Ödeme sistemi hatası: ${fetchError.message || 'Bilinmeyen hata'}. Lütfen daha sonra tekrar deneyin.`);
+      }
       
       console.log('Response status:', response.status);
       
@@ -58,7 +64,7 @@ export default function SubscribeButton({ priceId, className = '', children }: S
         console.error('Non-JSON response received:', contentType);
         const responseText = await response.text();
         console.error('Response body:', responseText.substring(0, 200) + '...');
-        throw new Error(`Server returned ${response.status} with non-JSON response. Check console for details.`);
+        throw new Error(`Sunucu ${response.status} döndürdü ve JSON yanıt vermedi. Detaylar için konsola bakın.`);
       }
       
       // HTTP Status kodunu kontrol et
@@ -69,7 +75,7 @@ export default function SubscribeButton({ priceId, className = '', children }: S
           statusText: response.statusText,
           data: errorData
         });
-        throw new Error(`Server responded with ${response.status}: ${errorData.error || response.statusText}`);
+        throw new Error(`Sunucu ${response.status} hata kodu döndürdü: ${errorData.error || response.statusText}`);
       }
       
       // Yanıtı JSON olarak parse et
@@ -80,7 +86,7 @@ export default function SubscribeButton({ priceId, className = '', children }: S
       // Check if we have a URL to redirect to
       if (!data.url) {
         console.error('No checkout URL received from server');
-        setError('No checkout URL received. Please try again.');
+        setError('Ödeme URL adresi alınamadı. Lütfen tekrar deneyin.');
         return;
       }
       
@@ -91,8 +97,8 @@ export default function SubscribeButton({ priceId, className = '', children }: S
     } catch (error: any) {
       console.error('Error subscribing:', error);
       
-      // İngilizce hata mesajı
-      setError(`Payment system error: ${error.message}. Please try again later or contact support.`);
+      // Türkçe hata mesajı
+      setError(`Ödeme sistemi hatası: ${error.message}. Lütfen daha sonra tekrar deneyin veya destek ile iletişime geçin.`);
     } finally {
       setLoading(false);
     }
@@ -105,7 +111,7 @@ export default function SubscribeButton({ priceId, className = '', children }: S
         disabled={loading}
         className={`${className} ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
       >
-        {loading ? 'Processing...' : children || 'Subscribe'}
+        {loading ? 'İşleniyor...' : children || 'Abone Ol'}
       </button>
       
       {error && (

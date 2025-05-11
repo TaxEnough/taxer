@@ -1,4 +1,4 @@
-import { NextResponse, NextRequest } from 'next/server';
+import { NextRequest } from 'next/server';
 import Stripe from 'stripe';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { PRICES } from '@/lib/stripe';
@@ -39,21 +39,22 @@ function errorLog(message: string, error?: any) {
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept',
+  'Content-Type': 'application/json'
 };
 
 // Handle OPTIONS request for CORS preflight
 export async function OPTIONS() {
-  return NextResponse.json({}, { 
-    status: 200,
+  return new Response(null, { 
+    status: 204, // No content
     headers: corsHeaders
   });
 }
 
 // GET method to also handle browser navigation
 export async function GET() {
-  return NextResponse.json(
-    { error: 'Please use POST method to create checkout session' },
+  return new Response(
+    JSON.stringify({ error: 'Please use POST method to create checkout session' }),
     { status: 405, headers: corsHeaders }
   );
 }
@@ -73,8 +74,8 @@ export async function POST(req: NextRequest) {
       debugLog('İstek verileri başarıyla alındı', requestData);
     } catch (parseError) {
       errorLog('İstek verisi JSON olarak çözümlenemedi', parseError);
-      return NextResponse.json(
-        { error: 'Geçersiz istek verisi' },
+      return new Response(
+        JSON.stringify({ error: 'Geçersiz istek verisi' }),
         { status: 400, headers: corsHeaders }
       );
     }
@@ -111,8 +112,8 @@ export async function POST(req: NextRequest) {
       // Hala email bulunamadıysa ve kimlik doğrulaması yapılamadıysa hata ver
       if (!userEmail) {
         errorLog('Kullanıcı kimliği veya email bulunamadı', { session });
-        return NextResponse.json(
-          { error: 'Lütfen giriş yapın veya email adresinizi girin' },
+        return new Response(
+          JSON.stringify({ error: 'Lütfen giriş yapın veya email adresinizi girin' }),
           { status: 401, headers: corsHeaders }
         );
       }
@@ -134,8 +135,8 @@ export async function POST(req: NextRequest) {
     // PriceId kontrolü
     if (!priceId) {
       errorLog('Eksik priceId');
-      return NextResponse.json(
-        { error: 'Fiyat ID gerekli' },
+      return new Response(
+        JSON.stringify({ error: 'Fiyat ID gerekli' }),
         { status: 400, headers: corsHeaders }
       );
     }
@@ -150,8 +151,8 @@ export async function POST(req: NextRequest) {
 
     if (!validPriceIds.includes(priceId)) {
       errorLog('Geçersiz fiyat ID:', { priceId, validPriceIds });
-      return NextResponse.json(
-        { error: 'Geçersiz fiyat ID' },
+      return new Response(
+        JSON.stringify({ error: 'Geçersiz fiyat ID' }),
         { status: 400, headers: corsHeaders }
       );
     }
@@ -197,24 +198,27 @@ export async function POST(req: NextRequest) {
         metadata: checkoutSession.metadata
       });
 
-      return NextResponse.json({ 
-        url: checkoutSession.url,
-        sessionId: checkoutSession.id,
-        email: userEmail,
-        success: true,
-        message: "Ödeme sayfası oluşturuldu. Başarılı ödeme sonrası 7 günlük deneme süresi başlayacak."
-      }, { headers: corsHeaders });
+      return new Response(
+        JSON.stringify({ 
+          url: checkoutSession.url,
+          sessionId: checkoutSession.id,
+          email: userEmail,
+          success: true,
+          message: "Ödeme sayfası oluşturuldu. Başarılı ödeme sonrası 7 günlük deneme süresi başlayacak."
+        }), 
+        { status: 200, headers: corsHeaders }
+      );
     } catch (stripeError: any) {
       errorLog('Stripe hatası:', stripeError);
-      return NextResponse.json(
-        { error: `Stripe hatası: ${stripeError.message}` },
+      return new Response(
+        JSON.stringify({ error: `Stripe hatası: ${stripeError.message}` }),
         { status: 500, headers: corsHeaders }
       );
     }
   } catch (error: any) {
     errorLog('Ödeme oturumu oluşturma hatası:', error);
-    return NextResponse.json(
-      { error: `Bir şeyler yanlış gitti: ${error.message}` },
+    return new Response(
+      JSON.stringify({ error: `Bir şeyler yanlış gitti: ${error.message}` }),
       { status: 500, headers: corsHeaders }
     );
   }
