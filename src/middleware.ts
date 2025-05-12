@@ -1,7 +1,7 @@
 import { clerkMiddleware, getAuth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { NextRequest } from "next/server";
-import { getUserSubscriptionStatus } from "@/lib/subscription-utils";
+import { getUserSubscriptionStatus, hasPremiumAccess } from "@/lib/subscription-utils";
 
 // Liste yerine doğrudan kontroller kullanalım
 function isPublicPath(path: string): boolean {
@@ -78,28 +78,36 @@ export default function middleware(req: NextRequest) {
     
     if (isPremiumPath) {
       try {
+        // Clerk oturum bilgilerini al
+        const auth = getAuth(req);
+        const userId = auth.userId;
+        
         // Abonelik durumunu çerezlerden kontrol edelim
-        // __clerk_db_jwt içindeki JWT'yi decode edip kullanıcı meta verilerini kontrol etmemiz gerekiyor
-        // Ancak bu kompleks olduğu için basit bir heuristic kullanacağız
+        const hasSubscriptionCookie = hasPremiumAccess(cookies);
         
-        // Abonelik durum çerezini ara
-        const subscriptionCookieMatch = cookies.match(/(?:subscription_status=([^;]+))/);
-        const hasSubscription = subscriptionCookieMatch && subscriptionCookieMatch[1] === 'active';
+        // Clerk metadata'sından premium durumunu kontrol et
+        let hasClerkPremium = false;
         
-        // Alternatif olarak isSubscribed=true veya premium=true gibi çerezler de kontrol et
-        const hasActiveSubscription = 
-          hasSubscription ||
-          cookies.includes('isSubscribed=true') || 
-          cookies.includes('premium=true') || 
-          cookies.includes('isPremium=true');
+        if (userId) {
+          try {
+            // Clerk meta verilerini kontrol et
+            const userMeta = auth.sessionClaims?.metadata as any;
+            
+            hasClerkPremium = userMeta && 
+              (userMeta.subscription_status === 'active' || 
+               userMeta.isPremium === 'true' || 
+               userMeta.isPremium === true);
+              
+            console.log(`[Premium Check] User: ${userId}, Clerk Meta Premium: ${hasClerkPremium}`);
+          } catch (metaError) {
+            console.error("[Clerk Meta Error]", metaError);
+          }
+        }
         
-        console.log(`[Premium Check] Path: ${path}, Has subscription indicators: ${hasActiveSubscription}`);
+        // Çerezler veya Clerk metadata'sında premium varsa erişime izin ver
+        const hasActiveSubscription = hasSubscriptionCookie || hasClerkPremium;
         
-        // Geliştirme ortamında otomatik erişim verme - kullanıcının gerçekten premium olmasını kontrol et
-        // if (process.env.NODE_ENV === 'development') {
-        //   console.log('[Premium Check] Development environment, allowing access to premium content');
-        //   return NextResponse.next();
-        // }
+        console.log(`[Premium Check] Path: ${path}, HasCookie: ${hasSubscriptionCookie}, HasClerkMeta: ${hasClerkPremium}`);
         
         // Abonelik yoksa fiyatlandırma sayfasına yönlendir
         if (!hasActiveSubscription) {

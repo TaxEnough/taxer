@@ -1,4 +1,6 @@
 import { cookies } from 'next/headers';
+import { getAuth } from '@clerk/nextjs/server';
+import { currentUser } from '@clerk/nextjs/server';
 
 /**
  * Kullanıcının abonelik durumunu kontrol eder
@@ -12,6 +14,24 @@ export async function getUserSubscriptionStatus(userId?: string): Promise<{
   periodEnd?: Date | null;
 }> {
   try {
+    // Önce Clerk oturum bilgilerinden kontrol et
+    // Bu server componentlerde çalışır
+    try {
+      const user = userId ? await getUserById(userId) : await currentUser();
+      if (user?.publicMetadata?.subscriptionStatus === 'active' || 
+          user?.publicMetadata?.isPremium === true) {
+        return {
+          isSubscribed: true,
+          plan: user.publicMetadata.subscriptionPlan as string || 'premium',
+          periodEnd: user.publicMetadata.subscriptionPeriodEnd 
+            ? new Date(user.publicMetadata.subscriptionPeriodEnd as string) 
+            : null
+        };
+      }
+    } catch (clerkError) {
+      console.warn("Clerk meta verisi alınırken hata:", clerkError);
+    }
+    
     // Çerezlerden kontrol et
     const cookieStore = cookies();
     const subscriptionStatus = cookieStore.get('subscription_status')?.value;
@@ -57,6 +77,64 @@ export function hasPremiumAccess(cookieString: string): boolean {
   // }
   
   return hasSubscriptionCookie;
+}
+
+/**
+ * Clerk kullanıcısını ID ile al
+ */
+async function getUserById(userId: string) {
+  try {
+    // Bu kısmı Clerk API ile entegre etmeniz gerekecek
+    // Şimdilik örnek bir implementasyon
+    return null;
+  } catch (error) {
+    console.error("Kullanıcı bilgileri alınırken hata:", error);
+    return null;
+  }
+}
+
+/**
+ * Client tarafında premium erişim kontrolü
+ */
+export async function getClientPremiumStatus(): Promise<boolean> {
+  try {
+    // Next API route üzerinden premium durumu kontrol et
+    const response = await fetch('/api/subscription/check-premium', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      return false;
+    }
+    
+    const data = await response.json();
+    return data.isPremium === true;
+  } catch (error) {
+    console.error("Premium erişim kontrolü sırasında hata:", error);
+    return false;
+  }
+}
+
+/**
+ * Client veya Server tarafında kullanılabilen genel premium durum kontrolü
+ */
+export async function hasUserPremiumAccess(): Promise<boolean> {
+  try {
+    // Server tarafında isek
+    if (typeof window === 'undefined') {
+      const { isSubscribed } = await getUserSubscriptionStatus();
+      return isSubscribed;
+    }
+    
+    // Client tarafında isek
+    return await getClientPremiumStatus();
+  } catch (error) {
+    console.error("Premium erişim kontrolü sırasında hata:", error);
+    return false;
+  }
 }
 
 /**

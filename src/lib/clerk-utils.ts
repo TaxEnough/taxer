@@ -140,4 +140,37 @@ export function getQuickPremiumStatus(): boolean {
     console.error('Error checking quick premium status:', error);
     return false;
   }
+}
+
+/**
+ * Premium durumu için çerezleri ayarla
+ * Tarayıcı tarafında çalışacak şekilde tasarlandı
+ */
+export async function setPremiumCookies() {
+  // 30 günlük süre - 2592000000 milisaniye
+  const expires = new Date(Date.now() + 2592000000).toUTCString();
+  
+  // HttpOnly olmayan çerezler ayarla - client tarafından da erişilebilir
+  document.cookie = `isPremium=true; expires=${expires}; path=/; SameSite=Lax;`;
+  document.cookie = `subscription_status=active; expires=${expires}; path=/; SameSite=Lax;`;
+  document.cookie = `premium=true; expires=${expires}; path=/; SameSite=Lax;`;
+  
+  // Client tarafında API isteği gönder
+  try {
+    // API'ye gönder ve çerezleri sunucu tarafında da ayarla
+    const response = await fetch('/api/subscription/check-premium', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      console.error('Premium çerezleri sunucu tarafında ayarlanamadı:', await response.text());
+    }
+  } catch (error) {
+    console.error('Premium çerezleri ayarlanırken hata:', error);
+  }
+  
+  return true;
 } 

@@ -9,6 +9,7 @@ import { AuthProvider } from '@/context/AuthContext'
 import Footer from '@/components/Footer'
 import { Toaster } from 'react-hot-toast'
 import { Analytics } from '@vercel/analytics/react'
+import PremiumSync from '@/components/PremiumSync'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -124,6 +125,7 @@ export default function RootLayout({
           <AuthProvider>
             <Toaster position="top-center" />
             <LoadingTransition />
+            <PremiumSync />
             <Providers>
               <main className="min-h-screen">
                 {children}
