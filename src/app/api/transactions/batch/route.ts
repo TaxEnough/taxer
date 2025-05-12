@@ -73,14 +73,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
       }
       
-      // Başarıyla eklenen işlem sayısı
-      // Not: Gerçek bir uygulama için verileri veritabanına kaydedin
-      const successCount = transactions.length;
-      
+      // Başarı yanıtı - dummy veri olmadan
       return NextResponse.json({
         success: true,
-        message: `${successCount} transactions processed successfully`,
-        count: successCount
+        message: 'Transactions processed',
+        count: 0
       });
     } catch (userError) {
       console.error('User verification error:', userError);

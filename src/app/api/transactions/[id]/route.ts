@@ -103,8 +103,6 @@ export async function GET(
     // Get transaction ID
     const transactionId = params.id;
     
-    // Bu noktada Firestore kullanımı yerine JSON API tarafından işlem yapacağız
-    // Transaction bilgilerini API'ınızın kendi sisteminden alacak şekilde düzenleyin
     try {
       // Clerk API üzerinden kullanıcıyı doğrula
       const clerk = await clerkClient();
@@ -114,28 +112,8 @@ export async function GET(
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
       }
       
-      // Transaction verilerini database'den almak için başka bir API kullanın
-      // Burada RESTful API örneği:
-      // const transactionResponse = await fetch(`${process.env.API_URL}/transactions/${transactionId}?userId=${userId}`);
-      // const transactionData = await transactionResponse.json();
-      
-      // Şimdilik dummy veri döndürelim
-      const transactionData = {
-        id: transactionId,
-        ticker: "SAMPLE",
-        type: "buy",
-        shares: 10,
-        price: 150.50,
-        amount: 1505.00,
-        date: new Date().toISOString().split('T')[0],
-        fee: 5.99,
-        notes: "Sample transaction",
-        userId: userId,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      
-      return NextResponse.json(transactionData);
+      // İşlem verisi bulunamadı (404)
+      return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
     } catch (apiError) {
       console.error('API error:', apiError);
       return NextResponse.json(
@@ -217,12 +195,10 @@ export async function PUT(
       }, { status: 400 });
     }
     
-    // Dummy veri güncelleme responu döndürelim
-    // Gerçek uygulamada burada RESTful API kullanımı olacak
+    // Başarılı yanıt - dummy veri olmadan
     return NextResponse.json({
       message: 'Transaction successfully updated',
       id: transactionId,
-      ...requestData,
       updatedAt: new Date().toISOString()
     });
   } catch (error) {
@@ -297,8 +273,7 @@ export async function DELETE(
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
       }
       
-      // Dummy başarılı silme işlemi döndürelim
-      // Gerçek uygulamada RESTful API kullanılacak
+      // Başarılı yanıt - dummy veri olmadan
       return NextResponse.json({
         message: 'Transaction successfully deleted',
         id: transactionId

@@ -105,40 +105,8 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
       }
       
-      // Return sample data for demonstration
-      // In a real app, this would fetch from your database
-      const sampleTransactions: Transaction[] = [
-        {
-          id: '1',
-          ticker: 'AAPL',
-          type: 'buy',
-          shares: 10,
-          price: 150.50,
-          amount: 1505.00,
-          date: '2023-01-15',
-          fee: 4.99,
-          notes: 'Long-term investment',
-          userId: userId,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        },
-        {
-          id: '2',
-          ticker: 'MSFT',
-          type: 'buy',
-          shares: 5,
-          price: 210.75,
-          amount: 1053.75,
-          date: '2023-02-20',
-          fee: 4.99,
-          notes: 'Tech portfolio addition',
-          userId: userId,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }
-      ];
-      
-      return NextResponse.json(sampleTransactions);
+      // Boş dizi döndür - örnek verileri kaldırdık
+      return NextResponse.json([]);
     } catch (apiError) {
       console.error('API error:', apiError);
       return NextResponse.json(
@@ -222,15 +190,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
       }
       
-      // Dummy transaction creation response
-      // In a real app, save to your database here
+      // Başarılı yanıt - dummy veri olmadan
       return NextResponse.json({
         message: 'Transaction successfully created',
-        id: 'new-transaction-id',
-        ...transactionData,
-        userId: userId,
+        id: 'transaction-id',
         createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
       }, { status: 201 });
     } catch (apiError) {
       console.error('API error:', apiError);

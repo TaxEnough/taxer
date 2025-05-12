@@ -138,6 +138,30 @@ export default function Navbar() {
     return 'User';
   };
 
+  // Kullanıcının premium durumunu kontrol eden fonksiyon
+  const isPremiumUser = () => {
+    // Clerk üzerinden premium durumu kontrolü
+    if (isClerkLoaded && isClerkSignedIn && clerkUser) {
+      const userWithMetadata = clerkUser as any;
+      // Subscription statüsü kontrol edilir
+      const subscription = userWithMetadata?.publicMetadata?.subscription;
+      if (subscription && subscription.status === 'active') {
+        return true;
+      }
+      
+      // isPremium alanı da kontrol edilir
+      if (userWithMetadata?.publicMetadata?.isPremium === true) {
+        return true;
+      }
+    }
+    
+    // Kullanıcının abonelik durumunu eski yöntemle kontrol et
+    return hasSubscription;
+  };
+  
+  // Premium durumunu hesapla
+  const isPremium = isPremiumUser();
+  
   // Modify the mobile menu links to conditionally show premium links
   const mobileMenuLinks = [
     { name: 'Home', href: '/' },
@@ -149,8 +173,8 @@ export default function Navbar() {
       { name: 'Reports', href: '/reports' }
     ] : []),
     { name: 'Blog', href: '/blog' },
-    // Fiyatlandırma sayfasını herkese göster, abonelere bile faydalı olabilir (upgrade seçenekleri için)
-    { name: 'Pricing', href: '/pricing' },
+    // Fiyatlandırma sayfasını sadece premium olmayan kullanıcılara göster
+    ...((!isClerkSignedIn || !isPremium) ? [{ name: 'Pricing', href: '/pricing' }] : []),
     { name: 'Support', href: '/support' },
   ];
 
@@ -236,17 +260,19 @@ export default function Navbar() {
                 </>
               )}
               
-              <Link href="/pricing"
-                passHref
-                className={`${
-                  isLinkActive('/pricing') 
-                    ? 'border-primary-500 text-gray-900' 
-                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-                } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
-                onClick={handleLinkClick}
-              >
-                Pricing
-              </Link>
+              {!isPremium && (
+                <Link href="/pricing"
+                  passHref
+                  className={`${
+                    isLinkActive('/pricing') 
+                      ? 'border-primary-500 text-gray-900' 
+                      : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                  } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
+                  onClick={handleLinkClick}
+                >
+                  Pricing
+                </Link>
+              )}
             </div>
           </div>
 
