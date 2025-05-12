@@ -489,7 +489,7 @@ export default function UploadTransactions() {
                 disabled={loading || selectedRows.length === 0}
                 className="w-full"
               >
-                {loading ? 'İşleniyor...' : `Seçilen İşlemleri Kaydet (${selectedRows.length})`}
+                {loading ? 'Processing...' : `Save Selected Transactions (${selectedRows.length})`}
               </Button>
               <Button 
                 variant="outline" 

@@ -1,6 +1,8 @@
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useClerk } from '@clerk/nextjs';
+import { AlertDialogFooter, AlertDialogCancel } from '@/components/ui/alert-dialog';
 
 export default function DeleteAccountButton() {
   const { user, logout } = useAuth();
@@ -16,36 +18,36 @@ export default function DeleteAccountButton() {
     setError('');
     
     try {
-      // API'ye istek gönder
+      // Send request to API
       const response = await fetch('/api/user/delete-account', {
         method: 'DELETE',
       });
       
       const data = await response.json();
       
-      // Client-side işlem gerekiyor mu?
+      // Is client-side action needed?
       if (response.status === 202 && data.shouldUseClientSide) {
-        console.log('Client-side hesap silme işlemi yapılıyor');
+        console.log('Performing client-side account deletion');
         
         try {
-          // Clerk ile oturumu kapat
+          // Sign out with Clerk
           await signOut();
           await logout();
           
         } catch (clerkError: any) {
-          console.error('Clerk hesap silme hatası:', clerkError);
-          setError('Hesap silme hatası: ' + (clerkError.message || 'Bilinmeyen hata'));
+          console.error('Clerk account deletion error:', clerkError);
+          setError('Account deletion error: ' + (clerkError.message || 'Unknown error'));
         }
       } else if (response.ok) {
-        // API tarafında başarıyla silindi
+        // Successfully deleted on API side
         await signOut();
         await logout();
       } else {
-        setError(data.error || 'Hesap silinemedi');
+        setError(data.error || 'Account could not be deleted');
       }
     } catch (error: any) {
-      console.error('Hesap silme hatası:', error);
-      setError('İşlem sırasında bir hata oluştu');
+      console.error('Account deletion error:', error);
+      setError('An error occurred during the process');
     } finally {
       setLoading(false);
     }
@@ -53,9 +55,9 @@ export default function DeleteAccountButton() {
 
   return (
     <div className="mt-8 border-t border-gray-200 pt-8">
-      <h3 className="text-lg font-medium text-red-600">Hesabı Sil</h3>
+      <h3 className="text-lg font-medium text-red-600">Delete Account</h3>
       <p className="mt-2 text-sm text-gray-500">
-        Hesabınızı silmek tüm verilerinizi kalıcı olarak siler. Bu işlem geri alınamaz.
+        Deleting your account will permanently remove all your data. This action cannot be undone.
       </p>
       
       {error && (
@@ -67,7 +69,7 @@ export default function DeleteAccountButton() {
       {showConfirmation ? (
         <div className="mt-4 p-4 border border-red-200 rounded-md bg-red-50">
           <p className="font-medium text-red-700 mb-4">
-            Bu işlem geri alınamaz. Hesabınız ve tüm verileriniz kalıcı olarak silinecek.
+            This action cannot be undone. Your account and all your data will be permanently deleted.
           </p>
           <div className="flex gap-4">
             <button
@@ -79,13 +81,13 @@ export default function DeleteAccountButton() {
                   : 'bg-red-600 hover:bg-red-700'
               }`}
             >
-              {loading ? 'İşleniyor...' : 'Hesabımı Sil'}
+              {loading ? 'Processing...' : 'Delete My Account'}
             </button>
             <button
               onClick={() => setShowConfirmation(false)}
               className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md"
             >
-              İptal
+              Cancel
             </button>
           </div>
         </div>
@@ -94,7 +96,7 @@ export default function DeleteAccountButton() {
           onClick={() => setShowConfirmation(true)}
           className="mt-4 px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-md"
         >
-          Hesabı Sil
+          Delete Account
         </button>
       )}
     </div>

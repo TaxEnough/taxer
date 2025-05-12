@@ -145,7 +145,7 @@ export default function SubscribeButton({ priceId, className = '', children }: S
         disabled={loading}
         className={`${className} ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
       >
-        {loading ? 'İşleniyor...' : children || 'Abone Ol'}
+        {loading ? 'Processing...' : children || 'Subscribe'}
       </button>
       
       {error && (
