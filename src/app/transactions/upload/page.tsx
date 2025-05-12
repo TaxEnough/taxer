@@ -504,7 +504,7 @@ export default function UploadTransactions() {
                 }}
                 className="w-1/3"
               >
-                İptal
+                Cancel
               </Button>
             </div>
           </div>

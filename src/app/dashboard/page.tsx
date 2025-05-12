@@ -78,6 +78,76 @@ export default function DashboardPage() {
   // Stock tipini buraya da ekle
   const [calculatorStocks, setCalculatorStocks] = useState<Stock[]>([]);
   
+  // Handle file upload
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      setUploadedFile(file);
+      setUploadError(null);
+      
+      // Basic file type check
+      const fileExtension = file.name.split('.').pop()?.toLowerCase();
+      if (!['csv', 'xlsx', 'xls'].includes(fileExtension || '')) {
+        setUploadError('Unsupported file format. Please upload a CSV or Excel file.');
+        return;
+      }
+      
+      // Read the file
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          // For demonstration purposes, we'll parse a simple CSV format
+          // In a real app, you'd want to use a proper CSV/Excel parsing library
+          const text = event.target?.result as string;
+          const lines = text.split('\n');
+          const headers = lines[0].split(',').map(h => h.trim());
+          
+          // Skip header row and parse data rows
+          const data = lines.slice(1).filter(line => line.trim().length > 0).map(line => {
+            const values = line.split(',').map(v => v.trim());
+            const row: any = {};
+            headers.forEach((header, index) => {
+              row[header] = values[index] || '';
+            });
+            return row;
+          });
+          
+          setFileData(data);
+          
+          // Process data into a format compatible with the calculator
+          const processed: TradeData[] = data.map((row, index) => {
+            // Here you would adapt the CSV data format to your application's needs
+            return {
+              ticker: row.Symbol || row.Ticker || '',
+              transactionType: (row['Transaction Type'] || '').toLowerCase().includes('sell') ? 'Sell' : 'Buy',
+              numberOfShares: parseFloat(row['Number of Shares'] || row.Shares || '0'),
+              pricePerShare: parseFloat(row['Buy Price'] || row['Sell Price'] || row.Price || '0'),
+              transactionDate: row['Buy Date'] || row['Sell Date'] || row.Date || '',
+              totalAmount: parseFloat(row['Total Amount'] || '0'),
+              commissionFees: parseFloat(row['Commission/Fees'] || row.Fees || '0'),
+              buyPrice: parseFloat(row['Buy Price'] || '0'),
+              buyDate: row['Buy Date'] || '',
+              sellPrice: parseFloat(row['Sell Price'] || '0'),
+              sellDate: row['Sell Date'] || ''
+            };
+          });
+          
+          setProcessedData(processed);
+          console.log('Processed data:', processed);
+        } catch (error) {
+          console.error('Error parsing file:', error);
+          setUploadError('Error parsing file. Please check the file format.');
+        }
+      };
+      
+      reader.onerror = () => {
+        setUploadError('Error reading file. Please try again.');
+      };
+      
+      reader.readAsText(file);
+    }
+  };
+  
   // İşlenen verileri hesap makinesine aktar
   const transferToCalculator = () => {
     if (!processedData.length) {
@@ -329,10 +399,68 @@ TSLA,Sell,7,200.50,2023-03-01,235.75,2023-07-15,1650.25,7.99`;
               </div>
             </div>
             
-            {/* Sağ Panel - Lazy Load */}
+            {/* Right Panel - Calculator and CSV Upload */}
             <div className="w-full lg:w-2/3">
-              <div className="fallback-loading">
-                {calculatorStocks && calculatorStocks.length > 0 ? <StockTaxCalculator initialStocks={calculatorStocks} /> : <LoadingSpinner />}
+              <div className="bg-white shadow-sm rounded-lg p-6 mb-6">
+                <h2 className="text-lg font-medium text-gray-900 mb-4">Tax Calculator</h2>
+                
+                {/* Always show the calculator */}
+                <StockTaxCalculator initialStocks={calculatorStocks.length > 0 ? calculatorStocks : []} />
+              </div>
+              
+              {/* CSV Upload Section */}
+              <div className="bg-white shadow-sm rounded-lg p-6">
+                <h2 className="text-lg font-medium text-gray-900 mb-4">Import Trading History</h2>
+                
+                <div className="mb-4">
+                  <button
+                    onClick={handleDownloadSample}
+                    className="text-primary-600 hover:text-primary-800 text-sm font-medium"
+                  >
+                    Download sample CSV template
+                  </button>
+                </div>
+                
+                <div className="mb-4">
+                  <input
+                    type="file"
+                    id="file-upload"
+                    className="hidden"
+                    onChange={handleFileChange}
+                    accept=".csv,.xlsx,.xls"
+                  />
+                  <label
+                    htmlFor="file-upload"
+                    className="cursor-pointer bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Upload CSV file
+                  </label>
+                  {uploadedFile && (
+                    <span className="ml-3 text-sm text-gray-600">
+                      {uploadedFile.name}
+                    </span>
+                  )}
+                </div>
+                
+                {uploadError && (
+                  <div className="mb-4 p-3 bg-red-100 text-red-800 rounded-md">
+                    {uploadError}
+                  </div>
+                )}
+                
+                {processedData.length > 0 && (
+                  <div className="mb-4">
+                    <button
+                      onClick={transferToCalculator}
+                      className="bg-primary-600 text-white py-2 px-4 rounded-md hover:bg-primary-700 shadow-sm text-sm font-medium"
+                    >
+                      Transfer Data to Calculator
+                    </button>
+                    <p className="text-sm text-gray-600 mt-1">
+                      {processedData.length} transactions found. Sell transactions will be transferred to the calculator.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
