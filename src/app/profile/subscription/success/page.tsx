@@ -1,12 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 
 export default function SubscriptionSuccessPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { user, isLoaded } = useUser();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('Premium erişim aktifleştiriliyor...');
@@ -14,12 +13,15 @@ export default function SubscriptionSuccessPage() {
   useEffect(() => {
     if (!isLoaded) return;
     
+    // URL parametrelerini window.location.search'ten al
+    const urlParams = new URLSearchParams(window.location.search);
+    
     const activatePremium = async () => {
       try {
         // Kullanıcı bilgisini al
-        const email = searchParams.get('email') || user?.primaryEmailAddress?.emailAddress || '';
-        const userIdParam = searchParams.get('userId') || user?.id || '';
-        const plan = searchParams.get('plan') || 'premium';
+        const email = urlParams.get('email') || user?.primaryEmailAddress?.emailAddress || '';
+        const userIdParam = urlParams.get('userId') || user?.id || '';
+        const plan = urlParams.get('plan') || 'premium';
         
         // Premium erişimi aktifleştir
         if (userIdParam) {
@@ -67,7 +69,7 @@ export default function SubscriptionSuccessPage() {
     };
     
     activatePremium();
-  }, [isLoaded, user, searchParams, router]);
+  }, [isLoaded, user, router]);
   
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
