@@ -22,8 +22,8 @@ export default function SubscribeButton({ priceId, className = '', children }: S
       
       console.log('Starting subscription process for price ID:', priceId);
       
-      // URL'leri hazırla
-      const successUrl = `${window.location.origin}/dashboard?subscription=success`;
+      // URL'leri hazırla - success URL'ini güncelliyoruz
+      const successUrl = `${window.location.origin}/profile/subscription/success`;
       const cancelUrl = `${window.location.origin}/pricing?subscription=cancelled`;
       
       // Kullanıcı bilgilerini alıp istek verilerine ekle
@@ -39,9 +39,9 @@ export default function SubscribeButton({ priceId, className = '', children }: S
       // Birden fazla API endpoint'i ayarla ve sırayla dene
       // Bu Vercel'deki sorunları çözmek için fallback mekanizması oluşturur
       const API_ENDPOINTS = [
+        '/api/payment/create-checkout',
         '/api/checkout',
-        '/api/payment/checkout',
-        '/api/payment/create-checkout'
+        '/api/payment/checkout'
       ];
       
       let response = null;
@@ -52,6 +52,9 @@ export default function SubscribeButton({ priceId, className = '', children }: S
         try {
           console.log(`Attempting payment request to: ${endpoint}`);
           
+          // URL parametrelerini ekle
+          const successUrlWithParams = `${successUrl}?userId=${encodeURIComponent(userId)}&email=${encodeURIComponent(email)}&plan=${priceId.includes('premium') ? 'premium' : 'basic'}`;
+          
           response = await fetch(endpoint, {
             method: 'POST',
             headers: {
@@ -60,10 +63,10 @@ export default function SubscribeButton({ priceId, className = '', children }: S
             },
             body: JSON.stringify({
               priceId,
-              successUrl,
+              successUrl: successUrlWithParams,
               cancelUrl,
-              userId, // Kullanıcı ID'sini ekliyoruz
-              email    // Kullanıcı email'ini ekliyoruz
+              userId,
+              email
             })
           });
           

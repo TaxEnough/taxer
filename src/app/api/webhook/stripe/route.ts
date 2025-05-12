@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { headers } from 'next/headers';
 import { updateUserSubscription } from '@/lib/clerkStripeIntegration';
+import { setPremiumCookies } from '@/lib/subscription-utils';
 
 // Stripe API client
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -98,7 +99,16 @@ export async function POST(req: Request) {
             console.error(`Failed to update Clerk metadata for user ${userId}`);
           }
           
-          break;
+          // Premium kullanıcı erişim çerezlerini ayarla
+          const response = NextResponse.json({ 
+            received: true, 
+            type: event.type,
+            processed: true,
+            message: 'Subscription activated successfully'
+          });
+          
+          // Premium çerezlerini ayarla
+          return setPremiumCookies(userId, planType, response);
         }
         
         case 'invoice.payment_succeeded': {
@@ -130,6 +140,17 @@ export async function POST(req: Request) {
               } else {
                 console.error(`Failed to update Clerk metadata for user ${userId}`);
               }
+              
+              // Premium kullanıcı erişim çerezlerini ayarla
+              const response = NextResponse.json({ 
+                received: true, 
+                type: event.type,
+                processed: true,
+                message: 'Subscription payment processed successfully'
+              });
+              
+              // Premium çerezlerini ayarla
+              return setPremiumCookies(userId, planType, response);
             } else {
               console.error(`UserId not found in subscription metadata for subscription ${subscriptionId}`);
             }
