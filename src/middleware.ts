@@ -95,11 +95,11 @@ export default function middleware(req: NextRequest) {
         
         console.log(`[Premium Check] Path: ${path}, Has subscription indicators: ${hasActiveSubscription}`);
         
-        // Geliştirme ortamında her zaman erişime izin ver
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[Premium Check] Development environment, allowing access to premium content');
-          return NextResponse.next();
-        }
+        // Geliştirme ortamında otomatik erişim verme - kullanıcının gerçekten premium olmasını kontrol et
+        // if (process.env.NODE_ENV === 'development') {
+        //   console.log('[Premium Check] Development environment, allowing access to premium content');
+        //   return NextResponse.next();
+        // }
         
         // Abonelik yoksa fiyatlandırma sayfasına yönlendir
         if (!hasActiveSubscription) {

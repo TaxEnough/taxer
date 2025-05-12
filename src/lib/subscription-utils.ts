@@ -51,10 +51,10 @@ export function hasPremiumAccess(cookieString: string): boolean {
     cookieString.includes('premium=true') ||
     cookieString.includes('isSubscribed=true');
     
-  // Geliştirme ortamında her zaman erişime izin ver
-  if (process.env.NODE_ENV === 'development') {
-    return true;
-  }
+  // Geliştirme ortamında otomatik erişim verme - kullanıcının gerçekten premium olmasını kontrol et
+  // if (process.env.NODE_ENV === 'development') {
+  //   return true;
+  // }
   
   return hasSubscriptionCookie;
 }
