@@ -1,54 +1,60 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { getAuth } from '@clerk/nextjs/server';
 
-// Premium erişim gerektiren rotalar
-const premiumRoutes = ['/transactions', '/dashboard', '/reports'];
+// Korumalı premium sayfalar - middleware tarafından kontrol edilecek
+const PREMIUM_PATHS = ['/dashboard', '/transactions', '/reports'];
 
-export function middleware(req: NextRequest) {
-  // Kullanıcı kimliğini ve oturum bilgilerini al
-  const { userId, sessionId } = getAuth(req);
-  
-  // API rotaları için geçiş
-  if (req.nextUrl.pathname.startsWith('/api/')) {
-    return NextResponse.next();
-  }
+// Middleware function
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
   
   // Premium rota kontrolü
-  const isPremiumRoute = premiumRoutes.some(route => 
-    req.nextUrl.pathname.startsWith(route) || req.nextUrl.pathname === route
+  const isPremiumPath = PREMIUM_PATHS.some(path => 
+    pathname === path || pathname.startsWith(`${path}/`)
   );
   
-  // Herkese açık rotalar için kontrolsüz geçiş
-  if (!isPremiumRoute) {
+  // Premium rota değilse, normal akışa devam et
+  if (!isPremiumPath) {
     return NextResponse.next();
   }
   
-  // Premium rotalarda oturum kontrolü
-  if (!userId || !sessionId) {
-    // Login sayfasına yönlendir
-    const loginUrl = new URL('/login', req.url);
-    loginUrl.searchParams.set('from', req.nextUrl.pathname);
+  // Cookie kontrolü - oturum açık mı?
+  const hasClerkSession = checkClerkSession(request);
+  
+  // Premium içeriğe erişmek istiyor ve oturum açık değilse
+  if (isPremiumPath && !hasClerkSession) {
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('from', pathname);
     return NextResponse.redirect(loginUrl);
   }
   
-  // Oturum varsa ve login/register sayfasındaysa dashboard'a yönlendir
-  if (userId && (req.nextUrl.pathname === '/login' || req.nextUrl.pathname === '/register')) {
-    const dashboardUrl = new URL('/dashboard', req.url);
-    return NextResponse.redirect(dashboardUrl);
-  }
-  
-  // Tüm kontrollerden geçti - devam et
+  // Tüm kontroller geçildi, devam et
   return NextResponse.next();
 }
 
-// Middleware'in çalışacağı rotalar
+// Clerk oturum durumunu çerezlerden kontrol eden yardımcı fonksiyon
+function checkClerkSession(request: NextRequest): boolean {
+  // Clerk oturum çerezlerini kontrol et
+  const hasSession = request.cookies.has('__session') || 
+                     request.cookies.has('__clerk_db_jwt') ||
+                     request.cookies.has('__client');
+  
+  // Cookie olmasa bile, authorization header'dan da kontrol et
+  if (!hasSession) {
+    const authHeader = request.headers.get('authorization');
+    if (authHeader && (authHeader.startsWith('Bearer ') || authHeader.startsWith('Clerk '))) {
+      return true;
+    }
+  }
+  
+  return hasSession;
+}
+
+// Matcher - hangi rotalarda çalışacağını belirtir
 export const config = {
   matcher: [
-    '/transactions/:path*',
     '/dashboard/:path*',
+    '/transactions/:path*',
     '/reports/:path*',
-    '/login',
-    '/register',
   ],
 }; 
