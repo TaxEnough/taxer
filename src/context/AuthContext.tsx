@@ -16,6 +16,7 @@ export interface User {
   imageUrl?: string;
   isLoaded: boolean;
   isPremium?: boolean;
+  accountStatus?: 'free' | 'basic' | 'premium';
 }
 
 interface AuthContextType {
@@ -83,6 +84,15 @@ export function AuthProvider({ children }: { children: ReactNode }): React.React
   const mapClerkUserToAuthUser = (clerkUser: any): User | null => {
     if (!clerkUser) return null;
     
+    let accountStatus: 'free' | 'basic' | 'premium' = 'free';
+    
+    // Önce abonelik durumunu belirle
+    if (clerkUser.publicMetadata?.subscription?.status === 'active') {
+      accountStatus = clerkUser.publicMetadata?.subscription?.plan || 'premium';
+    } else if (clerkUser.privateMetadata?.subscription?.status === 'active') {
+      accountStatus = clerkUser.privateMetadata?.subscription?.plan || 'premium';
+    }
+    
     return {
       id: clerkUser.id,
       name: clerkUser.fullName || 
@@ -91,7 +101,8 @@ export function AuthProvider({ children }: { children: ReactNode }): React.React
       imageUrl: clerkUser.imageUrl,
       isLoaded: true,
       isPremium: (clerkUser.publicMetadata?.subscription?.status === 'active') || 
-                (clerkUser.privateMetadata?.subscription?.status === 'active')
+                (clerkUser.privateMetadata?.subscription?.status === 'active'),
+      accountStatus
     };
   };
   

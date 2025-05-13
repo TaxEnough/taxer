@@ -29,6 +29,23 @@ export default function Navbar() {
   
   // Abonelik kontrolü için ref kullanarak tekrarlanan kontrolleri önle
   const subscriptionCheckedRef = useRef(false);
+  
+  // Premium veya basic hesap durumu kontrolü
+  const hasPermission = () => {
+    // Context'ten alınan kullanıcı bilgilerine göre kontrol et
+    if (user?.accountStatus === 'basic' || user?.accountStatus === 'premium') {
+      return true;
+    }
+    
+    // Clerk'ten doğrudan kontrol
+    if (isClerkLoaded && isClerkSignedIn && clerkUser) {
+      const userWithMetadata = clerkUser as any;
+      const subscription = userWithMetadata?.privateMetadata?.subscription || userWithMetadata?.publicMetadata?.subscription;
+      return subscription?.status === 'active';
+    }
+    
+    return false;
+  };
 
   // Check if user has an active subscription
   useEffect(() => {
@@ -162,20 +179,20 @@ export default function Navbar() {
   // Premium durumunu hesapla
   const isPremium = isPremiumUser();
   
-  // Modify the mobile menu links to conditionally show premium links
+  // Mobil menü için link dizisi oluştur
   const mobileMenuLinks = [
     { name: 'Home', href: '/' },
     { name: 'About', href: '/about' },
-    // Premium sayfaları sadece aboneliği olan kullanıcılara göster
-    ...(hasSubscription ? [
+    // Koşullu bağlantılar
+    ...(hasPermission() ? [
       { name: 'Dashboard', href: '/dashboard' },
       { name: 'Transactions', href: '/transactions' },
       { name: 'Reports', href: '/reports' }
     ] : []),
     { name: 'Blog', href: '/blog' },
     { name: 'Support', href: '/support' },
-    // Fiyatlandırma sayfasını sadece premium olmayan kullanıcılara göster
-    ...((!isClerkSignedIn || !isPremium) ? [{ name: 'Pricing', href: '/pricing' }] : []),
+    // Ücretsiz kullanıcılar için ücretlendirme
+    ...(!hasPermission() ? [{ name: 'Pricing', href: '/pricing' }] : [])
   ];
 
   // User hesap durumunu gösteren bir fonksiyon
@@ -231,7 +248,7 @@ export default function Navbar() {
               </a>
               
               {/* Premium linkler için koşullu gösterim */}
-              {(hasSubscription || (isClerkLoaded && isClerkSignedIn && (clerkUser as any)?.privateMetadata?.subscription)) && (
+              {hasPermission() && (
                 <>
                   <a href="/dashboard"
                     className={`${
@@ -252,6 +269,16 @@ export default function Navbar() {
                     onClick={handleLinkClick}
                   >
                     Transactions
+                  </a>
+                  <a href="/reports"
+                    className={`${
+                      isLinkActive('/reports') 
+                        ? 'border-primary-500 text-gray-900' 
+                        : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                    } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
+                    onClick={handleLinkClick}
+                  >
+                    Reports
                   </a>
                 </>
               )}
