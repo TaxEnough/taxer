@@ -2,7 +2,7 @@
 
 import React, { ReactNode, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
+import { useUser } from '@clerk/nextjs';
 
 interface PremiumGuardProps {
   children: ReactNode;
@@ -20,36 +20,50 @@ export default function PremiumGuard({
   redirectPath = '/pricing', 
   featureName = 'premium content' 
 }: PremiumGuardProps) {
-  const { user, loading } = useAuth();
+  const { isLoaded, isSignedIn, user } = useUser();
   const router = useRouter();
+
+  // Kullanıcının premium üyeliği var mı kontrol et
+  const hasPremiumSubscription = () => {
+    if (!isLoaded || !isSignedIn || !user) return false;
+    
+    // TypeScript için user as any kullanarak metadata erişimi
+    const userData = user as any;
+    
+    // Clerk metadata'dan subscription bilgisini kontrol et
+    const userSubscription = userData.publicMetadata?.subscription || userData.unsafeMetadata?.subscription;
+    
+    // Aktif abonelik varsa true döndür
+    return userSubscription && userSubscription.status === 'active';
+  };
 
   useEffect(() => {
     // Sayfa yüklendiğinde kullanıcı oturumu ve yetkisi kontrol edilir
-    if (!loading) {
+    if (isLoaded) {
       // Kullanıcı oturumu yoksa login sayfasına yönlendir
-      if (!user) {
+      if (!isSignedIn) {
         router.push(`/login?from=${encodeURIComponent(window.location.pathname)}`);
         return;
       }
       
-      // Kullanıcı accountStatus kontrolü (basic veya premium olmalı)
-      if (user.accountStatus !== 'basic' && user.accountStatus !== 'premium') {
+      // Premium durumu kontrolü
+      if (!hasPremiumSubscription()) {
         // Fiyatlandırma sayfasına yönlendir ve hangi özellik için ücretlendirme gerektiğini belirt
         router.push(`${redirectPath}?from=${encodeURIComponent(window.location.pathname)}&feature=${featureName}`);
         return;
       }
     }
-  }, [user, loading, router, redirectPath, featureName]);
+  }, [isLoaded, isSignedIn, user, router, redirectPath, featureName]);
 
   // Yükleme sırasında veya yetki kontrolü sırasında yükleme animasyonu göster
-  if (loading) {
+  if (!isLoaded || !isSignedIn) {
     return <div className="flex items-center justify-center min-h-screen">
       <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
     </div>;
   }
 
-  // Yetki yoksa, sayfa içeriği yüklenmeden önce durdur
-  if (!user || (user.accountStatus !== 'basic' && user.accountStatus !== 'premium')) {
+  // Premium üyelik yoksa içerik gösterme
+  if (!hasPremiumSubscription()) {
     return null;
   }
 

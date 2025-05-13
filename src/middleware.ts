@@ -1,72 +1,54 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { verifyAuthToken } from './lib/auth';
+import { getAuth } from '@clerk/nextjs/server';
 
 // Premium erişim gerektiren rotalar
 const premiumRoutes = ['/transactions', '/dashboard', '/reports'];
 
-export async function middleware(request: NextRequest) {
-  const pathname = request.nextUrl.pathname;
+export function middleware(req: NextRequest) {
+  // Kullanıcı kimliğini ve oturum bilgilerini al
+  const { userId, sessionId } = getAuth(req);
+  
+  // API rotaları için geçiş
+  if (req.nextUrl.pathname.startsWith('/api/')) {
+    return NextResponse.next();
+  }
   
   // Premium rota kontrolü
   const isPremiumRoute = premiumRoutes.some(route => 
-    pathname.startsWith(route) || pathname === route
+    req.nextUrl.pathname.startsWith(route) || req.nextUrl.pathname === route
   );
   
+  // Herkese açık rotalar için kontrolsüz geçiş
   if (!isPremiumRoute) {
     return NextResponse.next();
   }
   
-  try {
-    // Token kontrolü
-    const token = request.cookies.get('auth-token')?.value;
-    
-    if (!token) {
-      return redirectToLogin(request);
-    }
-    
-    const decodedToken = await verifyAuthToken(token);
-    
-    if (!decodedToken || !decodedToken.uid) {
-      return redirectToLogin(request);
-    }
-    
-    // Premium durumu kontrolü
-    const accountStatus = decodedToken.accountStatus;
-    
-    if (!accountStatus || accountStatus === 'free') {
-      return redirectToPricing(request);
-    }
-    
-    // Basic veya premium üyelik varsa devam et
-    return NextResponse.next();
-  } catch (error) {
-    console.error('Premium route middleware error:', error);
-    return redirectToLogin(request);
+  // Premium rotalarda oturum kontrolü
+  if (!userId || !sessionId) {
+    // Login sayfasına yönlendir
+    const loginUrl = new URL('/login', req.url);
+    loginUrl.searchParams.set('from', req.nextUrl.pathname);
+    return NextResponse.redirect(loginUrl);
   }
+  
+  // Oturum varsa ve login/register sayfasındaysa dashboard'a yönlendir
+  if (userId && (req.nextUrl.pathname === '/login' || req.nextUrl.pathname === '/register')) {
+    const dashboardUrl = new URL('/dashboard', req.url);
+    return NextResponse.redirect(dashboardUrl);
+  }
+  
+  // Tüm kontrollerden geçti - devam et
+  return NextResponse.next();
 }
 
-// Giriş sayfasına yönlendirme
-function redirectToLogin(request: NextRequest) {
-  const url = request.nextUrl.clone();
-  url.pathname = '/login';
-  url.searchParams.set('from', request.nextUrl.pathname);
-  return NextResponse.redirect(url);
-}
-
-// Ücretlendirme sayfasına yönlendirme
-function redirectToPricing(request: NextRequest) {
-  const url = request.nextUrl.clone();
-  url.pathname = '/pricing';
-  url.searchParams.set('from', request.nextUrl.pathname);
-  return NextResponse.redirect(url);
-}
-
-// Middleware'in çalışacağı rotalar 
+// Middleware'in çalışacağı rotalar
 export const config = {
   matcher: [
     '/transactions/:path*',
     '/dashboard/:path*',
     '/reports/:path*',
+    '/login',
+    '/register',
   ],
 }; 
