@@ -96,31 +96,40 @@ export default function UploadTransactions() {
   
   // CSV dosyasını işleme
   const processCSV = (file: File) => {
-    parse(file, {
-      header: true,
-      complete: (results) => {
-        try {
-          if (!results.data || !Array.isArray(results.data) || results.data.length === 0) {
-            throw new Error('Geçersiz CSV dosya formatı');
-          }
-          
-          const headers = results.meta.fields || [];
-          if (headers.length === 0) {
-            throw new Error('CSV dosyasında sütun başlıkları bulunamadı');
-          }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const csvText = e.target?.result as string;
+      parse(csvText, {
+        header: true,
+        complete: (results) => {
+          try {
+            if (!results.data || !Array.isArray(results.data) || results.data.length === 0) {
+              throw new Error('Geçersiz CSV dosya formatı');
+            }
+            
+            const headers = results.meta.fields || [];
+            if (headers.length === 0) {
+              throw new Error('CSV dosyasında sütun başlıkları bulunamadı');
+            }
 
-          processInitialFile(results.data as ParsedTransaction[], headers);
-          setError(null);
-        } catch (err) {
-          setError(err instanceof Error ? err.message : 'Dosya işlenirken hata oluştu');
+            processInitialFile(results.data as ParsedTransaction[], headers);
+            setError(null);
+          } catch (err) {
+            setError(err instanceof Error ? err.message : 'Dosya işlenirken hata oluştu');
+            setIsAnalyzing(false);
+          }
+        },
+        error: (error) => {
+          setError(`Dosya okuma hatası: ${error.message}`);
           setIsAnalyzing(false);
         }
-      },
-      error: (error) => {
-        setError(`Dosya okuma hatası: ${error.message}`);
-        setIsAnalyzing(false);
-      }
-    });
+      });
+    };
+    reader.onerror = () => {
+      setError('Dosya okunurken bir hata oluştu');
+      setIsAnalyzing(false);
+    };
+    reader.readAsText(file);
   };
 
   // Excel dosyasını işleme

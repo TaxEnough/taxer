@@ -262,31 +262,40 @@ export default function TransactionsPage() {
   
   // Process CSV file
   const processCSV = (file: File) => {
-    parse(file, {
-      header: true,
-      complete: (results) => {
-        try {
-          if (!results.data || !Array.isArray(results.data) || results.data.length === 0) {
-            throw new Error('Invalid CSV file format');
-          }
-          
-          const headers = results.meta.fields || [];
-          if (headers.length === 0) {
-            throw new Error('No column headers found in CSV file');
-          }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const csvText = e.target?.result as string;
+      parse(csvText, {
+        header: true,
+        complete: (results) => {
+          try {
+            if (!results.data || !Array.isArray(results.data) || results.data.length === 0) {
+              throw new Error('Invalid CSV file format');
+            }
+            
+            const headers = results.meta.fields || [];
+            if (headers.length === 0) {
+              throw new Error('No column headers found in CSV file');
+            }
 
-          processInitialFile(results.data as ParsedTransaction[], headers);
-          setError(null);
-        } catch (err) {
-          setError(err instanceof Error ? err.message : 'Error processing file');
+            processInitialFile(results.data as ParsedTransaction[], headers);
+            setError(null);
+          } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error processing file');
+            setIsAnalyzing(false);
+          }
+        },
+        error: (error) => {
+          setError(`File reading error: ${error.message}`);
           setIsAnalyzing(false);
         }
-      },
-      error: (error) => {
-        setError(`File reading error: ${error.message}`);
-        setIsAnalyzing(false);
-      }
-    });
+      });
+    };
+    reader.onerror = () => {
+      setError('Error reading the file');
+      setIsAnalyzing(false);
+    };
+    reader.readAsText(file);
   };
 
   // Process Excel file

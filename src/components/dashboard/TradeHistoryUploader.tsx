@@ -109,32 +109,41 @@ const TradeHistoryUploader: React.FC<TradeHistoryUploaderProps> = ({ onDataProce
   
   // CSV dosyasını işleme
   const processCSV = (file: File) => {
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        try {
-          if (!results.data || !Array.isArray(results.data) || results.data.length === 0) {
-            throw new Error('Invalid CSV file format');
-          }
-          
-          const headers = results.meta.fields || [];
-          if (headers.length === 0) {
-            throw new Error('Could not find column headers in CSV file');
-          }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const csvText = e.target?.result as string;
+      Papa.parse(csvText, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          try {
+            if (!results.data || !Array.isArray(results.data) || results.data.length === 0) {
+              throw new Error('Invalid CSV file format');
+            }
+            
+            const headers = results.meta.fields || [];
+            if (headers.length === 0) {
+              throw new Error('Could not find column headers in CSV file');
+            }
 
-          console.log('CSV Parsed successfully:', { rowCount: results.data.length, headers });
-          processInitialFile(results.data as any[], headers);
-          setError(null);
-        } catch (err) {
-          setError(err instanceof Error ? err.message : 'Error processing file');
+            console.log('CSV Parsed successfully:', { rowCount: results.data.length, headers });
+            processInitialFile(results.data as any[], headers);
+            setError(null);
+          } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error processing file');
+          }
+        },
+        error: (error) => {
+          console.error('CSV parsing error:', error);
+          setError(`File reading error: ${error.message}`);
         }
-      },
-      error: (error) => {
-        console.error('CSV parsing error:', error);
-        setError(`File reading error: ${error.message}`);
-      }
-    });
+      });
+    };
+    reader.onerror = () => {
+      console.error('File reading error');
+      setError('File reading error');
+    };
+    reader.readAsText(file);
   };
 
   // Excel dosyasını işleme
