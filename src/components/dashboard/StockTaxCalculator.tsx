@@ -366,7 +366,7 @@ export default function StockTaxCalculator({ initialStocks }: StockTaxCalculator
 
     return (
         <div className="bg-white shadow-sm rounded-lg p-6 mb-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">US Stock Tax Calculator (2024)</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">US Stock Tax Calculator (2025)</h2>
             
             <div className="mb-4">
                 <label htmlFor="totalIncome" className="block text-sm font-medium text-gray-700 mb-1">
