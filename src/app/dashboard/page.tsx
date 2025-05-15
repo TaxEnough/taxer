@@ -152,10 +152,10 @@ TSLA,200.50,235.75,15,7.99,2023-03-01,2023-07-15`;
         // Önce Clerk ile kontrol et
         if (clerkLoaded) {
           if (clerkSignedIn && clerkUser) {
-            console.log('Clerk kullanıcısı bulundu');
+            console.log('Clerk user found');
             setPageLoading(false);
           } else {
-            console.log('Clerk kullanıcısı bulunamadı, yönlendiriliyor...');
+            console.log('Clerk user not found, redirecting...');
             router.push('/login');
           }
           return;
@@ -163,7 +163,7 @@ TSLA,200.50,235.75,15,7.99,2023-03-01,2023-07-15`;
         
         // Alternatif olarak Auth Context kontrol et
         if (firebaseUser && !firebaseLoading) {
-          console.log('Auth Context kullanıcısı bulundu');
+          console.log('Auth Context user found');
           setPageLoading(false);
           return;
         }
@@ -171,10 +171,10 @@ TSLA,200.50,235.75,15,7.99,2023-03-01,2023-07-15`;
         // Token kontrolü yap
         const token = await getAuthTokenFromClient();
         if (token) {
-          console.log('Token bulundu');
+          console.log('Token found');
           setPageLoading(false);
         } else {
-          console.log('Oturum açılmamış, yönlendiriliyor...');
+          console.log('Session not started, redirecting...');
           router.push('/login');
         }
       } catch (error) {
@@ -193,7 +193,7 @@ TSLA,200.50,235.75,15,7.99,2023-03-01,2023-07-15`;
       const premiumStatus = getClientPremiumStatus();
       
       if (!premiumStatus.isPremium) {
-        console.log('Premium hesap bulunamadı, yönlendiriliyor...');
+        console.log('Premium account not found, redirecting...');
         router.push('/pricing?premium=required');
       }
     };
@@ -230,16 +230,27 @@ TSLA,200.50,235.75,15,7.99,2023-03-01,2023-07-15`;
             <div className="w-full lg:w-1/3 bg-white shadow-sm rounded-lg p-6">
               <h1 className="text-2xl font-bold text-gray-900 mb-3">Dashboard</h1>
               
-              <div className="bg-primary-50 border border-primary-200 rounded-md p-3 mb-4">
-                <div className="flex items-center">
+              {/* Daha modern ve gelişmiş karşılama mesajı */}
+              <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 rounded-lg p-6 mb-6 shadow-lg text-white">
+                <div className="flex items-center space-x-4">
                   <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-primary-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
-                    </svg>
+                    {clerkUser?.imageUrl ? (
+                      <img 
+                        src={clerkUser.imageUrl} 
+                        alt="Profile" 
+                        className="h-16 w-16 rounded-full object-cover border-4 border-white/30 shadow-xl" 
+                      />
+                    ) : (
+                      <div className="h-16 w-16 rounded-full bg-white/90 flex items-center justify-center shadow-xl">
+                        <span className="text-indigo-700 text-2xl font-bold">
+                          {displayName ? displayName.charAt(0).toUpperCase() : 'U'}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  <div className="ml-2">
-                    <h2 className="text-md font-medium text-primary-800">
-                      Welcome, {displayName || (clerkUser ? (
+                  <div>
+                    <h2 className="text-2xl font-bold mb-1">
+                      Hello, {displayName || (clerkUser ? (
                         clerkUser.firstName || 
                         clerkUser.username || 
                         clerkUser.fullName || 
@@ -247,24 +258,10 @@ TSLA,200.50,235.75,15,7.99,2023-03-01,2023-07-15`;
                         'User'
                       ) : 'User')}!
                     </h2>
+                    <p className="text-white/80 text-sm">
+                      Your financial tools are ready. Start managing your transactions now.
+                    </p>
                   </div>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-3 gap-3 mb-5">
-                <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
-                  <h3 className="text-sm font-medium text-gray-700 mb-1">Transactions</h3>
-                  <p className="text-lg font-semibold text-gray-900">0</p>
-                </div>
-                
-                <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
-                  <h3 className="text-sm font-medium text-gray-700 mb-1">Gains</h3>
-                  <p className="text-lg font-semibold text-green-600">$0.00</p>
-                </div>
-                
-                <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
-                  <h3 className="text-sm font-medium text-gray-700 mb-1">Tax</h3>
-                  <p className="text-lg font-semibold text-red-600">$0.00</p>
                 </div>
               </div>
               
@@ -274,7 +271,7 @@ TSLA,200.50,235.75,15,7.99,2023-03-01,2023-07-15`;
                 <div className="grid grid-cols-1 gap-3">
                   <a
                     href="/transactions/new" 
-                    className="flex items-center justify-between p-3 border border-gray-300 rounded-md hover:bg-gray-50"
+                    className="flex items-center justify-between p-3 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200"
                   >
                     <div className="flex items-center">
                       <svg className="h-5 w-5 text-primary-600 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -289,7 +286,7 @@ TSLA,200.50,235.75,15,7.99,2023-03-01,2023-07-15`;
                   
                   <a
                     href="/reports" 
-                    className="flex items-center justify-between p-3 border border-gray-300 rounded-md hover:bg-gray-50"
+                    className="flex items-center justify-between p-3 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200"
                   >
                     <div className="flex items-center">
                       <svg className="h-5 w-5 text-primary-600 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
