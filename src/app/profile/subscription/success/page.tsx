@@ -74,9 +74,9 @@ export default function SuccessPage() {
     <div className="flex flex-col items-center justify-center min-h-[60vh] p-4">
       <div className="text-center max-w-md">
         <div className="text-green-500 text-5xl mb-4">✓</div>
-        <h2 className="text-2xl font-semibold mb-2">Ödeme Tamamlandı!</h2>
+        <h2 className="text-2xl font-semibold mb-2">Payment Completed!</h2>
         <p className="text-gray-600 mb-4">
-          Teşekkürler! Premium üyeliğiniz aktif edildi. Ana sayfaya yönlendiriliyorsunuz...
+          Thank you! Your premium subscription has been activated. You are being redirected to the homepage...
         </p>
         {loading && (
           <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mt-4"></div>
