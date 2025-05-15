@@ -202,15 +202,42 @@ export default function Navbar() {
       const userWithMetadata = clerkUser as any;
       const subscription = userWithMetadata?.privateMetadata?.subscription || userWithMetadata?.publicMetadata?.subscription;
       if (subscription?.status === 'active') {
-        return subscription.plan || 'Premium';
+        // İlk harfi büyüt
+        const plan = subscription.plan || 'premium';
+        return plan.charAt(0).toUpperCase() + plan.slice(1);
       }
       return 'Free Plan';
     }
     
-    // Fallback kontrol
+    // Fallback kontrol - ilk harfleri büyük
     if (user && (user as any).accountStatus === 'basic') return 'Basic';
     if (user && (user as any).accountStatus === 'premium') return 'Premium';
     return 'Free Plan';
+  };
+
+  // Abonelik durumuna göre renk döndüren yardımcı fonksiyon
+  const getSubscriptionBadgeColors = () => {
+    const status = getUserAccountStatus().toLowerCase();
+    
+    if (status.includes('premium')) {
+      return {
+        bg: 'bg-gradient-to-r from-purple-500 to-indigo-600',
+        text: 'text-white',
+        border: 'border-purple-400'
+      };
+    } else if (status.includes('basic')) {
+      return {
+        bg: 'bg-gradient-to-r from-blue-400 to-blue-500',
+        text: 'text-white',
+        border: 'border-blue-400'
+      };
+    } else {
+      return {
+        bg: 'bg-gray-100',
+        text: 'text-gray-700',
+        border: 'border-gray-300'
+      };
+    }
   };
   
   return (
@@ -326,9 +353,10 @@ export default function Navbar() {
             {isClerkLoaded ? (
               isClerkSignedIn ? (
                 <div className="flex items-center space-x-4">
-                  <span className="text-sm text-gray-700 font-medium">
+                  {/* Abonelik durumu için yeni tasarım */}
+                  <div className={`${getSubscriptionBadgeColors().bg} ${getSubscriptionBadgeColors().text} text-xs font-medium px-2.5 py-1 rounded-full border ${getSubscriptionBadgeColors().border} shadow-sm`}>
                     {getUserAccountStatus()}
-                  </span>
+                  </div>
                   
                   {/* Profil dropdown menüsü */}
                   <div className="relative">
