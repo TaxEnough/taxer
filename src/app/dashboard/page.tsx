@@ -156,6 +156,22 @@ TSLA,200.50,235.75,15,7.99,2023-03-01,2023-07-15`;
     }
   }, [router, firebaseUser, firebaseLoading, clerkLoaded, clerkSignedIn]);
 
+  // Kullanıcı ismini belirle (önce Clerk, yoksa Firebase)
+  const userName = clerkUser?.firstName || clerkUser?.username || firebaseUser?.name || 'User';
+  
+  // Debug için kullanıcı bilgilerini logla
+  useEffect(() => {
+    console.log("Clerk user info:", {
+      firstName: clerkUser?.firstName,
+      username: clerkUser?.username,
+      fullName: clerkUser?.fullName,
+      isLoaded: clerkLoaded,
+      isSignedIn: clerkSignedIn
+    });
+    console.log("Firebase user info:", firebaseUser);
+    console.log("Final userName:", userName);
+  }, [clerkUser, firebaseUser, userName, clerkLoaded, clerkSignedIn]);
+
   // Yükleniyor durumu göster
   if ((!clerkLoaded && firebaseLoading) || (pageLoading && !getAuthTokenFromClient() && !clerkSignedIn)) {
     return (
@@ -171,9 +187,6 @@ TSLA,200.50,235.75,15,7.99,2023-03-01,2023-07-15`;
       </>
     );
   }
-
-  // Kullanıcı ismini belirle (önce Clerk, yoksa Firebase)
-  const userName = clerkUser?.firstName || clerkUser?.username || firebaseUser?.name || 'User';
 
   return (
     <>
@@ -193,7 +206,9 @@ TSLA,200.50,235.75,15,7.99,2023-03-01,2023-07-15`;
                     </svg>
                   </div>
                   <div className="ml-2">
-                    <h2 className="text-md font-medium text-primary-800">Welcome, {userName}!</h2>
+                    <h2 className="text-md font-medium text-primary-800">
+                      Welcome, {userName !== 'User' ? userName : clerkUser?.firstName || clerkUser?.username || clerkUser?.fullName || 'User'}!
+                    </h2>
                   </div>
                 </div>
               </div>
