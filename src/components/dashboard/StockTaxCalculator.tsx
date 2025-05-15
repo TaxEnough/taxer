@@ -368,8 +368,8 @@ export default function StockTaxCalculator({ initialStocks }: StockTaxCalculator
         <div className="bg-white shadow-sm rounded-lg p-6 mb-8">
             <h2 className="text-xl font-bold text-gray-900 mb-4">US Stock Tax Calculator (2025)</h2>
             
-            <div className="mb-6 bg-blue-50 p-4 rounded-lg border border-blue-100 shadow-sm">
-                <label htmlFor="totalIncome" className="block text-md font-medium text-blue-800 mb-2">
+            <div className="mb-4 bg-blue-50 p-3 rounded-md border border-blue-100 shadow-sm">
+                <label htmlFor="totalIncome" className="block text-sm font-medium text-blue-700 mb-1">
                     Total Taxable Income Excluding Investment Income ($)
                 </label>
                 <div className="relative">
@@ -379,13 +379,13 @@ export default function StockTaxCalculator({ initialStocks }: StockTaxCalculator
                     <input
                         type="number"
                         id="totalIncome"
-                        className="block w-full pl-7 py-2.5 max-w-md rounded-md border-blue-300 bg-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition-colors duration-200"
+                        className="block w-full pl-7 py-1.5 max-w-md rounded-md border-blue-300 bg-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition-colors duration-200"
                         placeholder="Enter your taxable income"
                         value={totalIncome || ''}
                         onChange={(e) => setTotalIncome(parseFloat(e.target.value) || 0)}
                     />
                 </div>
-                <p className="mt-2 text-sm text-blue-600">This value is used to determine your appropriate tax bracket.</p>
+                <p className="mt-1 text-xs text-blue-500">Used to determine your tax bracket</p>
             </div>
             
             <div className="overflow-x-auto border border-gray-200 rounded-md mb-4">
