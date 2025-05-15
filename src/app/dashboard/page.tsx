@@ -74,6 +74,54 @@ export default function DashboardPage() {
   // Add this new state for the collapsible panel
   const [isTradeHistoryOpen, setIsTradeHistoryOpen] = useState(false);
 
+  // Kullanıcı adını saklamak için bir state ekleyelim
+  const [displayName, setDisplayName] = useState('');
+  
+  // Clerk verilerini kullanıcı adına çevirelim
+  useEffect(() => {
+    // Clerk verilerini kontrol et
+    if (clerkLoaded && clerkSignedIn && clerkUser) {
+      // Kullanıcı adını öncelik sırasına göre belirle
+      if (clerkUser.firstName) {
+        setDisplayName(clerkUser.firstName);
+      } else if (clerkUser.username) {
+        setDisplayName(clerkUser.username);
+      } else if (clerkUser.fullName) {
+        setDisplayName(clerkUser.fullName);
+      } else if (clerkUser.primaryEmailAddress) {
+        // E-posta adresinin @ işaretinden önceki kısmını al
+        const emailName = clerkUser.primaryEmailAddress.emailAddress.split('@')[0];
+        setDisplayName(emailName);
+      } else {
+        setDisplayName(''); // Boş bırak
+      }
+      
+      console.log("Clerk user info updated:", {
+        firstName: clerkUser.firstName,
+        lastName: clerkUser.lastName,
+        username: clerkUser.username,
+        fullName: clerkUser.fullName,
+        setDisplayName: displayName
+      });
+    } else if (firebaseUser && firebaseUser.name) {
+      setDisplayName(firebaseUser.name);
+    }
+  }, [clerkLoaded, clerkSignedIn, clerkUser, firebaseUser]);
+  
+  // Debug için kullanıcı bilgilerini logla
+  useEffect(() => {
+    console.log("Clerk user info:", {
+      firstName: clerkUser?.firstName,
+      username: clerkUser?.username,
+      fullName: clerkUser?.fullName,
+      emailAddress: clerkUser?.primaryEmailAddress?.emailAddress,
+      isLoaded: clerkLoaded,
+      isSignedIn: clerkSignedIn
+    });
+    console.log("Firebase user info:", firebaseUser);
+    console.log("Display name being used:", displayName);
+  }, [clerkUser, firebaseUser, displayName, clerkLoaded, clerkSignedIn]);
+
   // Handle CSV sample download
   const handleDownloadSample = () => {
     const sampleCSVContent = `Symbol,Buy Price,Sell Price,Shares Sold,Fee/Commissions,Buy Date,Sell Date
@@ -156,22 +204,6 @@ TSLA,200.50,235.75,15,7.99,2023-03-01,2023-07-15`;
     }
   }, [router, firebaseUser, firebaseLoading, clerkLoaded, clerkSignedIn]);
 
-  // Kullanıcı ismini belirle (önce Clerk, yoksa Firebase)
-  const userName = clerkUser?.firstName || clerkUser?.username || firebaseUser?.name || 'User';
-  
-  // Debug için kullanıcı bilgilerini logla
-  useEffect(() => {
-    console.log("Clerk user info:", {
-      firstName: clerkUser?.firstName,
-      username: clerkUser?.username,
-      fullName: clerkUser?.fullName,
-      isLoaded: clerkLoaded,
-      isSignedIn: clerkSignedIn
-    });
-    console.log("Firebase user info:", firebaseUser);
-    console.log("Final userName:", userName);
-  }, [clerkUser, firebaseUser, userName, clerkLoaded, clerkSignedIn]);
-
   // Yükleniyor durumu göster
   if ((!clerkLoaded && firebaseLoading) || (pageLoading && !getAuthTokenFromClient() && !clerkSignedIn)) {
     return (
@@ -207,7 +239,13 @@ TSLA,200.50,235.75,15,7.99,2023-03-01,2023-07-15`;
                   </div>
                   <div className="ml-2">
                     <h2 className="text-md font-medium text-primary-800">
-                      Welcome, {userName !== 'User' ? userName : clerkUser?.firstName || clerkUser?.username || clerkUser?.fullName || 'User'}!
+                      Welcome, {displayName || (clerkUser ? (
+                        clerkUser.firstName || 
+                        clerkUser.username || 
+                        clerkUser.fullName || 
+                        (clerkUser.primaryEmailAddress?.emailAddress?.split('@')[0]) || 
+                        'User'
+                      ) : 'User')}!
                     </h2>
                   </div>
                 </div>
