@@ -3,6 +3,9 @@ import { getAuth } from '@clerk/nextjs/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { cookies } from 'next/headers';
 
+// Bu endpoint'in dinamik olduğunu belirt - statik oluşturma denemesi yapılmasın
+export const dynamic = 'force-dynamic';
+
 /**
  * Premium abonelik durumunu kontrol eder
  */
