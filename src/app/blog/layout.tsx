@@ -1,6 +1,5 @@
 import { Metadata } from 'next';
 import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
 
 export const metadata: Metadata = {
   title: 'Blog | Tax Enough - Tax and Investment Tools',
@@ -18,7 +17,6 @@ export default function BlogLayout({
       <div className="min-h-screen bg-gray-50">
         {children}
       </div>
-      <Footer />
     </>
   );
 } 
