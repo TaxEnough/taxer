@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-// Stock tipini tanımlıyoruz
+
 interface Stock {
     id: string;
     symbol: string;
@@ -15,7 +15,7 @@ interface Stock {
     isShortTerm?: boolean;
 }
 
-// Sonuçlar tipini tanımlıyoruz
+
 interface Results {
     shortTermGains: number;
     longTermGains: number;
@@ -44,7 +44,7 @@ export default function StockTaxCalculator() {
     const [totalIncome, setTotalIncome] = useState<number>(0);
     const [results, setResults] = useState<Results | null>(null);
 
-    // Stock ekleme
+
     const addStock = () => {
         const newId = String(new Date().getTime());
         setStocks([...stocks, { 
