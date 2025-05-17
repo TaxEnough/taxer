@@ -3,60 +3,60 @@ import { verifyAuthToken } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { clerkClient } from '@clerk/nextjs/server';
 
-export const dynamic = 'force-dynamic'; // Endpointin statik olarak optimize edilmesini engelle
+export const dynamic = 'force-dynamic'; // Prevent static optimization of endpoint
 
 export async function GET(request: NextRequest) {
-  console.log('GET /api/auth/me endpoint çağrıldı');
+  console.log('GET /api/auth/me endpoint called');
   
   try {
-    // HTTP başlıklarını al
+    // Get HTTP headers
     const headersList = headers();
     const authHeader = headersList.get('authorization');
-    console.log('Authorization header\'dan token alındı');
+    console.log('Token obtained from Authorization header');
     
-    // Token yoksa hata döndür
+    // Return error if token is missing
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.log('Token bulunamadı');
-      return NextResponse.json({ error: 'Kimlik doğrulama token\'ı bulunamadı' }, { status: 401 });
+      console.log('Token not found');
+      return NextResponse.json({ error: 'Authentication token not found' }, { status: 401 });
     }
     
-    // Token'ı ayıkla
+    // Extract token
     const token = authHeader.substring(7);
-    console.log('Token bulundu, doğrulanıyor');
+    console.log('Token found, verifying');
     
     try {
-      // Token'ı doğrula
+      // Verify token
       const decodedToken = await verifyAuthToken(token);
       
-      // Kullanıcı ID'si kontrolü
+      // Check user ID
       if (!decodedToken || !decodedToken.uid) {
-        console.log('Token geçerli ancak kullanıcı ID bulunamadı');
-        // Token yapısını log'a yazdır (hassas bilgileri kırparak)
-        console.log('Token içeriği:', JSON.stringify({
+        console.log('Token valid but user ID not found');
+        // Log token structure (redacting sensitive info)
+        console.log('Token content:', JSON.stringify({
           ...decodedToken,
-          email: decodedToken?.email ? '[GİZLİ]' : undefined,
-          sub: decodedToken?.sub ? '[VAR]' : undefined,
-          user_id: decodedToken?.user_id ? '[VAR]' : undefined,
-          userId: decodedToken?.userId ? '[VAR]' : undefined
+          email: decodedToken?.email ? '[REDACTED]' : undefined,
+          sub: decodedToken?.sub ? '[EXISTS]' : undefined,
+          user_id: decodedToken?.user_id ? '[EXISTS]' : undefined,
+          userId: decodedToken?.userId ? '[EXISTS]' : undefined
         }));
         
         return NextResponse.json(
-          { error: 'Geçersiz token: Kullanıcı ID bulunamadı' },
+          { error: 'Invalid token: User ID not found' },
           { status: 401 }
         );
       }
       
-      console.log('Token doğrulandı, kullanıcı ID:', decodedToken.uid);
+      console.log('Token verified, user ID:', decodedToken.uid);
       
-      // Clerk'den kullanıcı bilgilerini al
+      // Get user info from Clerk
       try {
         const clerk = await clerkClient();
         const user = await clerk.users.getUser(decodedToken.uid);
         
         if (user) {
-          console.log('Clerk\'den kullanıcı bilgileri alındı');
+          console.log('User information retrieved from Clerk');
           
-          // Cache-Control başlığını ekle (10 saniyelik kısa süre cache'de tut)
+          // Add Cache-Control header (short 10-second cache)
           return NextResponse.json(
             {
               id: decodedToken.uid,
@@ -66,14 +66,14 @@ export async function GET(request: NextRequest) {
             {
               status: 200,
               headers: {
-                'Cache-Control': 'private, max-age=10', // 10 saniye client tarafında cache'lenebilir
+                'Cache-Control': 'private, max-age=10', // Can be cached on client side for 10 seconds
               },
             }
           );
         } else {
-          console.log('Kullanıcı verileri bulunamadı, token bilgileriyle devam ediliyor');
+          console.log('User data not found, continuing with token information');
           
-          // Kullacını bilgileri yoksa token bilgilerini kullan
+          // Use token information if user data not available
           return NextResponse.json(
             {
               id: decodedToken.uid,
@@ -83,18 +83,18 @@ export async function GET(request: NextRequest) {
             {
               status: 200,
               headers: {
-                'Cache-Control': 'private, max-age=10', // 10 saniye client tarafında cache'lenebilir
+                'Cache-Control': 'private, max-age=10', // Can be cached on client side for 10 seconds
               },
             }
           );
         }
       } catch (clerkError: any) {
-        console.error('Kullanıcı bilgileri hatası:', clerkError);
+        console.error('User information error:', clerkError);
         
-        // Clerk izin hatası durumunda direkt token bilgilerini kullan
-        console.log('Kullanıcı verileri bulunamadı, token bilgileriyle devam ediliyor');
+        // Use token information directly in case of Clerk permission error
+        console.log('User data not found, continuing with token information');
         
-        // Kullacını bilgileri yoksa token bilgilerini kullan
+        // Use token information if user data not available
         return NextResponse.json(
           {
             id: decodedToken.uid,
@@ -104,17 +104,17 @@ export async function GET(request: NextRequest) {
           {
             status: 200,
             headers: {
-              'Cache-Control': 'private, max-age=10', // 10 saniye client tarafında cache'lenebilir
+              'Cache-Control': 'private, max-age=10', // Can be cached on client side for 10 seconds
             },
           }
         );
       }
     } catch (tokenError) {
-      console.error('Token doğrulama hatası:', tokenError);
-      return NextResponse.json({ error: 'Geçersiz token' }, { status: 401 });
+      console.error('Token verification error:', tokenError);
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
   } catch (error) {
-    console.error('/api/auth/me endpoint hatası:', error);
-    return NextResponse.json({ error: 'Sunucu hatası' }, { status: 500 });
+    console.error('/api/auth/me endpoint error:', error);
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 } 

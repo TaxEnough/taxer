@@ -81,7 +81,7 @@ export default function SubscribeButton({ priceId, className = '', children }: S
             break;
           } else {
             // Başarısız ama yanıt aldık, sonraki endpoint'i denemeden önce bu hata bilgisini sakla
-            lastError = new Error(`${endpoint} sunucusu ${response.status} hata kodu döndürdü: ${response.statusText}`);
+            lastError = new Error(`${endpoint} server returned error code ${response.status}: ${response.statusText}`);
             console.error(`Error from ${endpoint}:`, lastError);
           }
         } catch (fetchError) {
@@ -93,7 +93,7 @@ export default function SubscribeButton({ priceId, className = '', children }: S
       
       // Tüm endpoint'ler denendikten sonra hala başarılı yanıt yoksa hata fırlat
       if (!response || !response.ok) {
-        throw lastError || new Error('Tüm ödeme endpoint\'leri başarısız oldu.');
+        throw lastError || new Error('All payment endpoints failed.');
       }
       
       // Headers'ı güvenli bir şekilde log yapalım
@@ -109,7 +109,7 @@ export default function SubscribeButton({ priceId, className = '', children }: S
         console.error('Non-JSON response received:', contentType);
         const responseText = await response.text();
         console.error('Response body:', responseText.substring(0, 300));
-        throw new Error(`Sunucu JSON yanıt vermedi. Detaylar için konsola bakın.`);
+        throw new Error(`Server did not respond with JSON. See console for details.`);
       }
       
       // Yanıtı JSON olarak parse et
@@ -120,7 +120,7 @@ export default function SubscribeButton({ priceId, className = '', children }: S
       // Check if we have a URL to redirect to
       if (!data.url) {
         console.error('No checkout URL received from server');
-        setError('Ödeme URL adresi alınamadı. Lütfen tekrar deneyin.');
+        setError('Unable to get payment URL. Please try again.');
         return;
       }
       
@@ -131,8 +131,8 @@ export default function SubscribeButton({ priceId, className = '', children }: S
     } catch (error: any) {
       console.error('Error subscribing:', error);
       
-      // Türkçe hata mesajı
-      setError(`Ödeme sistemi hatası: ${error.message || 'Beklenmeyen bir hata oluştu'}. Lütfen daha sonra tekrar deneyin veya destek ile iletişime geçin.`);
+      // İngilizce hata mesajı
+      setError(`Payment system error: ${error.message || 'An unexpected error occurred'}. Please try again later or contact support.`);
     } finally {
       setLoading(false);
     }
