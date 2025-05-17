@@ -14,13 +14,13 @@ export const getStripe = () => {
 export const PRICES = {
   BASIC: {
     MONTHLY: {
-      id: 'price_1RIS0fLhWC2oNMWwizDKv78o', // Basic Monthly $19.99
+      id: 'price_1RPuH1LhWC2oNMWwQMSfyDP0', // Basic Monthly $19.99
       name: 'Basic Plan (Monthly)',
       price: 19.99,
       interval: 'month'
     },
     YEARLY: {
-      id: 'price_1RIoHlLhWC2oNMWwKzOx9WBD', // Basic Yearly $120
+      id: 'price_1RPuIfLhWC2oNMWwjz4QUn0N', // Basic Yearly $120
       name: 'Basic Plan (Yearly)',
       price: 120,
       interval: 'year'
@@ -34,13 +34,13 @@ export const PRICES = {
   },
   PREMIUM: {
     MONTHLY: {
-      id: 'price_1RIoIVLhWC2oNMWwZZ7GOZhY', // Premium Monthly $29.99
+      id: 'price_1RPuI9LhWC2oNMWwYQKvG2Ry', // Premium Monthly $29.99
       name: 'Premium Plan (Monthly)',
       price: 29.99,
       interval: 'month'
     },
     YEARLY: {
-      id: 'price_1RIoJ3LhWC2oNMWwBpw1oZTl', // Premium Yearly $180
+      id: 'price_1RPuIxLhWC2oNMWwA9xLh4ko', // Premium Yearly $180
       name: 'Premium Plan (Yearly)',
       price: 180,
       interval: 'year'
