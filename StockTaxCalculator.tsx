@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-// Stock tipini tanımlıyoruz
+
 interface Stock {
     id: string;
     symbol: string;
@@ -15,7 +15,7 @@ interface Stock {
     isShortTerm?: boolean;
 }
 
-// Sonuçlar tipini tanımlıyoruz
+
 interface Results {
     shortTermGains: number;
     longTermGains: number;
