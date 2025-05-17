@@ -1,7 +1,6 @@
 'use client';
 
 import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
 import { SignIn } from '@clerk/nextjs';
 import { useUser } from '@clerk/nextjs';
 import { useEffect } from 'react';
@@ -39,8 +38,6 @@ export default function LoginPage() {
           redirectUrl="/dashboard"
         />
       </div>
-
-      <Footer />
     </div>
   );
 } 

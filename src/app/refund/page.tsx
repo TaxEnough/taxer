@@ -1,6 +1,4 @@
 import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
-
 export default function RefundPage() {
   return (
     <>
@@ -63,7 +61,6 @@ export default function RefundPage() {
           </div>
         </div>
       </div>
-      <Footer />
-    </>
+          </>
   );
 } 

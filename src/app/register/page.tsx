@@ -1,7 +1,6 @@
 'use client';
 
 import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
 import { SignUp } from '@clerk/nextjs';
 import { useUser } from '@clerk/nextjs';
 import { useEffect } from 'react';
@@ -40,7 +39,6 @@ export default function RegisterPage() {
         />
       </div>
 
-      <Footer />
-    </div>
+          </div>
   );
 } 

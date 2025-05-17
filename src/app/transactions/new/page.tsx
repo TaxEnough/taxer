@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { getAuthTokenFromClient } from '@/lib/auth-client';
@@ -351,7 +350,6 @@ export default function NewTransaction() {
           </div>
         </main>
       </div>
-      <Footer />
-    </ClientToastWrapper>
+          </ClientToastWrapper>
   );
 } 

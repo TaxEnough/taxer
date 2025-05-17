@@ -4,7 +4,6 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
 import { getAuthTokenFromClient } from '@/lib/auth-client';
 import Link from 'next/link';
 import { useUser } from '@clerk/nextjs';
@@ -215,8 +214,7 @@ TSLA,200.50,235.75,15,7.99,2023-03-01,2023-07-15`;
             <p className="text-gray-600">Loading...</p>
           </div>
         </div>
-        <Footer />
-      </>
+              </>
     );
   }
 

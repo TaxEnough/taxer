@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import SubscribeButton from '@/components/SubscribeButton';
@@ -301,7 +300,6 @@ export default function Pricing() {
           </div>
         </div>
       </main>
-      <Footer />
-    </>
+          </>
   );
 } 

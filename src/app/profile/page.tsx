@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useUser, useClerk } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
 import { getAuthTokenFromClient } from '@/lib/auth-client';
 
 export default function ProfilePage() {
@@ -173,8 +172,7 @@ export default function ProfilePage() {
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
         </div>
-        <Footer />
-      </>
+              </>
     );
   }
   

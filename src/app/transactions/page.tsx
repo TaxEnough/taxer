@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
 import TransactionList from '@/components/transactions/TransactionList';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -581,8 +580,7 @@ export default function TransactionsPage() {
             <p className="text-gray-600">Loading...</p>
           </div>
         </div>
-        <Footer />
-      </>
+              </>
     );
   }
 
