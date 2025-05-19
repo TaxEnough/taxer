@@ -1,9 +1,13 @@
 'use client';
 
-import React, { ReactNode } from 'react';
+import React from 'react';
 import PremiumGuard from '@/components/PremiumGuard';
 
-export default function DashboardLayout({ children }: { children: ReactNode }) {
+interface DashboardLayoutProps {
+  children: React.ReactNode;
+}
+
+export default function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <PremiumGuard featureName="dashboard">
       {children}
