@@ -619,13 +619,6 @@ export default function TransactionsPage() {
                 </>
               )}
             </Button>
-            <Link 
-              href="/transactions/new"
-              className="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white tracking-widest hover:bg-blue-700 active:bg-blue-800 focus:outline-none focus:border-blue-800 focus:ring ring-blue-300 disabled:opacity-25 transition ease-in-out duration-150"
-            >
-              <FileText className="h-4 w-4 mr-1" />
-              New Interface
-            </Link>
           </div>
         </div>
 

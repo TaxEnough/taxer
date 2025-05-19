@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Search, Loader2 } from 'lucide-react';
+import Navbar from '@/components/Navbar';
+import { Plus, Search, Loader2, ArrowLeft } from 'lucide-react';
 import { useUser } from '@clerk/nextjs';
 import { toast } from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,7 @@ import { formatCurrency } from '@/lib/utils';
 import { useClerkAuthCache, getQuickPremiumStatus } from '@/lib/clerk-utils';
 import { getTransactionsByTicker } from '@/lib/transaction-firebase';
 import { getAuthTokenFromClient } from '@/lib/auth-client';
+import Link from 'next/link';
 
 // GroupedTransactions interface
 interface GroupedTransactions {
@@ -232,136 +234,170 @@ export default function NewTransactionsPage() {
     }
   };
   
-  // Filter transactions by search term
-  const filteredTransactions = searchTerm
-    ? Object.entries(transactionsData)
-        .filter(([ticker]) => ticker.toLowerCase().includes(searchTerm.toLowerCase()))
-        .reduce((acc, [ticker, data]) => {
-          acc[ticker] = data;
-          return acc;
-        }, {} as GroupedTransactions)
-    : transactionsData;
+  const filteredStocks = Object.values(transactionsData)
+    .filter(stock => stock.ticker.toLowerCase().includes(searchTerm.toLowerCase()));
   
-  // Check if there are any transactions
-  const hasTransactions = Object.keys(transactionsData).length > 0;
-  
-  return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold mb-2">Your Investments</h1>
-          <p className="text-gray-500">
-            Track your investment journey and monitor your portfolio performance
-          </p>
-        </div>
-        <Button 
-          onClick={() => handleAddTransaction()}
-          className="mt-4 md:mt-0"
-        >
-          <Plus className="mr-2 h-4 w-4" /> Add Transaction
-        </Button>
-      </div>
-      
-      {/* Account Summary */}
-      {hasTransactions && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white p-4 rounded-lg shadow-sm border">
-            <div className="text-sm text-gray-500">Total Investment</div>
-            <div className="text-2xl font-bold">{formatCurrency(totalInvestment)}</div>
-          </div>
-          <div className="bg-white p-4 rounded-lg shadow-sm border">
-            <div className="text-sm text-gray-500">Current Value</div>
-            <div className="text-2xl font-bold">{formatCurrency(totalCurrentValue)}</div>
-          </div>
-          <div className="bg-white p-4 rounded-lg shadow-sm border">
-            <div className="text-sm text-gray-500">Realized Profit/Loss</div>
-            <div className={`text-2xl font-bold ${totalProfit > 0 ? 'text-green-600' : totalProfit < 0 ? 'text-red-600' : ''}`}>
-              {formatCurrency(totalProfit)}
+  // Loading state
+  if (loading) {
+    return (
+      <div className="bg-gray-50 min-h-screen">
+        <Navbar />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="flex justify-center items-center h-64">
+            <div className="text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary-600" />
+              <p className="mt-2 text-gray-600">Loading your investments...</p>
             </div>
           </div>
-          <div className="bg-white p-4 rounded-lg shadow-sm border">
-            <div className="text-sm text-gray-500">Open Positions</div>
-            <div className="text-2xl font-bold">{totalPositions}</div>
+        </div>
+      </div>
+    );
+  }
+  
+  return (
+    <div className="bg-gray-50 min-h-screen">
+      <Navbar />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="flex flex-col md:flex-row justify-between items-center mb-8">
+          <div>
+            <div className="flex items-center mb-2">
+              <Link href="/transactions" className="inline-flex items-center text-gray-600 hover:text-gray-900 mr-2">
+                <ArrowLeft className="h-4 w-4 mr-1" />
+                Back
+              </Link>
+              <h1 className="text-3xl font-bold">Manage Transactions</h1>
+            </div>
+            <p className="text-gray-500">
+              Track and manage your investment transactions by stock
+            </p>
+          </div>
+          <div className="mt-4 md:mt-0">
+            <Button 
+              onClick={() => handleAddTransaction()}
+              className="inline-flex items-center px-4 py-2 bg-primary-600 border border-transparent rounded-md font-semibold text-xs text-white tracking-widest hover:bg-primary-700 active:bg-primary-800 focus:outline-none focus:border-primary-800 focus:ring ring-primary-300 disabled:opacity-25 transition ease-in-out duration-150"
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Add New Transaction
+            </Button>
           </div>
         </div>
-      )}
-      
-      {/* Search and Filter */}
-      {hasTransactions && (
-        <div className="relative mb-6">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-          <Input
-            type="text"
-            placeholder="Search stocks by symbol..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 max-w-md"
-          />
+        
+        {/* Account Summary Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
+            <div className="flex items-center">
+              <div className="flex-shrink-0 bg-primary-100 rounded-md p-3">
+                <svg className="h-6 w-6 text-primary-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <div className="ml-5">
+                <h3 className="text-lg font-medium text-gray-900">Stocks</h3>
+                <p className="text-gray-500 text-sm">Total: {totalPositions}</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
+            <div className="flex items-center">
+              <div className="flex-shrink-0 bg-blue-100 rounded-md p-3">
+                <svg className="h-6 w-6 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 8h6m-5 0a3 3 0 110 6H9l3 3m-3-6h6m6 1a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="ml-5">
+                <h3 className="text-lg font-medium text-gray-900">Investment</h3>
+                <p className="text-gray-500 text-sm">{formatCurrency(totalInvestment)}</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
+            <div className="flex items-center">
+              <div className="flex-shrink-0 bg-green-100 rounded-md p-3">
+                <svg className="h-6 w-6 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="ml-5">
+                <h3 className="text-lg font-medium text-gray-900">Current Value</h3>
+                <p className="text-gray-500 text-sm">{formatCurrency(totalCurrentValue)}</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
+            <div className="flex items-center">
+              <div className={`flex-shrink-0 ${totalProfit >= 0 ? 'bg-green-100' : 'bg-red-100'} rounded-md p-3`}>
+                <svg className={`h-6 w-6 ${totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+              <div className="ml-5">
+                <h3 className="text-lg font-medium text-gray-900">Profit/Loss</h3>
+                <p className={`text-sm ${totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatCurrency(totalProfit)}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
-      )}
-      
-      {/* Loading State */}
-      {loading && (
-        <div className="flex flex-col items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-gray-400 mb-4" />
-          <p className="text-gray-500">Loading your investment data...</p>
+        
+        {/* Search and Filter */}
+        <div className="mb-6">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-5 w-5 text-gray-400" />
+            </div>
+            <Input
+              type="text"
+              placeholder="Search stocks by symbol..."
+              className="pl-10"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
         </div>
-      )}
-      
-      {/* Error State */}
-      {!loading && error && (
-        <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
-          <p className="text-red-600">{error}</p>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={fetchTransactions}
-            className="mt-2"
-          >
-            Retry
-          </Button>
-        </div>
-      )}
-      
-      {/* Empty State */}
-      {!loading && !error && !hasTransactions && (
-        <div className="bg-blue-50 border border-blue-100 rounded-md p-8 text-center">
-          <h3 className="text-xl font-medium mb-2">No investments yet</h3>
-          <p className="text-gray-600 mb-4">
-            Start tracking your investment journey by adding your first transaction.
-          </p>
-          <Button onClick={() => handleAddTransaction()}>
-            <Plus className="mr-2 h-4 w-4" /> Add Your First Transaction
-          </Button>
-        </div>
-      )}
-      
-      {/* Transaction List */}
-      {!loading && !error && hasTransactions && (
-        <div className="space-y-4">
-          {Object.keys(filteredTransactions).length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No stocks match your search criteria</p>
+        
+        {/* Stock Cards */}
+        <div className="space-y-6">
+          {filteredStocks.length === 0 ? (
+            <div className="bg-white rounded-lg p-6 text-center border border-gray-200">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-gray-100">
+                <Search className="h-6 w-6 text-gray-600" />
+              </div>
+              <h3 className="mt-2 text-sm font-medium text-gray-900">No stocks found</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                {Object.keys(transactionsData).length === 0
+                  ? "You haven't added any transactions yet."
+                  : "No stocks match your search criteria."}
+              </p>
+              <div className="mt-6">
+                <Button 
+                  onClick={() => handleAddTransaction()}
+                  className="inline-flex items-center px-4 py-2 bg-primary-600 border border-transparent rounded-md font-semibold text-xs text-white tracking-widest hover:bg-primary-700 active:bg-primary-800 focus:outline-none focus:border-primary-800 focus:ring ring-primary-300 disabled:opacity-25 transition ease-in-out duration-150"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Your First Transaction
+                </Button>
+              </div>
+            </div>
           ) : (
-            Object.entries(filteredTransactions)
-              .sort(([, a], [, b]) => {
-                // Sort by current value (descending)
-                return b.summary.currentValue - a.summary.currentValue;
-              })
-              .map(([ticker, data]) => (
-                <StockCard
-                  key={ticker}
-                  ticker={ticker}
-                  transactions={data.transactions}
-                  summary={data.summary}
-                  onAddTransaction={handleAddTransaction}
-                  onEditTransaction={handleEditTransaction}
-                  onDeleteTransaction={handleDeleteTransaction}
-                  onSellStock={handleSellStock}
-                />
-              ))
+            filteredStocks.map((stock) => (
+              <StockCard
+                key={stock.ticker}
+                ticker={stock.ticker}
+                transactions={stock.transactions}
+                summary={stock.summary}
+                onAddTransaction={handleAddTransaction}
+                onEditTransaction={handleEditTransaction}
+                onDeleteTransaction={handleDeleteTransaction}
+                onSellStock={handleSellStock}
+              />
+            ))
           )}
         </div>
-      )}
+      </div>
       
       {/* Transaction Dialog */}
       <TransactionDialog
