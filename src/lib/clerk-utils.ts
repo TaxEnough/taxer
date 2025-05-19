@@ -1,7 +1,7 @@
 'use client';
 
 import { User } from '@clerk/nextjs/dist/types/server';
-import { useUser } from '@clerk/nextjs';
+import { useUser, useAuth } from '@clerk/nextjs';
 
 // Cache süresi 30 dakika (saniye cinsinden)
 const CACHE_DURATION = 1800;
@@ -93,6 +93,7 @@ export function cacheUserAuthState(user: any, isSignedIn: boolean): void {
  */
 export function useClerkAuthCache() {
   const { isLoaded, isSignedIn, user } = useUser();
+  const { userId } = useAuth();
   
   // Clerk auth durumu yüklendiğinde, cache'leme işlemi yap
   if (isLoaded) {
@@ -110,7 +111,8 @@ export function useClerkAuthCache() {
     isLoaded, 
     isSignedIn, 
     user,
-    isPremium: checkPremium()
+    isPremium: checkPremium(),
+    userId: userId || user?.id
   };
 }
 
@@ -173,4 +175,20 @@ export async function setPremiumCookies() {
   }
   
   return true;
+}
+
+/**
+ * Cookie okuma yardımcı fonksiyonu
+ */
+function getCookie(name: string): string | undefined {
+  if (typeof document === 'undefined') return undefined;
+  
+  const cookies = document.cookie.split(';');
+  for (let i = 0; i < cookies.length; i++) {
+    const cookie = cookies[i].trim();
+    if (cookie.startsWith(name + '=')) {
+      return decodeURIComponent(cookie.substring(name.length + 1));
+    }
+  }
+  return undefined;
 } 

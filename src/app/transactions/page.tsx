@@ -588,23 +588,44 @@ export default function TransactionsPage() {
     <div className="bg-gray-50 min-h-screen">
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Transactions</h1>
-          <div className="flex space-x-2">
+        <div className="flex flex-col md:flex-row justify-between items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Transactions</h1>
+            <p className="text-gray-500">
+              View and manage your transaction history
+            </p>
+          </div>
+          <div className="flex space-x-2 mt-4 md:mt-0">
+            <Link 
+              href="/transactions/new"
+              className="inline-flex items-center px-4 py-2 bg-primary-600 border border-transparent rounded-md font-semibold text-xs text-white tracking-widest hover:bg-primary-700 active:bg-primary-800 focus:outline-none focus:border-primary-800 focus:ring ring-primary-300 disabled:opacity-25 transition ease-in-out duration-150"
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Add New
+            </Link>
             <Button
               onClick={() => setShowUploadPanel(!showUploadPanel)}
               variant="outline"
-              className="flex items-center"
+              size="sm"
+              className="inline-flex items-center"
             >
-              <Upload className="mr-2 h-4 w-4" />
-              CSV/Excel Upload
+              {showUploadPanel ? (
+                <>
+                  <X className="h-4 w-4 mr-1" /> Close Upload
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4 mr-1" /> Import
+                </>
+              )}
             </Button>
-            <Button asChild>
-              <Link href="/transactions/new" className="flex items-center">
-                <Plus className="mr-2 h-4 w-4" />
-                New Transaction
-              </Link>
-            </Button>
+            <Link 
+              href="/transactions/new"
+              className="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white tracking-widest hover:bg-blue-700 active:bg-blue-800 focus:outline-none focus:border-blue-800 focus:ring ring-blue-300 disabled:opacity-25 transition ease-in-out duration-150"
+            >
+              <FileText className="h-4 w-4 mr-1" />
+              New Interface
+            </Link>
           </div>
         </div>
 

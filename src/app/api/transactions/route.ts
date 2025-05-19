@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuthToken } from '@/lib/auth';
 import { clerkClient } from '@clerk/nextjs/server';
+import { 
+  getUserTransactionsFromFirestore, 
+  createTransactionInFirestore 
+} from '@/lib/transaction-firebase';
 
 // Transaction interface
 interface Transaction {
@@ -105,8 +109,9 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
       }
       
-      // Boş dizi döndür - örnek verileri kaldırdık
-      return NextResponse.json([]);
+      // Get user transactions from Firestore
+      const transactions = await getUserTransactionsFromFirestore(userId);
+      return NextResponse.json(transactions);
     } catch (apiError) {
       console.error('API error:', apiError);
       return NextResponse.json(
@@ -190,10 +195,23 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
       }
       
-      // Başarılı yanıt - dummy veri olmadan
+      // Save transaction to Firestore
+      const newTransaction: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'> = {
+        ticker: transactionData.ticker,
+        type: transactionData.type,
+        shares: transactionData.shares,
+        price: transactionData.price,
+        amount: transactionData.amount,
+        date: transactionData.date,
+        fee: transactionData.fee,
+        notes: transactionData.notes
+      };
+      
+      const transactionId = await createTransactionInFirestore(userId, newTransaction);
+      
       return NextResponse.json({
         message: 'Transaction successfully created',
-        id: 'transaction-id',
+        id: transactionId,
         createdAt: new Date().toISOString(),
       }, { status: 201 });
     } catch (apiError) {

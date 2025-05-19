@@ -10,6 +10,7 @@ export interface Transaction {
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
+  userId?: string;
 }
 
 export type TransactionType = "buy" | "sell" | "dividend";

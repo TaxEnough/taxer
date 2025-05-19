@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAuthToken } from '@/lib/auth';
 import { clerkClient } from '@clerk/nextjs/server';
+import { createBatchTransactionsInFirestore } from '@/lib/transaction-firebase';
 
 interface Transaction {
   ticker: string;
@@ -73,11 +74,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
       }
       
-      // Başarı yanıtı - dummy veri olmadan
+      // Create batch transactions in Firestore
+      const count = await createBatchTransactionsInFirestore(userId, transactions);
+      
+      // Return success response
       return NextResponse.json({
         success: true,
         message: 'Transactions processed',
-        count: 0
+        count
       });
     } catch (userError) {
       console.error('User verification error:', userError);

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuthToken } from '@/lib/auth';
 import { clerkClient } from '@clerk/nextjs/server';
+import { 
+  getTransactionFromFirestore, 
+  updateTransactionInFirestore, 
+  deleteTransactionFromFirestore 
+} from '@/lib/transaction-firebase';
 
 // Transaction interface
 interface Transaction {
@@ -112,8 +117,19 @@ export async function GET(
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
       }
       
-      // İşlem verisi bulunamadı (404)
-      return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
+      // Get transaction from Firestore
+      const transaction = await getTransactionFromFirestore(transactionId);
+      
+      if (!transaction) {
+        return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
+      }
+      
+      // Check if transaction belongs to the user
+      if (transaction.userId !== userId) {
+        return NextResponse.json({ error: 'Unauthorized access' }, { status: 403 });
+      }
+      
+      return NextResponse.json(transaction);
     } catch (apiError) {
       console.error('API error:', apiError);
       return NextResponse.json(
@@ -195,12 +211,44 @@ export async function PUT(
       }, { status: 400 });
     }
     
-    // Başarılı yanıt - dummy veri olmadan
-    return NextResponse.json({
-      message: 'Transaction successfully updated',
-      id: transactionId,
-      updatedAt: new Date().toISOString()
-    });
+    try {
+      // Ensure transaction exists and belongs to user
+      const existingTransaction = await getTransactionFromFirestore(transactionId);
+      
+      if (!existingTransaction) {
+        return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
+      }
+      
+      if (existingTransaction.userId !== userId) {
+        return NextResponse.json({ error: 'Unauthorized access' }, { status: 403 });
+      }
+      
+      // Update transaction in Firestore
+      const updatedTransaction: Partial<Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>> = {
+        ticker: requestData.ticker,
+        type: requestData.type,
+        shares: requestData.shares,
+        price: requestData.price,
+        amount: requestData.amount,
+        date: requestData.date,
+        fee: requestData.fee,
+        notes: requestData.notes
+      };
+      
+      await updateTransactionInFirestore(transactionId, userId, updatedTransaction);
+      
+      return NextResponse.json({
+        message: 'Transaction successfully updated',
+        id: transactionId,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (apiError: any) {
+      console.error('API error:', apiError);
+      return NextResponse.json(
+        { error: apiError.message || 'An error occurred while updating the transaction' },
+        { status: apiError.message?.includes('Unauthorized') ? 403 : 500 }
+      );
+    }
   } catch (error) {
     console.error('Error updating transaction:', error);
     return NextResponse.json(
@@ -260,28 +308,29 @@ export async function DELETE(
     }
     
     const userId = decodedToken.uid;
-    
-    // Get transaction ID
     const transactionId = params.id;
     
-    // Clerk API üzerinden kullanıcıyı doğrula
     try {
-      const clerk = await clerkClient();
-      const user = await clerk.users.getUser(userId);
+      // Delete transaction from Firestore
+      await deleteTransactionFromFirestore(transactionId, userId);
       
-      if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
-      }
-      
-      // Başarılı yanıt - dummy veri olmadan
       return NextResponse.json({
         message: 'Transaction successfully deleted',
         id: transactionId
       });
-    } catch (apiError) {
-      console.error('Clerk API error:', apiError);
+    } catch (apiError: any) {
+      console.error('API error:', apiError);
+      
+      if (apiError.message?.includes('not found')) {
+        return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
+      }
+      
+      if (apiError.message?.includes('Unauthorized')) {
+        return NextResponse.json({ error: 'Unauthorized access' }, { status: 403 });
+      }
+      
       return NextResponse.json(
-        { error: 'An error occurred while verifying user access' },
+        { error: 'An error occurred while deleting the transaction' },
         { status: 500 }
       );
     }
