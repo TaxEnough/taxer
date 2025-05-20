@@ -115,7 +115,7 @@ export default function NewTransactionsPage() {
         setTotalProfit(profit);
         setTotalPositions(positions);
       } catch (firebaseError) {
-        console.log('Henüz işlem verisi bulunamadı veya koleksiyon mevcut değil');
+        console.log('No transaction data found or collection does not exist yet');
         // Koleksiyon yoksa veya veri yoksa, boş data ile devam et
         setTransactionsData({} as GroupedTransactions);
         setTotalInvestment(0);
@@ -260,7 +260,7 @@ export default function NewTransactionsPage() {
           <div className="flex justify-center items-center h-64">
             <div className="text-center">
               <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary-600" />
-              <p className="mt-2 text-gray-600">İşlem eklemek için hazırlanıyor...</p>
+              <p className="mt-2 text-gray-600">Preparing to add transactions...</p>
             </div>
           </div>
         </div>
