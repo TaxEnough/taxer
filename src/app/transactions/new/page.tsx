@@ -114,14 +114,25 @@ export default function NewTransactionsPage() {
         setTotalCurrentValue(currentValue);
         setTotalProfit(profit);
         setTotalPositions(positions);
-      } catch (firebaseError) {
-        console.log('No transaction data found or collection does not exist yet');
-        // Koleksiyon yoksa veya veri yoksa, boş data ile devam et
-        setTransactionsData({} as GroupedTransactions);
-        setTotalInvestment(0);
-        setTotalCurrentValue(0);
-        setTotalProfit(0);
-        setTotalPositions(0);
+      } catch (firebaseError: any) {
+        console.log('Firestore error:', firebaseError.message || 'Unknown error');
+        
+        // İndeks oluşturma hatasını özel olarak yakala
+        if (firebaseError.message && firebaseError.message.includes('index is currently building')) {
+          setError('Firebase indeksi şu anda oluşturuluyor. Lütfen birkaç dakika bekleyip sayfayı yenileyin.');
+        } else if (firebaseError.message && firebaseError.message.includes('requires an index')) {
+          setError('Bu sorgu için Firebase indeksi oluşturuluyor. Lütfen birkaç dakika bekleyip sayfayı yenileyin.');  
+        } else if (firebaseError.message && firebaseError.message.includes('permission')) {
+          setError('Erişim yetkisi hatası. Lütfen giriş yaptığınızdan emin olun.');
+        } else {
+          // Koleksiyon yoksa veya veri yoksa, boş data ile devam et
+          console.log('No transaction data found or collection does not exist yet');
+          setTransactionsData({} as GroupedTransactions);
+          setTotalInvestment(0);
+          setTotalCurrentValue(0);
+          setTotalProfit(0);
+          setTotalPositions(0);
+        }
       }
       
     } catch (err: any) {
@@ -261,6 +272,34 @@ export default function NewTransactionsPage() {
             <div className="text-center">
               <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary-600" />
               <p className="mt-2 text-gray-600">Preparing to add transactions...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  // Error state
+  if (error) {
+    return (
+      <div className="bg-gray-50 min-h-screen">
+        <Navbar />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="flex justify-center items-center h-64">
+            <div className="text-center">
+              <div className="h-8 w-8 mx-auto text-red-600">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+              </div>
+              <h2 className="mt-2 text-lg font-semibold text-gray-900">An error occurred</h2>
+              <p className="mt-1 text-sm text-gray-600">{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-4 inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              >
+                Refresh Page
+              </button>
             </div>
           </div>
         </div>
