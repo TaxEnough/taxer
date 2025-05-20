@@ -102,5 +102,7 @@ export const config = {
      * - public assets
      */
     '/((?!_next/static|_next/image|favicon.ico|images|public|assets).*)',
+    '/api/subscription/check-premium',
+    '/api/transactions(.*)',
   ],
 }; 

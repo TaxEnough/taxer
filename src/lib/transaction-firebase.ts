@@ -26,6 +26,8 @@ const TRANSACTIONS_COLLECTION = 'transactions';
  */
 export async function getUserTransactionsFromFirestore(userId: string): Promise<Transaction[]> {
   try {
+    console.log('Firestore\'dan işlemler alınıyor, userId:', userId);
+    
     const transactionsRef = collection(db, TRANSACTIONS_COLLECTION);
     const q = query(
       transactionsRef,
@@ -33,7 +35,15 @@ export async function getUserTransactionsFromFirestore(userId: string): Promise<
       orderBy('date', 'desc')
     );
     
+    console.log('Firestore sorgusu oluşturuldu:', {
+      collection: TRANSACTIONS_COLLECTION,
+      userId: userId,
+      orderBy: 'date desc'
+    });
+    
     const querySnapshot = await getDocs(q);
+    
+    console.log(`Firestore sorgusu tamamlandı: ${querySnapshot.docs.length} sonuç bulundu`);
     
     return querySnapshot.docs.map(doc => {
       const data = doc.data();
@@ -114,6 +124,9 @@ export async function createTransactionInFirestore(
   transaction: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<string> {
   try {
+    console.log('Firestore\'a yeni işlem kaydediliyor, userId:', userId);
+    console.log('İşlem verileri:', JSON.stringify(transaction));
+    
     const transactionsRef = collection(db, TRANSACTIONS_COLLECTION);
     
     // Prepare transaction data with timestamps
@@ -124,7 +137,10 @@ export async function createTransactionInFirestore(
       updatedAt: serverTimestamp()
     };
     
+    console.log('İşlem verisi hazırlandı, userId ve timestamps eklendi');
+    
     const docRef = await addDoc(transactionsRef, transactionData);
+    console.log('İşlem başarıyla eklendi, doc ID:', docRef.id);
     return docRef.id;
   } catch (error) {
     console.error('Error creating transaction in Firestore:', error);
@@ -144,6 +160,8 @@ export async function updateTransactionInFirestore(
   transaction: Partial<Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>>
 ): Promise<void> {
   try {
+    console.log('İşlem güncelleniyor, docId:', transactionId, 'userId:', userId);
+    
     const docRef = doc(db, TRANSACTIONS_COLLECTION, transactionId);
     const docSnap = await getDoc(docRef);
     
@@ -153,6 +171,10 @@ export async function updateTransactionInFirestore(
     
     // Security check - verify the transaction belongs to the user
     if (docSnap.data().userId !== userId) {
+      console.error('İzin hatası: İşlemin userId değeri ile giriş yapan kullanıcının ID\'si uyuşmuyor');
+      console.error('İşlemdeki userId:', docSnap.data().userId);
+      console.error('Kullanıcı ID:', userId);
+      
       throw new Error('Unauthorized: This transaction does not belong to this user');
     }
     
@@ -161,6 +183,8 @@ export async function updateTransactionInFirestore(
       ...transaction,
       updatedAt: serverTimestamp()
     });
+    
+    console.log('İşlem güncellendi');
   } catch (error) {
     console.error('Error updating transaction in Firestore:', error);
     throw error;
@@ -177,6 +201,8 @@ export async function deleteTransactionFromFirestore(
   userId: string
 ): Promise<void> {
   try {
+    console.log('İşlem siliniyor, docId:', transactionId, 'userId:', userId);
+    
     const docRef = doc(db, TRANSACTIONS_COLLECTION, transactionId);
     const docSnap = await getDoc(docRef);
     
@@ -186,10 +212,15 @@ export async function deleteTransactionFromFirestore(
     
     // Security check - verify the transaction belongs to the user
     if (docSnap.data().userId !== userId) {
+      console.error('İzin hatası: İşlemin userId değeri ile giriş yapan kullanıcının ID\'si uyuşmuyor');
+      console.error('İşlemdeki userId:', docSnap.data().userId);
+      console.error('Kullanıcı ID:', userId);
+      
       throw new Error('Unauthorized: This transaction does not belong to this user');
     }
     
     await deleteDoc(docRef);
+    console.log('İşlem silindi');
   } catch (error) {
     console.error('Error deleting transaction from Firestore:', error);
     throw error;
@@ -207,6 +238,8 @@ export async function createBatchTransactionsInFirestore(
   transactions: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>[]
 ): Promise<number> {
   try {
+    console.log(`Toplu işlem ekleniyor, userId: ${userId}, işlem sayısı: ${transactions.length}`);
+    
     const batch = writeBatch(db);
     
     transactions.forEach(transaction => {
@@ -219,7 +252,10 @@ export async function createBatchTransactionsInFirestore(
       });
     });
     
+    console.log('Toplu işlem batch hazırlandı, commit yapılıyor');
     await batch.commit();
+    console.log('Toplu işlem başarıyla eklendi');
+    
     return transactions.length;
   } catch (error) {
     console.error('Error creating batch transactions in Firestore:', error);
@@ -248,63 +284,44 @@ export async function getTransactionsByTicker(userId: string) {
           transactions: [],
           summary: {
             totalShares: 0,
-            totalCost: 0,
             averageCost: 0,
-            remainingShares: 0,
-            currentValue: 0,
-            totalProfit: 0
+            totalInvested: 0,
+            totalFees: 0,
+            currentHoldings: 0
           }
         };
       }
       
       groupedTransactions[ticker].transactions.push(transaction);
+      
+      // Update summary based on transaction type
+      const summary = groupedTransactions[ticker].summary;
+      
+      if (transaction.type === 'buy') {
+        summary.totalShares += transaction.shares;
+        summary.totalInvested += transaction.amount;
+        summary.totalFees += transaction.fee || 0;
+      } else if (transaction.type === 'sell') {
+        summary.totalShares -= transaction.shares;
+        // We don't subtract from totalInvested for sells, as that's for average cost
+        summary.totalFees += transaction.fee || 0;
+      }
+      
+      // Recalculate average cost if we have shares
+      if (summary.totalShares > 0) {
+        summary.averageCost = summary.totalInvested / summary.totalShares;
+      }
+      
+      // Current holdings are the total shares we still have
+      summary.currentHoldings = summary.totalShares;
     });
     
-    // Calculate summary for each ticker
-    Object.keys(groupedTransactions).forEach(ticker => {
-      const tickerData = groupedTransactions[ticker];
-      const transactions = tickerData.transactions;
-      
-      let totalBuyShares = 0;
-      let totalBuyCost = 0;
-      let totalSellShares = 0;
-      let totalSellProceeds = 0;
-      
-      transactions.forEach((tx: Transaction) => {
-        if (tx.type === 'buy') {
-          totalBuyShares += tx.shares;
-          totalBuyCost += tx.amount + (tx.fee || 0);
-        } else if (tx.type === 'sell') {
-          totalSellShares += tx.shares;
-          totalSellProceeds += tx.amount - (tx.fee || 0);
-        }
-      });
-      
-      const remainingShares = totalBuyShares - totalSellShares;
-      const averageCost = totalBuyShares > 0 ? totalBuyCost / totalBuyShares : 0;
-      
-      // Calculate profit based on average cost
-      let totalProfit = 0;
-      transactions.filter((tx: Transaction) => tx.type === 'sell').forEach((tx: Transaction) => {
-        const costBasis = tx.shares * averageCost;
-        const proceeds = tx.amount - (tx.fee || 0);
-        totalProfit += proceeds - costBasis;
-      });
-      
-      // Update summary
-      tickerData.summary = {
-        totalShares: totalBuyShares,
-        totalCost: totalBuyCost,
-        averageCost,
-        remainingShares,
-        currentValue: remainingShares * averageCost, // This will be updated with current price if available
-        totalProfit
-      };
-    });
-    
-    return groupedTransactions;
+    // Convert to array and sort by ticker
+    return Object.values(groupedTransactions).sort((a, b) => 
+      a.ticker.localeCompare(b.ticker)
+    );
   } catch (error) {
-    console.error('Error fetching transactions by ticker:', error);
+    console.error('Error getting transactions by ticker:', error);
     throw error;
   }
 } 

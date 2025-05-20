@@ -48,12 +48,31 @@ export function removeClientCookie(name: string): void {
   console.log(`Cookie ${name} silindi`);
 }
 
-// Clerk'ten kullanıcı token'ı almayı dene
+// Clerk'ten kullanıcı token'ı almayı dene ve Firebase uyumlu hale getir
 export async function getAuthTokenFromClient(): Promise<string | null> {
   try {
     // Önce cookie'den token kontrol et
     const existingToken = Cookie.get('clerk-token');
     if (existingToken) {
+      // Token alındı, debug için log
+      console.log('Token cookie\'den alındı, uzunluk:', existingToken.length);
+      
+      // Firebase ve Clerk userId'sini senkronize et
+      try {
+        if (typeof window !== 'undefined') {
+          // Kullanıcı ID'sini al
+          const userId = localStorage.getItem('clerk-user-id');
+          if (userId) {
+            console.log('Kullanıcı ID\'si:', userId);
+            // Kullanıcı ID'sini özel bir alanla Firebase uyumlu token'a ekle
+            localStorage.setItem('firebase-user-id', userId);
+            // Firebase uygulamasına kullanıcı ID'sini ayarla (opsiyonel)
+          }
+        }
+      } catch (userIdError) {
+        console.error('Kullanıcı ID işleme hatası:', userIdError);
+      }
+      
       return existingToken;
     }
     
@@ -64,9 +83,18 @@ export async function getAuthTokenFromClient(): Promise<string | null> {
         const clerk = window.Clerk;
         if (clerk && clerk.session) {
           const token = await clerk.session.getToken();
+          
           if (token) {
             // Token'ı kısa süreli cache'le (5 dakika)
             Cookie.set('clerk-token', token, { expires: 1/288 }); // 5 dakika = 1/288 gün
+            
+            // Kullanıcı ID'sini kaydet
+            if (clerk.user?.id) {
+              console.log('Clerk kullanıcı ID\'si alındı ve kaydedildi:', clerk.user.id);
+              localStorage.setItem('clerk-user-id', clerk.user.id);
+              localStorage.setItem('firebase-user-id', clerk.user.id);
+            }
+            
             return token;
           }
         }
