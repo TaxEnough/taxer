@@ -24,11 +24,15 @@ interface GroupedTransactions {
     transactions: Transaction[];
     summary: {
       totalShares: number;
-      totalCost: number;
       averageCost: number;
-      remainingShares: number;
-      currentValue: number;
-      totalProfit: number;
+      totalInvested: number;
+      totalFees: number;
+      currentHoldings: number;
+      // Eski alanları uyumluluk için tanımlıyoruz
+      totalCost?: number;
+      remainingShares?: number;
+      currentValue?: number;
+      totalProfit?: number;
     };
   };
 }
@@ -85,30 +89,40 @@ export default function NewTransactionsPage() {
         return;
       }
       
-      // Get transactions by ticker
-      const groupedTransactions = await getTransactionsByTicker(userId);
-      setTransactionsData(groupedTransactions);
-      
-      // Calculate account summary
-      let investment = 0;
-      let currentValue = 0;
-      let profit = 0;
-      let positions = 0;
-      
-      Object.values(groupedTransactions).forEach(ticker => {
-        investment += ticker.summary.totalCost;
-        currentValue += ticker.summary.currentValue;
-        profit += ticker.summary.totalProfit;
+      try {
+        // İşlemleri getir (eğer koleksiyon yoksa hata oluşabilir)
+        const groupedTransactions = await getTransactionsByTicker(userId);
+        setTransactionsData(groupedTransactions as unknown as GroupedTransactions);
         
-        if (ticker.summary.remainingShares > 0) {
-          positions++;
-        }
-      });
-      
-      setTotalInvestment(investment);
-      setTotalCurrentValue(currentValue);
-      setTotalProfit(profit);
-      setTotalPositions(positions);
+        // Calculate account summary
+        let investment = 0;
+        let currentValue = 0;
+        let profit = 0;
+        let positions = 0;
+        
+        Object.values(groupedTransactions).forEach(ticker => {
+          investment += ticker.summary.totalCost || ticker.summary.totalInvested || 0;
+          currentValue += ticker.summary.currentValue || ticker.summary.totalInvested || 0;
+          profit += ticker.summary.totalProfit || 0;
+          
+          if ((ticker.summary.remainingShares || ticker.summary.currentHoldings) > 0) {
+            positions++;
+          }
+        });
+        
+        setTotalInvestment(investment);
+        setTotalCurrentValue(currentValue);
+        setTotalProfit(profit);
+        setTotalPositions(positions);
+      } catch (firebaseError) {
+        console.log('Henüz işlem verisi bulunamadı veya koleksiyon mevcut değil');
+        // Koleksiyon yoksa veya veri yoksa, boş data ile devam et
+        setTransactionsData({} as GroupedTransactions);
+        setTotalInvestment(0);
+        setTotalCurrentValue(0);
+        setTotalProfit(0);
+        setTotalPositions(0);
+      }
       
     } catch (err: any) {
       console.error('Error fetching transactions:', err);
@@ -246,7 +260,7 @@ export default function NewTransactionsPage() {
           <div className="flex justify-center items-center h-64">
             <div className="text-center">
               <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary-600" />
-              <p className="mt-2 text-gray-600">Loading your investments...</p>
+              <p className="mt-2 text-gray-600">İşlem eklemek için hazırlanıyor...</p>
             </div>
           </div>
         </div>
