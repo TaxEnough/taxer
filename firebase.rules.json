@@ -16,6 +16,11 @@
           "allow read": "request.auth != null",
           "allow create, update, delete": true
         },
+        "match/transactions/{document}": {
+          "allow read": "request.auth != null && request.auth.uid == resource.data.userId",
+          "allow create": "request.auth != null && request.auth.uid == request.resource.data.userId",
+          "allow update, delete": "request.auth != null && request.auth.uid == resource.data.userId"
+        },
         "match/users/{userId}": {
           "allow read": "request.auth != null && request.auth.uid == userId",
           "allow write": "(request.auth != null && request.auth.uid == userId) || true"
