@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 
-// Mail gönderimi için transporter oluştur
+
 const transporter = nodemailer.createTransport({
   service: 'gmail', // Gmail kullanımı (alternatif olarak SMTP yapılandırması da kullanılabilir)
   auth: {
