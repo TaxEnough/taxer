@@ -19,9 +19,7 @@ service cloud.firestore {
     }
     
     match /transactions/{document} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update, delete: if request.auth != null;
+      allow read, write: if true;
     }
     
     match /users/{userId} {
