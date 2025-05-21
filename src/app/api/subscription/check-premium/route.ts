@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuth } from '@clerk/nextjs/server';
 import { currentUser } from '@clerk/nextjs/server';
+import { clerkClient } from '@clerk/nextjs/server';
 import { cookies } from 'next/headers';
 
 // Bu endpoint'in dinamik olduğunu belirt - statik oluşturma denemesi yapılmasın
@@ -11,18 +11,35 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(req: NextRequest) {
   try {
-    // Clerk ile oturum bilgilerini al
-    const auth = getAuth(req);
-    const userId = auth.userId;
+    // Auth header'dan token bilgilerini al
+    const authHeader = req.headers.get('authorization');
+    let userId = null;
+    
+    // Auth header varsa parse et
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      try {
+        // Token doğrulama işlemi buraya eklenebilir
+        // Bu örnek için basit bir yaklaşım kullanıyoruz
+        const tokenData = JSON.parse(atob(token.split('.')[1]));
+        userId = tokenData.sub || null;
+      } catch (tokenError) {
+        console.error('Token parsing error:', tokenError);
+      }
+    }
+    
+    // Oturum açmış kullanıcıyı kontrol et
+    const user = await currentUser();
+    
+    // Kullanıcı kimliğini belirle
+    userId = user?.id || userId;
     
     // Kullanıcı oturum açmamışsa premium değil
     if (!userId) {
       return NextResponse.json({ isPremium: false });
     }
     
-    // Kullanıcı meta verilerini kontrol et
-    const user = await currentUser();
-    
+    // Kullanıcının meta verilerinde premium kontrolü
     if (user) {
       // Kullanıcının meta verilerinde premium kontrolü
       if (
@@ -34,6 +51,25 @@ export async function GET(req: NextRequest) {
         await setPremiumCookies();
         
         return NextResponse.json({ isPremium: true });
+      }
+    } else if (userId) {
+      // Eğer currentUser çalışmadıysa, Clerk API ile kullanıcıyı al
+      try {
+        const clerk = await clerkClient();
+        const userDetails = await clerk.users.getUser(userId);
+        
+        if (
+          userDetails.publicMetadata?.subscriptionStatus === 'active' ||
+          userDetails.publicMetadata?.isPremium === true
+        ) {
+          // Premium durumu çerezlere kaydet
+          console.log('Premium durum çerezlere kaydediliyor...');
+          await setPremiumCookies();
+          
+          return NextResponse.json({ isPremium: true });
+        }
+      } catch (clerkError) {
+        console.error('Clerk API error:', clerkError);
       }
     }
     

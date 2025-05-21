@@ -70,12 +70,14 @@ export default function NewTransactionsPage() {
     try {
       // Quick auth check
       if (!isSignedIn && !clerkAuth.isSignedIn) {
+        console.log('User not signed in, redirecting to login...');
         router.push('/login');
         return;
       }
       
       // Check premium status
       if (!isPremium) {
+        console.log('Premium required, redirecting to pricing...');
         router.push('/pricing?premium=required');
         return;
       }
@@ -84,15 +86,42 @@ export default function NewTransactionsPage() {
       const userId = user?.id || clerkAuth.userId;
       
       if (!userId) {
-        setError('User ID not found');
+        console.error('User ID not found');
+        setError('Authentication error: User ID not found. Please try logging out and logging back in.');
         setLoading(false);
         return;
       }
       
+      console.log('Fetching transactions for user:', userId);
+      
       try {
-        // İşlemleri getir (eğer koleksiyon yoksa hata oluşabilir)
-        const groupedTransactions = await getTransactionsByTicker(userId);
-        setTransactionsData(groupedTransactions as unknown as GroupedTransactions);
+        // Get auth token
+        const token = await getAuthTokenFromClient();
+        
+        if (!token) {
+          console.error('Authentication token not available');
+          setError('Authentication error: Token not available. Please try logging out and logging back in.');
+          setLoading(false);
+          return;
+        }
+        
+        // Doğrudan API çağrısı yap
+        const response = await fetch('/api/transactions', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to fetch transactions');
+        }
+        
+        const transactionsData = await response.json();
+        console.log('Transactions fetched successfully:', Object.keys(transactionsData).length, 'tickers found');
+        
+        setTransactionsData(transactionsData as GroupedTransactions);
         
         // Calculate account summary
         let investment = 0;
@@ -100,7 +129,7 @@ export default function NewTransactionsPage() {
         let profit = 0;
         let positions = 0;
         
-        Object.values(groupedTransactions).forEach(ticker => {
+        Object.values(transactionsData).forEach((ticker: any) => {
           investment += ticker.summary.totalCost || ticker.summary.totalInvested || 0;
           currentValue += ticker.summary.currentValue || ticker.summary.totalInvested || 0;
           profit += ticker.summary.totalProfit || 0;
@@ -114,29 +143,44 @@ export default function NewTransactionsPage() {
         setTotalCurrentValue(currentValue);
         setTotalProfit(profit);
         setTotalPositions(positions);
-      } catch (firebaseError: any) {
-        console.log('Firestore error:', firebaseError.message || 'Unknown error');
+      } catch (fetchError: any) {
+        console.error('Error fetching transactions:', fetchError);
         
-        // İndeks oluşturma hatasını özel olarak yakala
-        if (firebaseError.message && firebaseError.message.includes('index is currently building')) {
-          setError('Firebase indeksi şu anda oluşturuluyor. Lütfen birkaç dakika bekleyip sayfayı yenileyin.');
-        } else if (firebaseError.message && firebaseError.message.includes('requires an index')) {
-          setError('Bu sorgu için Firebase indeksi oluşturuluyor. Lütfen birkaç dakika bekleyip sayfayı yenileyin.');  
-        } else if (firebaseError.message && firebaseError.message.includes('permission')) {
-          setError('Erişim yetkisi hatası. Lütfen giriş yaptığınızdan emin olun.');
-        } else {
-          // Koleksiyon yoksa veya veri yoksa, boş data ile devam et
-          console.log('No transaction data found or collection does not exist yet');
-          setTransactionsData({} as GroupedTransactions);
-          setTotalInvestment(0);
-          setTotalCurrentValue(0);
-          setTotalProfit(0);
-          setTotalPositions(0);
+        // Fallback to Firebase direct fetch if API fails
+        try {
+          console.log('API call failed, trying direct Firebase fetch...');
+          const groupedTransactions = await getTransactionsByTicker(userId);
+          console.log('Firebase fetch successful');
+          
+          setTransactionsData(groupedTransactions as GroupedTransactions);
+          
+          // Calculate account summary
+          let investment = 0;
+          let currentValue = 0;
+          let profit = 0;
+          let positions = 0;
+          
+          Object.values(groupedTransactions).forEach(ticker => {
+            investment += ticker.summary.totalCost || ticker.summary.totalInvested || 0;
+            currentValue += ticker.summary.currentValue || ticker.summary.totalInvested || 0;
+            profit += ticker.summary.totalProfit || 0;
+            
+            if ((ticker.summary.remainingShares || ticker.summary.currentHoldings) > 0) {
+              positions++;
+            }
+          });
+          
+          setTotalInvestment(investment);
+          setTotalCurrentValue(currentValue);
+          setTotalProfit(profit);
+          setTotalPositions(positions);
+        } catch (firebaseError: any) {
+          console.error('Firebase fetch also failed:', firebaseError);
+          setError(firebaseError.message || 'Failed to load transactions from database');
         }
       }
-      
     } catch (err: any) {
-      console.error('Error fetching transactions:', err);
+      console.error('General error:', err);
       setError(err.message || 'Failed to load transactions');
     } finally {
       setLoading(false);
@@ -244,7 +288,7 @@ export default function NewTransactionsPage() {
           },
           body: JSON.stringify(data)
         });
-        
+      
         if (!response.ok) {
           const errorData = await response.json();
           throw new Error(errorData.error || 'Failed to create transaction');
@@ -264,9 +308,9 @@ export default function NewTransactionsPage() {
   
   // Loading state
   if (loading) {
-    return (
+  return (
       <div className="bg-gray-50 min-h-screen">
-        <Navbar />
+      <Navbar />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="flex justify-center items-center h-64">
             <div className="text-center">
@@ -290,8 +334,8 @@ export default function NewTransactionsPage() {
               <div className="h-8 w-8 mx-auto text-red-600">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-                </svg>
-              </div>
+                    </svg>
+                  </div>
               <h2 className="mt-2 text-lg font-semibold text-gray-900">An error occurred</h2>
               <p className="mt-1 text-sm text-gray-600">{error}</p>
               <button
@@ -300,10 +344,10 @@ export default function NewTransactionsPage() {
               >
                 Refresh Page
               </button>
-            </div>
-          </div>
-        </div>
-      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
     );
   }
   
@@ -342,14 +386,14 @@ export default function NewTransactionsPage() {
               <div className="flex-shrink-0 bg-primary-100 rounded-md p-3">
                 <svg className="h-6 w-6 text-primary-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </div>
+                    </svg>
+                  </div>
               <div className="ml-5">
                 <h3 className="text-lg font-medium text-gray-900">Stocks</h3>
                 <p className="text-gray-500 text-sm">Total: {totalPositions}</p>
-              </div>
-            </div>
-          </div>
+                    </div>
+                  </div>
+                </div>
           
           <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
             <div className="flex items-center">
@@ -362,9 +406,9 @@ export default function NewTransactionsPage() {
                 <h3 className="text-lg font-medium text-gray-900">Investment</h3>
                 <p className="text-gray-500 text-sm">{formatCurrency(totalInvestment)}</p>
               </div>
-            </div>
-          </div>
-          
+                      </div>
+                    </div>
+                    
           <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
             <div className="flex items-center">
               <div className="flex-shrink-0 bg-green-100 rounded-md p-3">
@@ -376,49 +420,49 @@ export default function NewTransactionsPage() {
                 <h3 className="text-lg font-medium text-gray-900">Current Value</h3>
                 <p className="text-gray-500 text-sm">{formatCurrency(totalCurrentValue)}</p>
               </div>
-            </div>
-          </div>
-          
+                      </div>
+                    </div>
+                    
           <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
             <div className="flex items-center">
               <div className={`flex-shrink-0 ${totalProfit >= 0 ? 'bg-green-100' : 'bg-red-100'} rounded-md p-3`}>
                 <svg className={`h-6 w-6 ${totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
-              </div>
+                      </div>
               <div className="ml-5">
                 <h3 className="text-lg font-medium text-gray-900">Profit/Loss</h3>
                 <p className={`text-sm ${totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {formatCurrency(totalProfit)}
                 </p>
-              </div>
-            </div>
-          </div>
-        </div>
-        
+                      </div>
+                    </div>
+                      </div>
+                    </div>
+                    
         {/* Search and Filter */}
         <div className="mb-6">
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Search className="h-5 w-5 text-gray-400" />
-            </div>
+                      </div>
             <Input
-              type="text"
+                          type="text"
               placeholder="Search stocks by symbol..."
               className="pl-10"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-        </div>
-        
+                        />
+                      </div>
+                    </div>
+                    
         {/* Stock Cards */}
         <div className="space-y-6">
           {filteredStocks.length === 0 ? (
             <div className="bg-white rounded-lg p-6 text-center border border-gray-200">
               <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-gray-100">
                 <Search className="h-6 w-6 text-gray-600" />
-              </div>
+                      </div>
               <h3 className="mt-2 text-sm font-medium text-gray-900">No stocks found</h3>
               <p className="mt-1 text-sm text-gray-500">
                 {Object.keys(transactionsData).length === 0
@@ -449,7 +493,7 @@ export default function NewTransactionsPage() {
               />
             ))
           )}
-        </div>
+          </div>
       </div>
       
       {/* Transaction Dialog */}

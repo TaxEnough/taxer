@@ -580,7 +580,7 @@ export default function TransactionsPage() {
             <p className="text-gray-600">Loading...</p>
           </div>
         </div>
-      </>
+              </>
     );
   }
 

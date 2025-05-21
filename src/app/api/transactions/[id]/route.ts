@@ -121,7 +121,7 @@ export async function GET(
       const transaction = await getTransactionFromFirestore(transactionId);
       
       if (!transaction) {
-        return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
       }
       
       // Check if transaction belongs to the user
@@ -237,11 +237,11 @@ export async function PUT(
       
       await updateTransactionInFirestore(transactionId, userId, updatedTransaction);
       
-      return NextResponse.json({
-        message: 'Transaction successfully updated',
-        id: transactionId,
-        updatedAt: new Date().toISOString()
-      });
+    return NextResponse.json({
+      message: 'Transaction successfully updated',
+      id: transactionId,
+      updatedAt: new Date().toISOString()
+    });
     } catch (apiError: any) {
       console.error('API error:', apiError);
       return NextResponse.json(

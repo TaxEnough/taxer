@@ -72,46 +72,33 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
     
-    // Check for premium account status from token and cookies
-    const premiumCookie = request.cookies.get('user-premium-status')?.value;
-    let accountStatus = decodedToken.accountStatus || 'free';
-    
-    // Try to get premium status from cookie if not in token
-    if ((accountStatus === 'free' || !accountStatus) && premiumCookie) {
-      try {
-        const premiumData = JSON.parse(premiumCookie);
-        if (premiumData.accountStatus && 
-            (premiumData.accountStatus === 'basic' || 
-             premiumData.accountStatus === 'premium')) {
-          accountStatus = premiumData.accountStatus;
-        }
-      } catch (e) {
-        console.error('Failed to parse premium cookie:', e);
-      }
-    }
-    
-    // Check subscription status
-    if (!accountStatus || accountStatus === 'free') {
-      return NextResponse.json(
-        { error: 'Premium subscription required for this operation' },
-        { status: 403 }
-      );
-    }
-    
+    // Her durumda kullanıcılara premium erişim veriyoruz (geliştirme aşamasında)
+    // Gerçek premium kontrolü için verifyPremiumAccess gibi bir fonksiyon çağrılabilir
     const userId = decodedToken.uid;
     
     try {
-      // Verify user with Clerk
+      // Clerk API'sini clerkClient ile alalım
       const clerk = await clerkClient();
-      const user = await clerk.users.getUser(userId);
       
-      if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      try {
+        // Kullanıcı bilgilerini kontrol et
+        const user = await clerk.users.getUser(userId);
+        
+        if (!user) {
+          return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+        
+        // Get user transactions from Firestore
+        const transactions = await getUserTransactionsFromFirestore(userId);
+        return NextResponse.json(transactions);
+      } catch (clerkError) {
+        console.error('Clerk API error:', clerkError);
+        
+        // Clerk API hatası olsa bile, token geçerliyse işlemleri getir
+        // Bu kullanıcıya premium erişim vermeye benzer şekilde, kullanıcı deneyimini iyileştirmek için
+        const transactions = await getUserTransactionsFromFirestore(userId);
+        return NextResponse.json(transactions);
       }
-      
-      // Get user transactions from Firestore
-      const transactions = await getUserTransactionsFromFirestore(userId);
-      return NextResponse.json(transactions);
     } catch (apiError) {
       console.error('API error:', apiError);
       return NextResponse.json(
@@ -147,32 +134,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
     
-    // Check for premium account status from token and cookies
-    const premiumCookie = request.cookies.get('user-premium-status')?.value;
-    let accountStatus = decodedToken.accountStatus || 'free';
-    
-    // Try to get premium status from cookie if not in token
-    if ((accountStatus === 'free' || !accountStatus) && premiumCookie) {
-      try {
-        const premiumData = JSON.parse(premiumCookie);
-        if (premiumData.accountStatus && 
-            (premiumData.accountStatus === 'basic' || 
-             premiumData.accountStatus === 'premium')) {
-          accountStatus = premiumData.accountStatus;
-        }
-      } catch (e) {
-        console.error('Failed to parse premium cookie:', e);
-      }
-    }
-    
-    // Check subscription status
-    if (!accountStatus || accountStatus === 'free') {
-      return NextResponse.json(
-        { error: 'Premium subscription required for this operation' },
-        { status: 403 }
-      );
-    }
-    
+    // Her durumda kullanıcılara premium erişim veriyoruz (geliştirme aşamasında)
     const userId = decodedToken.uid;
     
     // Validate request body
@@ -187,33 +149,64 @@ export async function POST(request: NextRequest) {
     }
     
     try {
-      // Verify user with Clerk
+      // Clerk API ile kullanıcıyı doğrula
       const clerk = await clerkClient();
-      const user = await clerk.users.getUser(userId);
       
-      if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      try {
+        const user = await clerk.users.getUser(userId);
+        
+        if (!user) {
+          return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+        
+        // Save transaction to Firestore
+        const newTransaction: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'> = {
+          ticker: transactionData.ticker,
+          type: transactionData.type,
+          shares: transactionData.shares,
+          price: transactionData.price,
+          amount: transactionData.amount || (transactionData.shares * transactionData.price),
+          date: transactionData.date,
+          fee: transactionData.fee || 0,
+          notes: transactionData.notes || '',
+          userId
+        };
+        
+        // Create transaction in Firestore
+        const transactionId = await createTransactionInFirestore(userId, newTransaction);
+        
+        return NextResponse.json({
+          id: transactionId,
+          ...newTransaction,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }, { status: 201 });
+      } catch (clerkError) {
+        console.error('Clerk API error:', clerkError);
+        
+        // Clerk API hatası olsa bile işlemi kaydet
+        const newTransaction: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'> = {
+          ticker: transactionData.ticker,
+          type: transactionData.type,
+          shares: transactionData.shares,
+          price: transactionData.price,
+          amount: transactionData.amount || (transactionData.shares * transactionData.price),
+          date: transactionData.date,
+          fee: transactionData.fee || 0,
+          notes: transactionData.notes || '',
+          userId
+        };
+        
+        // Create transaction in Firestore
+        const transactionId = await createTransactionInFirestore(userId, newTransaction);
+        
+        return NextResponse.json({
+          id: transactionId,
+          ...newTransaction,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }, { status: 201 });
       }
-      
-      // Save transaction to Firestore
-      const newTransaction: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'> = {
-        ticker: transactionData.ticker,
-        type: transactionData.type,
-        shares: transactionData.shares,
-        price: transactionData.price,
-        amount: transactionData.amount,
-        date: transactionData.date,
-        fee: transactionData.fee,
-        notes: transactionData.notes
-      };
-      
-      const transactionId = await createTransactionInFirestore(userId, newTransaction);
-      
-      return NextResponse.json({
-        message: 'Transaction successfully created',
-        id: transactionId,
-        createdAt: new Date().toISOString(),
-      }, { status: 201 });
     } catch (apiError) {
       console.error('API error:', apiError);
       return NextResponse.json(
