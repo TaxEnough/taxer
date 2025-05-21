@@ -270,7 +270,14 @@ export async function createBatchTransactionsInFirestore(
  */
 export async function getTransactionsByTicker(userId: string) {
   try {
+    // Kullanıcı işlemlerini getir
     const transactions = await getUserTransactionsFromFirestore(userId);
+    
+    // Eğer hiç işlem yoksa boş obje döndür
+    if (!transactions || transactions.length === 0) {
+      console.log('Kullanıcının hiç işlemi bulunamadı');
+      return {}; // Boş obje dön
+    }
     
     // Group transactions by ticker
     const groupedTransactions: {[key: string]: any} = {};
@@ -287,7 +294,12 @@ export async function getTransactionsByTicker(userId: string) {
             averageCost: 0,
             totalInvested: 0,
             totalFees: 0,
-            currentHoldings: 0
+            currentHoldings: 0,
+            // Eski API uyumluluğu için
+            totalCost: 0,
+            remainingShares: 0,
+            currentValue: 0,
+            totalProfit: 0
           }
         };
       }
@@ -314,14 +326,22 @@ export async function getTransactionsByTicker(userId: string) {
       
       // Current holdings are the total shares we still have
       summary.currentHoldings = summary.totalShares;
+      
+      // Eski API uyumluluğu için
+      summary.totalCost = summary.totalInvested;
+      summary.remainingShares = summary.currentHoldings;
+      summary.currentValue = summary.averageCost * summary.currentHoldings;
+      
+      // Tahmini kâr/zarar hesabı
+      // Gerçek kâr/zarar hesabı için tüm satış işlemlerini analiz etmek gerekir
+      summary.totalProfit = 0; // Başlangıçta sıfır, gerçek hesaplama eklenebilir
     });
     
     // Convert to array and sort by ticker
-    return Object.values(groupedTransactions).sort((a, b) => 
-      a.ticker.localeCompare(b.ticker)
-    );
+    return groupedTransactions;
   } catch (error) {
     console.error('Error getting transactions by ticker:', error);
-    throw error;
+    // Hata durumunda boş obje döndür - sayfa en azından yüklenebilsin
+    return {}; 
   }
 } 

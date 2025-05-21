@@ -118,10 +118,23 @@ export default function NewTransactionsPage() {
           throw new Error(errorData.error || 'Failed to fetch transactions');
         }
         
-        const transactionsData = await response.json();
+        let transactionsData = await response.json();
         console.log('Transactions fetched successfully:', Object.keys(transactionsData).length, 'tickers found');
         
-        setTransactionsData(transactionsData as GroupedTransactions);
+        // Eğer API dizi döndürdüyse (eski format), objeye çevirelim
+        if (Array.isArray(transactionsData)) {
+          console.log('API array returned, converting to object format');
+          const objData: any = {};
+          transactionsData.forEach((item: any) => {
+            if (item && item.ticker) {
+              objData[item.ticker] = item;
+            }
+          });
+          transactionsData = objData;
+        }
+        
+        // Tip güvenliği için any olarak belirtelim
+        setTransactionsData(transactionsData as any);
         
         // Calculate account summary
         let investment = 0;
@@ -152,7 +165,8 @@ export default function NewTransactionsPage() {
           const groupedTransactions = await getTransactionsByTicker(userId);
           console.log('Firebase fetch successful');
           
-          setTransactionsData(groupedTransactions as GroupedTransactions);
+          // groupedTransactions artık doğrudan bir obje olduğu için uygun tipte
+          setTransactionsData(groupedTransactions);
           
           // Calculate account summary
           let investment = 0;
@@ -160,7 +174,7 @@ export default function NewTransactionsPage() {
           let profit = 0;
           let positions = 0;
           
-          Object.values(groupedTransactions).forEach(ticker => {
+          Object.values(groupedTransactions).forEach((ticker: any) => {
             investment += ticker.summary.totalCost || ticker.summary.totalInvested || 0;
             currentValue += ticker.summary.currentValue || ticker.summary.totalInvested || 0;
             profit += ticker.summary.totalProfit || 0;
@@ -193,6 +207,19 @@ export default function NewTransactionsPage() {
       fetchTransactions();
     }
   }, [fetchTransactions, isLoaded, clerkAuth.isLoaded]);
+  
+  // Otomatik işlem ekleme diyalogu göster (loading tamamlandıktan sonra eğer hiç işlem yoksa)
+  useEffect(() => {
+    if (!loading && Object.keys(transactionsData).length === 0 && !dialogOpen) {
+      // Dialog açılmamış ve işlem yoksa açalım
+      setTimeout(() => {
+        setDialogOpen(true);
+        setDialogMode('add');
+        setSelectedTransaction(null);
+        setSelectedTicker('');
+      }, 500); // Biraz bekleyelim ki sayfa tam yüklensin
+    }
+  }, [loading, transactionsData, dialogOpen]);
   
   // Add transaction handler
   const handleAddTransaction = (ticker?: string) => {
@@ -312,11 +339,39 @@ export default function NewTransactionsPage() {
       <div className="bg-gray-50 min-h-screen">
       <Navbar />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="flex justify-center items-center h-64">
-            <div className="text-center">
-              <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary-600" />
-              <p className="mt-2 text-gray-600">Preparing to add transactions...</p>
+          <div className="flex flex-col md:flex-row justify-between items-center mb-8">
+            <div>
+              <div className="flex items-center mb-2">
+                <Link href="/transactions" className="inline-flex items-center text-gray-600 hover:text-gray-900 mr-2">
+                  <ArrowLeft className="h-4 w-4 mr-1" />
+                  Back
+                </Link>
+                <h1 className="text-3xl font-bold">Manage Transactions</h1>
+              </div>
+              <p className="text-gray-500">
+                Track and manage your investment transactions by stock
+              </p>
             </div>
+            <div className="mt-4 md:mt-0">
+              <Button 
+                onClick={() => handleAddTransaction()}
+                className="inline-flex items-center px-4 py-2 bg-primary-600 border border-transparent rounded-md font-semibold text-xs text-white tracking-widest hover:bg-primary-700 active:bg-primary-800 focus:outline-none focus:border-primary-800 focus:ring ring-primary-300 disabled:opacity-25 transition ease-in-out duration-150"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Add New Transaction
+              </Button>
+            </div>
+          </div>
+          
+          {/* Loading indicator */}
+          <div className="bg-white rounded-lg p-6 text-center border border-gray-200">
+            <div className="flex justify-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary-600" />
+            </div>
+            <p className="mt-2 text-gray-600">Loading your transactions...</p>
+            <p className="mt-1 text-sm text-gray-500">
+              You can click on "Add New Transaction" button to add your first transaction while we're preparing your data.
+            </p>
           </div>
         </div>
       </div>
