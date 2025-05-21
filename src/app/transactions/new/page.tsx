@@ -187,14 +187,17 @@ export default function NewTransactionsPage() {
                   name="ticker"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="font-medium">Stock Symbol</FormLabel>
+                      <FormLabel className="font-medium text-gray-700 text-base">Stock Symbol</FormLabel>
                       <FormControl>
                         <Input 
                           {...field} 
                           placeholder="e.g. AAPL" 
-                          className="w-full"
+                          className="w-full h-11 text-base border-gray-300 focus:border-primary-500 focus:ring-primary-500 shadow-sm"
                         />
                       </FormControl>
+                      <FormDescription className="text-xs text-gray-500">
+                        Enter the stock ticker symbol for this transaction
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -206,21 +209,28 @@ export default function NewTransactionsPage() {
                   name="type"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="font-medium">Transaction Type</FormLabel>
+                      <FormLabel className="font-medium text-gray-700 text-base">Transaction Type</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="w-full h-11 text-base border-gray-300 focus:border-primary-500 focus:ring-primary-500 shadow-sm">
                             <SelectValue placeholder="Select transaction type" />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent>
+                        <SelectContent className="bg-white border-gray-200 shadow-lg">
                           {transactionTypeOptions.map(option => (
-                            <SelectItem key={option.value} value={option.value}>
+                            <SelectItem 
+                              key={option.value} 
+                              value={option.value}
+                              className="text-base hover:bg-gray-100"
+                            >
                               {option.label}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
+                      <FormDescription className="text-xs text-gray-500">
+                        Buy, sell, or dividend transaction
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -303,7 +313,7 @@ export default function NewTransactionsPage() {
                             </Button>
                           </FormControl>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
+                        <PopoverContent className="w-auto p-0 bg-white border-gray-200 shadow-lg z-50" align="start">
                           <Calendar
                             mode="single"
                             selected={field.value}
@@ -312,6 +322,7 @@ export default function NewTransactionsPage() {
                               date > new Date() || date < new Date("1900-01-01")
                             }
                             initialFocus
+                            className="bg-white"
                           />
                         </PopoverContent>
                       </Popover>
