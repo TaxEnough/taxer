@@ -2,7 +2,7 @@ export interface Transaction {
   id: string;
   date: string;
   ticker: string;
-  type: "buy" | "sell" | "dividend";
+  type: "buy" | "sell";
   shares: number;
   price: number;
   amount: number;
@@ -13,10 +13,9 @@ export interface Transaction {
   userId?: string;
 }
 
-export type TransactionType = "buy" | "sell" | "dividend";
+export type TransactionType = "buy" | "sell";
 
 export const transactionTypeOptions = [
-  { value: "buy", label: "Alış" },
-  { value: "sell", label: "Satış" },
-  { value: "dividend", label: "Temettü" },
+  { value: "buy", label: "Buy" },
+  { value: "sell", label: "Sell" },
 ]; 

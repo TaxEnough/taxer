@@ -43,7 +43,7 @@ import { Calendar } from '@/components/ui/calendar';
 // Form validation schema
 const transactionSchema = z.object({
   ticker: z.string().min(1, "Stock symbol is required"),
-  type: z.enum(["buy", "sell", "dividend"], {
+  type: z.enum(["buy", "sell"], {
     required_error: "Please select a transaction type",
   }),
   shares: z.number()
@@ -78,8 +78,8 @@ export default function NewTransactionsPage() {
     defaultValues: {
       ticker: '',
       type: 'buy',
-      shares: 0,
-      price: 0,
+      shares: undefined,
+      price: undefined,
       amount: 0,
       date: new Date(),
       fee: 0,
@@ -170,7 +170,6 @@ export default function NewTransactionsPage() {
               <ArrowLeft className="h-4 w-4 mr-1" />
               Back to Transactions
             </Link>
-            <h1 className="text-3xl font-bold">Add New Transaction</h1>
           </div>
           <p className="text-gray-500">
             Record a new investment transaction to your portfolio
@@ -249,11 +248,11 @@ export default function NewTransactionsPage() {
                           step="0.0001"
                           min="0.0001"
                           onChange={(e) => {
-                            const value = parseFloat(e.target.value);
-                            field.onChange(isNaN(value) ? 0 : value);
+                            const value = e.target.value === '' ? undefined : parseFloat(e.target.value);
+                            field.onChange(isNaN(value as number) ? undefined : value);
                           }}
-                          value={field.value}
-                          className="w-full"
+                          value={field.value === undefined ? '' : field.value}
+                          className="w-full h-11 text-base border-gray-300 focus:border-primary-500 focus:ring-primary-500 shadow-sm"
                         />
                       </FormControl>
                       <FormMessage />
@@ -274,11 +273,11 @@ export default function NewTransactionsPage() {
                           step="0.01"
                           min="0"
                           onChange={(e) => {
-                            const value = parseFloat(e.target.value);
-                            field.onChange(isNaN(value) ? 0 : value);
+                            const value = e.target.value === '' ? undefined : parseFloat(e.target.value);
+                            field.onChange(isNaN(value as number) ? undefined : value);
                           }}
-                          value={field.value}
-                          className="w-full"
+                          value={field.value === undefined ? '' : field.value}
+                          className="w-full h-11 text-base border-gray-300 focus:border-primary-500 focus:ring-primary-500 shadow-sm"
                           placeholder="0.00"
                         />
                       </FormControl>
@@ -344,12 +343,11 @@ export default function NewTransactionsPage() {
                           step="0.01"
                           min="0"
                           onChange={(e) => {
-                            const value = parseFloat(e.target.value);
-                            field.onChange(isNaN(value) ? 0 : value);
+                            const value = e.target.value === '' ? undefined : parseFloat(e.target.value);
+                            field.onChange(isNaN(value as number) ? undefined : value);
                           }}
-                          value={field.value}
-                          className="w-full"
-                          placeholder="0.00"
+                          value={field.value === undefined ? '' : field.value}
+                          className="w-full h-11 text-base border-gray-300 focus:border-primary-500 focus:ring-primary-500 shadow-sm"
                         />
                       </FormControl>
                       <FormMessage />
@@ -389,9 +387,7 @@ export default function NewTransactionsPage() {
                 <p className="text-sm text-gray-500 mt-1">
                   {form.getValues('type') === 'buy' 
                     ? "Total cost including commission/fees"
-                    : form.getValues('type') === 'sell'
-                      ? "Net proceeds after commission/fees"
-                      : "Dividend amount"}
+                    : "Net proceeds after commission/fees"}
                 </p>
               </div>
               
