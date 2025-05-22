@@ -251,7 +251,7 @@ export default function NewTransactionsPage() {
         <div>
           <h1 className="text-3xl font-bold mb-2">Your Investments</h1>
           <p className="text-gray-500">
-            Track your investment journey and monitor your portfolio performance
+            Track your investment journal and monitor your portfolio performance
           </p>
         </div>
         <Button 
@@ -328,7 +328,7 @@ export default function NewTransactionsPage() {
         <div className="bg-blue-50 border border-blue-100 rounded-md p-8 text-center">
           <h3 className="text-xl font-medium mb-2">No investments yet</h3>
           <p className="text-gray-600 mb-4">
-            Start tracking your investment journey by adding your first transaction.
+            Start tracking your investment journal by adding your first transaction.
           </p>
           <Button onClick={() => handleAddTransaction()}>
             <Plus className="mr-2 h-4 w-4" /> Add Your First Transaction
