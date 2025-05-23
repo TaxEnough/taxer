@@ -3,10 +3,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
-import TransactionList from '@/components/transactions/TransactionList';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { Plus, Upload, FileText, X } from 'lucide-react';
+import { Plus, Upload, FileText, X, ChevronDown, ChevronRight, Pencil, Trash2, ExternalLink } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getAuthTokenFromClient } from '@/lib/auth-client';
 import { parse } from 'papaparse';
@@ -35,21 +34,37 @@ interface ColumnMapping {
 interface Transaction {
   id: string;
   ticker: string;
-  transactionType: 'Buy' | 'Sell';
-  numberOfShares: number;
-  pricePerShare: number;
-  totalAmount: number;
-  transactionDate: string | any;
-  commissionFees?: number;
+  type: 'buy' | 'sell';
+  shares: number;
+  price: number;
+  amount: number;
+  date: string;
+  fee?: number;
   notes?: string;
+}
+
+// Stock Group interface
+interface StockGroup {
+  ticker: string;
+  transactions: Transaction[];
+  totalShares: number;
+  totalBuyShares: number; 
+  totalSellShares: number;
+  averageCost: number;
+  totalCost: number;
+  totalFees: number;
+  remainingShares: number;
+  remainingValue: number;
+  realizedProfitLoss: number;
+  isOpen: boolean;
 }
 
 export default function TransactionsPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [pageLoading, setPageLoading] = useState(true);
-  const [transactionCount, setTransactionCount] = useState(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [stockGroups, setStockGroups] = useState<StockGroup[]>([]);
   
   // Clerk Auth kullan - useClerkAuthCache hook'unu ekle
   const { isLoaded: isClerkLoaded, isSignedIn: isClerkSignedIn, user: clerkUser } = useUser();
@@ -80,6 +95,77 @@ export default function TransactionsPage() {
     fees: '',
     notes: ''
   });
+
+  // Group transactions by ticker
+  const groupTransactionsByStock = useCallback((transactions: Transaction[]) => {
+    // Group transactions by ticker
+    const groupedByTicker: { [key: string]: Transaction[] } = {};
+    
+    transactions.forEach(transaction => {
+      if (!groupedByTicker[transaction.ticker]) {
+        groupedByTicker[transaction.ticker] = [];
+      }
+      
+      groupedByTicker[transaction.ticker].push(transaction);
+    });
+    
+    // Calculate statistics for each stock group
+    const groups: StockGroup[] = Object.keys(groupedByTicker).map(ticker => {
+      const tickerTransactions = groupedByTicker[ticker];
+      
+      // Sort transactions by date (oldest first)
+      tickerTransactions.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      
+      // Calculate buy and sell totals
+      const buyTransactions = tickerTransactions.filter(t => t.type === 'buy');
+      const sellTransactions = tickerTransactions.filter(t => t.type === 'sell');
+      
+      const totalBuyShares = buyTransactions.reduce((sum, t) => sum + t.shares, 0);
+      const totalSellShares = sellTransactions.reduce((sum, t) => sum + t.shares, 0);
+      const remainingShares = totalBuyShares - totalSellShares;
+      
+      // Calculate total cost and fees
+      const totalCost = buyTransactions.reduce((sum, t) => sum + (t.amount || t.price * t.shares), 0);
+      const totalFees = tickerTransactions.reduce((sum, t) => sum + (t.fee || 0), 0);
+      
+      // Calculate average cost
+      const averageCost = totalBuyShares > 0 ? (totalCost + totalFees) / totalBuyShares : 0;
+      
+      // Calculate realized profit/loss from sold shares
+      let realizedProfitLoss = 0;
+      
+      sellTransactions.forEach(sell => {
+        const sellAmount = sell.amount || (sell.price * sell.shares);
+        const costBasis = averageCost * sell.shares;
+        const sellFee = sell.fee || 0;
+        
+        realizedProfitLoss += (sellAmount - sellFee) - costBasis;
+      });
+      
+      // Calculate remaining value
+      const remainingValue = remainingShares * averageCost;
+      
+      return {
+        ticker,
+        transactions: tickerTransactions,
+        totalShares: totalBuyShares,
+        totalBuyShares,
+        totalSellShares,
+        averageCost,
+        totalCost,
+        totalFees,
+        remainingShares,
+        remainingValue,
+        realizedProfitLoss,
+        isOpen: true // Default expanded
+      };
+    });
+    
+    // Sort groups by ticker
+    groups.sort((a, b) => a.ticker.localeCompare(b.ticker));
+    
+    return groups;
+  }, []);
 
   // Fetch transactions with auth check
   const fetchTransactions = useCallback(async () => {
@@ -131,8 +217,8 @@ export default function TransactionsPage() {
       
       if (!transactionsData || !Array.isArray(transactionsData)) {
         console.log('No transactions found for user');
-        setTransactionCount(0);
         setTransactions([]);
+        setStockGroups([]);
         setPageLoading(false);
         return;
       }
@@ -141,24 +227,28 @@ export default function TransactionsPage() {
       const fetchedTransactions: Transaction[] = transactionsData.map((item: any) => ({
         id: item.id,
         ticker: item.ticker || '',
-        transactionType: item.type === 'buy' ? 'Buy' : 'Sell',
-        numberOfShares: item.shares || 0,
-        pricePerShare: item.price || 0,
-        totalAmount: item.amount || 0,
-        transactionDate: item.date || '',
-        commissionFees: item.fee || 0,
+        type: item.type || 'buy',
+        shares: parseFloat(item.shares) || 0,
+        price: parseFloat(item.price) || 0,
+        amount: parseFloat(item.amount) || 0,
+        date: item.date || '',
+        fee: parseFloat(item.fee) || 0,
         notes: item.notes || '',
       }));
       
       setTransactions(fetchedTransactions);
-      setTransactionCount(fetchedTransactions.length);
+      
+      // Group transactions by stock
+      const groups = groupTransactionsByStock(fetchedTransactions);
+      setStockGroups(groups);
+      
       setPageLoading(false);
     } catch (err: any) {
       console.error('Error fetching transactions:', err);
       setError(err.message || 'Failed to load transactions');
       setPageLoading(false);
     }
-  }, [router, user, clerkAuth.isSignedIn, isPremium]);
+  }, [router, user, clerkAuth.isSignedIn, isPremium, groupTransactionsByStock]);
 
   // Initialize and load transactions
   useEffect(() => {
@@ -206,6 +296,15 @@ export default function TransactionsPage() {
     }
   };
 
+  // Toggle stock group expand/collapse
+  const toggleStockGroup = (ticker: string) => {
+    setStockGroups(prevGroups => 
+      prevGroups.map(group => 
+        group.ticker === ticker ? { ...group, isOpen: !group.isOpen } : group
+      )
+    );
+  };
+
   // Format currency
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -214,359 +313,27 @@ export default function TransactionsPage() {
     }).format(amount);
   };
 
-  // Standard column names (includes variations)
-  const standardColumns = {
-    ticker: ['ticker', 'symbol', 'stock', 'code'],
-    transactionType: ['transaction type', 'type', 'transaction', 'trade type', 'buy/sell'],
-    numberOfShares: ['number of shares', 'shares', 'quantity', 'amount'],
-    sharePrice: ['price per share', 'price', 'share price', 'unit price'],
-    date: ['transaction date', 'date', 'trade date'],
-    fees: ['commission', 'fees', 'fee'],
-    notes: ['notes', 'note', 'comment']
+  // Format number
+  const formatNumber = (num: number) => {
+    return new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(num);
   };
 
-  // Pre-process file
-  const processInitialFile = (data: ParsedTransaction[], headers: string[]) => {
-    setFileData(data);
-    setHeaders(headers);
-    
-    // Automatic column mapping
-    const newMapping: ColumnMapping = {
-      ticker: '',
-      transactionType: '',
-      numberOfShares: '',
-      sharePrice: '',
-      date: '',
-      fees: '',
-      notes: ''
-    };
-    
-    // Find potential match for each header
-    headers.forEach(header => {
-      const headerLower = header.toLowerCase().trim();
-      
-      // Check for each standard column
-      Object.entries(standardColumns).forEach(([key, possibleNames]) => {
-        if (possibleNames.some(name => headerLower.includes(name)) && !newMapping[key as keyof ColumnMapping]) {
-          newMapping[key as keyof ColumnMapping] = header;
-        }
-      });
-    });
-    
-    setColumnMapping(newMapping);
-    setIsFileLoaded(true);
-    setIsAnalyzing(false);
-    setSuccess('File processed successfully. Please map the columns below.');
-  };
-  
-  // Process CSV file
-  const processCSV = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const csvText = e.target?.result as string;
-      parse(csvText, {
-        header: true,
-        complete: (results) => {
-          try {
-            if (!results.data || !Array.isArray(results.data) || results.data.length === 0) {
-              throw new Error('Invalid CSV file format');
-            }
-            
-            const headers = results.meta.fields || [];
-            if (headers.length === 0) {
-              throw new Error('No column headers found in CSV file');
-            }
-
-            processInitialFile(results.data as ParsedTransaction[], headers);
-            setError(null);
-          } catch (err) {
-            setError(err instanceof Error ? err.message : 'Error processing file');
-            setIsAnalyzing(false);
-          }
-        },
-        error: (error) => {
-          setError(`File reading error: ${error.message}`);
-          setIsAnalyzing(false);
-        }
-      });
-    };
-    reader.onerror = () => {
-      setError('Error reading the file');
-      setIsAnalyzing(false);
-    };
-    reader.readAsText(file);
+  // Format percentage
+  const formatPercentage = (num: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'percent',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(num / 100);
   };
 
-  // Process Excel file
-  const processExcel = async (file: File) => {
-    try {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const data = e.target?.result;
-          const workbook = XLSX.read(data, { type: 'binary' });
-          const sheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[sheetName];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet);
-          
-          if (jsonData.length === 0) {
-            throw new Error('Not enough data found in Excel file');
-          }
-
-          // Get headers
-          const sampleData = jsonData[0] as Record<string, unknown>;
-          const headers = Object.keys(sampleData);
-          
-          processInitialFile(jsonData as ParsedTransaction[], headers);
-          setError(null);
-        } catch (error) {
-          setError(error instanceof Error ? error.message : 'Error processing Excel file');
-          setIsAnalyzing(false);
-        }
-      };
-      reader.onerror = (error) => {
-        setError('File reading error');
-        setIsAnalyzing(false);
-      };
-      reader.readAsBinaryString(file);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error processing Excel file');
-      setIsAnalyzing(false);
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setFile(e.target.files[0]);
-      setError(null);
-      setSuccess(null);
-      setIsFileLoaded(false);
-      setIsAnalyzing(true);
-      
-      const file = e.target.files[0];
-      const fileExt = file.name.split('.').pop()?.toLowerCase();
-
-      if (fileExt === 'csv') {
-        processCSV(file);
-      } else if (fileExt === 'xlsx' || fileExt === 'xls') {
-        processExcel(file);
-      } else {
-        setError('Unsupported file format. Please upload a CSV or Excel file.');
-        setIsAnalyzing(false);
-      }
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      setFile(e.dataTransfer.files[0]);
-      setError(null);
-      setSuccess(null);
-      setIsFileLoaded(false);
-      setIsAnalyzing(true);
-      
-      const file = e.dataTransfer.files[0];
-      const fileExt = file.name.split('.').pop()?.toLowerCase();
-      
-      if (fileExt === 'csv') {
-        processCSV(file);
-      } else if (fileExt === 'xlsx' || fileExt === 'xls') {
-        processExcel(file);
-      } else {
-        setError('Unsupported file format. Please upload a CSV or Excel file.');
-        setIsAnalyzing(false);
-      }
-    }
-  };
-  
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-  };
-  
-  const handleMappingChange = (field: keyof ColumnMapping, value: string) => {
-    setColumnMapping({
-      ...columnMapping,
-      [field]: value
-    });
-  };
-
-  const toggleRowSelection = (index: number) => {
-    if (selectedRows.includes(fileData[index])) {
-      setSelectedRows(selectedRows.filter(row => row !== fileData[index]));
-    } else {
-      setSelectedRows([...selectedRows, fileData[index]]);
-    }
-  };
-
-  const toggleAllRows = () => {
-    if (selectedRows.length === fileData.length) {
-      setSelectedRows([]);
-    } else {
-      setSelectedRows([...fileData]);
-    }
-  };
-
-  const processSelectedRows = async () => {
-    setUploadLoading(true);
-    setError(null);
-    
-    try {
-      // Check if required fields are mapped
-      const requiredFields: (keyof ColumnMapping)[] = ['ticker', 'transactionType', 'numberOfShares', 'sharePrice', 'date'];
-      const missingFields = requiredFields.filter(field => !columnMapping[field]);
-      
-      if (missingFields.length > 0) {
-        throw new Error(`Required columns not mapped: ${missingFields.join(', ')}`);
-      }
-      
-      // Get token
-      const token = await getAuthTokenFromClient();
-      
-      if (!token) {
-        throw new Error('Authentication token not available');
-      }
-      
-      // Prepare transactions for API
-      const transactions = selectedRows.map(row => {
-        const ticker = row[columnMapping.ticker]?.toString().trim();
-        const typeRaw = row[columnMapping.transactionType]?.toString().toLowerCase().trim();
-        const sharesRaw = row[columnMapping.numberOfShares]?.toString().replace(/,/g, '');
-        const priceRaw = row[columnMapping.sharePrice]?.toString().replace(/[^0-9.-]+/g, '');
-        const dateRaw = row[columnMapping.date];
-        const feesRaw = columnMapping.fees ? row[columnMapping.fees]?.toString().replace(/[^0-9.-]+/g, '') : '0';
-        const notes = columnMapping.notes ? row[columnMapping.notes]?.toString() : '';
-        
-        if (!ticker || !typeRaw || !sharesRaw || !priceRaw || !dateRaw) {
-          throw new Error('Missing required transaction data in selected rows');
-        }
-        
-        const shares = parseFloat(sharesRaw);
-        const price = parseFloat(priceRaw);
-        const amount = shares * price;
-        const fee = feesRaw ? parseFloat(feesRaw) : 0;
-        
-        return {
-          ticker: ticker.toUpperCase(),
-          type: mapTransactionType(typeRaw),
-          shares,
-          price,
-          amount,
-          date: formatDate(dateRaw),
-          fee,
-          notes
-        };
-      });
-      
-      if (transactions.length === 0) {
-        throw new Error('No valid transactions to upload');
-      }
-      
-      // Upload to API
-      const response = await fetch('/api/transactions/batch', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ transactions })
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to upload transactions');
-      }
-      
-      const resultData = await response.json();
-      
-      // Successfully uploaded
-      setSuccess(`${resultData.count || transactions.length} transactions uploaded successfully!`);
-      setUploadLoading(false);
-      
-      // Refresh transaction list
-      fetchTransactions();
-      
-      // Reset upload panel after a short delay
-      setTimeout(() => {
-        resetUploadPanel();
-      }, 2000);
-      
-    } catch (err: any) {
-      console.error('Error processing transactions:', err);
-      setError(err.message || 'Failed to process transactions');
-      setUploadLoading(false);
-    }
-  };
-
-  // Helper to map transaction type variations to standard types
-  const mapTransactionType = (type: string): 'buy' | 'sell' | 'dividend' => {
-    const lowerType = type.toLowerCase().trim();
-    
-    if (lowerType.includes('buy') || lowerType.includes('alım') || lowerType.includes('alim') || lowerType === 'b') {
-      return 'buy';
-    } else if (lowerType.includes('sell') || lowerType.includes('satım') || lowerType.includes('satim') || lowerType === 's') {
-      return 'sell';
-    } else if (lowerType.includes('div') || lowerType.includes('temettü') || lowerType.includes('dividend')) {
-      return 'dividend';
-    }
-    
-    // Default to buy if unknown
-    return 'buy';
-  };
-
-  // Helper to format dates consistently
-  const formatDate = (dateString: string): string => {
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) {
-        // Try alternate formats if standard parsing fails
-        const parts = dateString.split(/[/.-]/);
-        if (parts.length === 3) {
-          // Try different date formats (MM/DD/YYYY, DD/MM/YYYY, etc.)
-          const possibleFormats = [
-            new Date(`${parts[2]}-${parts[0]}-${parts[1]}`), // MM/DD/YYYY
-            new Date(`${parts[2]}-${parts[1]}-${parts[0]}`), // DD/MM/YYYY
-            new Date(`${parts[0]}-${parts[1]}-${parts[2]}`), // YYYY/MM/DD
-          ];
-          
-          for (const format of possibleFormats) {
-            if (!isNaN(format.getTime())) {
-              date.setTime(format.getTime());
-              break;
-            }
-          }
-        }
-      }
-      
-      if (isNaN(date.getTime())) {
-        // If all parsing attempts fail, return original string
-        return dateString;
-      }
-      
-      // Format as YYYY-MM-DD for API
-      return date.toISOString().split('T')[0];
-    } catch (error) {
-      return dateString;
-    }
-  };
-
-  const resetUploadPanel = () => {
-    setFile(null);
-    setFileData([]);
-    setHeaders([]);
-    setIsFileLoaded(false);
-    setSelectedRows([]);
-    setColumnMapping({
-      ticker: '',
-      transactionType: '',
-      numberOfShares: '',
-      sharePrice: '',
-      date: '',
-      fees: '',
-      notes: ''
-    });
-    setError(null);
-    setSuccess(null);
+  // Format date
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return isNaN(date.getTime()) ? dateString : date.toLocaleDateString();
   };
 
   // Loading state
@@ -580,7 +347,7 @@ export default function TransactionsPage() {
             <p className="text-gray-600">Loading...</p>
           </div>
         </div>
-              </>
+      </>
     );
   }
 
@@ -622,64 +389,8 @@ export default function TransactionsPage() {
           </div>
         </div>
 
-        {/* Upload panel - shown conditionally */}
-        {showUploadPanel && (
-          <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-5">
-            <div className="flex justify-between items-start mb-4">
-              <h2 className="text-lg font-medium text-gray-900">Import Transactions</h2>
-              <button 
-                onClick={() => setShowUploadPanel(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            
-            {!isFileLoaded ? (
-              <div 
-                className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center"
-                onDrop={(e) => {
-                  e.preventDefault();
-                  if (e.dataTransfer.files?.length) {
-                    setFile(e.dataTransfer.files[0]);
-                    // Process file logic would go here
-                  }
-                }}
-                onDragOver={(e) => e.preventDefault()}
-              >
-                <div className="mx-auto flex justify-center">
-                  <FileText className="h-10 w-10 text-gray-400" />
-                </div>
-                <p className="mt-2 text-sm font-medium text-gray-900">
-                  Drag and drop your CSV or Excel file here
-                </p>
-                <p className="mt-1 text-xs text-gray-500">
-                  Supported formats: CSV, XLSX, XLS
-                </p>
-                <input
-                  type="file"
-                  accept=".csv,.xlsx,.xls"
-                  onChange={handleFileChange}
-                  className="hidden"
-                  id="file-upload"
-                />
-                <label htmlFor="file-upload">
-                  <div className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 cursor-pointer">
-                    Select File
-                  </div>
-                </label>
-              </div>
-            ) : (
-              <div>
-                {/* File loaded view would go here */}
-                <p>File processing interface would appear here</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        {/* Stats Cards showing portfolio summary */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
             <div className="flex items-center">
               <div className="flex-shrink-0 bg-primary-100 rounded-md p-3">
@@ -688,8 +399,10 @@ export default function TransactionsPage() {
                 </svg>
               </div>
               <div className="ml-5">
-                <h3 className="text-lg font-medium text-gray-900">Transactions</h3>
-                <p className="text-gray-500 text-sm">Total: {transactionCount}</p>
+                <h3 className="text-sm font-medium text-gray-500">Total Investments</h3>
+                <p className="text-lg font-semibold text-gray-900">
+                  {formatCurrency(stockGroups.reduce((sum, group) => sum + group.remainingValue, 0))}
+                </p>
               </div>
             </div>
           </div>
@@ -702,32 +415,57 @@ export default function TransactionsPage() {
                 </svg>
               </div>
               <div className="ml-5">
-                <h3 className="text-lg font-medium text-gray-900">Profit</h3>
-                <p className="text-gray-500 text-sm">Calculate in Reports</p>
+                <h3 className="text-sm font-medium text-gray-500">Realized Profit/Loss</h3>
+                <p className={`text-lg font-semibold ${
+                  stockGroups.reduce((sum, group) => sum + group.realizedProfitLoss, 0) >= 0 
+                  ? 'text-green-600' 
+                  : 'text-red-600'}`}>
+                  {formatCurrency(stockGroups.reduce((sum, group) => sum + group.realizedProfitLoss, 0))}
+                </p>
               </div>
             </div>
           </div>
           
           <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
             <div className="flex items-center">
-              <div className="flex-shrink-0 bg-red-100 rounded-md p-3">
-                <svg className="h-6 w-6 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="flex-shrink-0 bg-blue-100 rounded-md p-3">
+                <svg className="h-6 w-6 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
               </div>
               <div className="ml-5">
-                <h3 className="text-lg font-medium text-gray-900">Tax Estimate</h3>
-                <p className="text-gray-500 text-sm">View in Reports</p>
+                <h3 className="text-sm font-medium text-gray-500">Total Stocks</h3>
+                <p className="text-lg font-semibold text-gray-900">
+                  {stockGroups.length}
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
+            <div className="flex items-center">
+              <div className="flex-shrink-0 bg-orange-100 rounded-md p-3">
+                <svg className="h-6 w-6 text-orange-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </div>
+              <div className="ml-5">
+                <h3 className="text-sm font-medium text-gray-500">Total Transactions</h3>
+                <p className="text-lg font-semibold text-gray-900">
+                  {transactions.length}
+                </p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Transaction List */}
-        <div className="bg-white rounded-lg">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Transaction History</h2>
-          {transactions.length === 0 ? (
-            <div className="bg-white shadow-sm rounded-lg p-6 text-center">
+        <div className="bg-white rounded-lg shadow-sm">
+          <h2 className="text-xl font-medium text-gray-900 p-6 border-b">Transaction History</h2>
+          
+          {stockGroups.length === 0 ? (
+            <div className="p-6 text-center">
               <svg
                 className="mx-auto h-12 w-12 text-gray-400"
                 fill="none"
@@ -743,7 +481,7 @@ export default function TransactionsPage() {
                 />
               </svg>
               <h3 className="mt-2 text-sm font-medium text-gray-900">No transactions</h3>
-              <p className="mt-1 text-sm text-gray-500">Get started by creating a new transaction.</p>
+              <p className="mt-1 text-sm text-gray-500">Start tracking your investment journal by adding a new transaction.</p>
               <div className="mt-6">
                 <button
                   type="button"
@@ -768,82 +506,189 @@ export default function TransactionsPage() {
               </div>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Ticker
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Type
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Shares
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Price
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Total
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {transactions.map((transaction) => (
-                    <tr key={transaction.id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {transaction.ticker}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <span
-                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            transaction.transactionType === 'Buy'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-red-100 text-red-800'
-                          }`}
-                        >
-                          {transaction.transactionType}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {transaction.numberOfShares}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatCurrency(transaction.pricePerShare)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatCurrency(transaction.totalAmount)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {typeof transaction.transactionDate === 'string' 
-                          ? transaction.transactionDate 
-                          : formatDate(String(transaction.transactionDate))}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <button
-                          onClick={() => handleDeleteTransaction(transaction.id)}
-                          className="text-red-600 hover:text-red-900 mr-2"
-                        >
-                          Delete
-                        </button>
-                        <button
-                          onClick={() => router.push(`/transactions/${transaction.id}`)}
-                          className="text-primary-600 hover:text-primary-900"
-                        >
-                          View
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div>
+              {stockGroups.map(group => (
+                <div key={group.ticker} className="border-b last:border-b-0">
+                  {/* Stock Group Header */}
+                  <div 
+                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50"
+                    onClick={() => toggleStockGroup(group.ticker)}
+                  >
+                    <div className="flex items-center">
+                      {group.isOpen ? (
+                        <ChevronDown className="h-5 w-5 text-gray-500 mr-2" />
+                      ) : (
+                        <ChevronRight className="h-5 w-5 text-gray-500 mr-2" />
+                      )}
+                      <h3 className="text-lg font-medium text-gray-900">{group.ticker}</h3>
+                      <span className="ml-2 text-sm text-gray-500">{group.remainingShares > 0 ? formatNumber(group.remainingShares) + ' shares' : '(Closed Position)'}</span>
+                    </div>
+                    
+                    <div className="flex items-center space-x-4">
+                      <div className="text-right">
+                        <div className="text-sm text-gray-500">Avg. Cost</div>
+                        <div className="font-medium">{formatCurrency(group.averageCost)}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm text-gray-500">Current Value</div>
+                        <div className="font-medium">{formatCurrency(group.remainingValue)}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm text-gray-500">Realized P/L</div>
+                        <div className={`font-medium ${group.realizedProfitLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {formatCurrency(group.realizedProfitLoss)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Transactions Table */}
+                  {group.isOpen && (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Type
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Date
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Shares
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Price
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Fees
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Total
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Avg. Cost
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              P/L
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {group.transactions.map((transaction) => {
+                            // Calculate profit/loss for sell transactions
+                            const isProfitLossRelevant = transaction.type === 'sell';
+                            const costBasis = group.averageCost * transaction.shares;
+                            const transactionTotal = transaction.amount || (transaction.price * transaction.shares);
+                            const profitLoss = isProfitLossRelevant ? transactionTotal - costBasis - (transaction.fee || 0) : 0;
+                            
+                            return (
+                              <tr key={transaction.id} className="hover:bg-gray-50">
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span
+                                    className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                      transaction.type === 'buy'
+                                        ? 'bg-green-100 text-green-800'
+                                        : 'bg-red-100 text-red-800'
+                                    }`}
+                                  >
+                                    {transaction.type === 'buy' ? 'Buy' : 'Sell'}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {formatDate(transaction.date)}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
+                                  {formatNumber(transaction.shares)}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
+                                  {formatCurrency(transaction.price)}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
+                                  {formatCurrency(transaction.fee || 0)}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
+                                  {formatCurrency(transactionTotal)}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
+                                  {transaction.type === 'buy' ? formatCurrency(group.averageCost) : '-'}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                                  {isProfitLossRelevant ? (
+                                    <span className={profitLoss >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                      {formatCurrency(profitLoss)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-400">-</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                  <div className="flex justify-center space-x-2">
+                                    <button
+                                      onClick={() => router.push(`/transactions/${transaction.id}`)}
+                                      className="p-1 rounded-full hover:bg-gray-100"
+                                      title="View Details"
+                                    >
+                                      <ExternalLink className="h-4 w-4 text-gray-500" />
+                                    </button>
+                                    <button
+                                      onClick={() => router.push(`/transactions/edit/${transaction.id}`)}
+                                      className="p-1 rounded-full hover:bg-gray-100"
+                                      title="Edit"
+                                    >
+                                      <Pencil className="h-4 w-4 text-gray-500" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteTransaction(transaction.id)}
+                                      className="p-1 rounded-full hover:bg-gray-100"
+                                      title="Delete"
+                                    >
+                                      <Trash2 className="h-4 w-4 text-red-500" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          
+                          {/* Summary row */}
+                          <tr className="bg-gray-50">
+                            <td colSpan={2} className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                              Summary
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
+                              {formatNumber(group.remainingShares)} (remaining)
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
+                              {formatCurrency(group.averageCost)} (avg)
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
+                              {formatCurrency(group.totalFees)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
+                              {formatCurrency(group.remainingValue)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
+                              -
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">
+                              <span className={group.realizedProfitLoss >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                {formatCurrency(group.realizedProfitLoss)}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-center">
+                              -
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>
