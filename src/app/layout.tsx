@@ -15,8 +15,34 @@ import { GoogleAnalytics } from '@next/third-parties/google'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Tax Enough | Your Tax and Investment Tools Assistant',
-  description: 'Calculate your tax obligations from stock investments in the US quickly and accurately.',
+  title: 'Tax Enough - Tax and Investment Tools',
+  description: 'Free tax calculation and investment tracking tool',
+  metadataBase: new URL('https://taxenough.com'),
+  openGraph: {
+    title: 'Tax Enough - Tax and Investment Tools',
+    description: 'Free tax calculation and investment tracking tool',
+    url: 'https://taxenough.com',
+    siteName: 'Tax Enough',
+    locale: 'en_US',
+    type: 'website',
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+  alternates: {
+    canonical: 'https://taxenough.com',
+  },
+  verification: {
+    google: 'your-google-verification-code', // Google Search Console doğrulama kodunuzu buraya ekleyin
+  },
   icons: {
     icon: [
       {
