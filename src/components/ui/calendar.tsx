@@ -1,27 +1,70 @@
 import * as React from "react"
-import { DayPicker } from "react-day-picker"
+import { DayPicker, CaptionProps, MonthChangeEventHandler } from "react-day-picker"
 import { ChevronLeft, ChevronRight } from "lucide-react"
+import { format, getYear, setYear } from "date-fns"
+import { tr } from "date-fns/locale"
 
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>
+
+// Custom caption component to add year selector
+function CustomCaption({ displayMonth, onMonthChange }: CaptionProps) {
+  const year = getYear(displayMonth)
+  const handleYearChange = (selectedYear: string) => {
+    const newMonth = setYear(displayMonth, parseInt(selectedYear))
+    onMonthChange(newMonth)
+  }
+
+  // Generate years for dropdown (10 years back, 10 years ahead)
+  const currentYear = new Date().getFullYear()
+  const years = Array.from(
+    { length: 21 },
+    (_, i) => currentYear - 10 + i
+  ).map(year => year.toString())
+
+  return (
+    <div className="flex items-center justify-center gap-1 relative">
+      <Select defaultValue={year.toString()} onValueChange={handleYearChange}>
+        <SelectTrigger className="w-[4.5rem] h-7 text-xs border-none focus:ring-0 p-1 mx-1">
+          <SelectValue placeholder={year.toString()} />
+        </SelectTrigger>
+        <SelectContent className="max-h-[15rem]">
+          {years.map((y) => (
+            <SelectItem key={y} value={y} className="text-sm">
+              {y}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <span className="text-sm font-medium">
+        {format(displayMonth, "MMMM", { locale: tr })}
+      </span>
+    </div>
+  )
+}
 
 function Calendar({
   className,
   classNames,
-  showOutsideDays = true,
+  showOutsideDays = false,
   ...props
 }: CalendarProps) {
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
       className={cn("p-3", className)}
+      locale={tr}
+      components={{
+        Caption: CustomCaption
+      }}
       classNames={{
         months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
         month: "space-y-4",
-        caption: "flex justify-center pt-1 relative items-center",
-        caption_label: "text-sm font-medium",
+        caption: "flex justify-center pt-1 relative items-center h-9",
+        caption_label: "text-sm font-medium hidden", // Hide default caption
         nav: "space-x-1 flex items-center",
         nav_button: cn(
           buttonVariants({ variant: "outline" }),
@@ -30,10 +73,10 @@ function Calendar({
         nav_button_previous: "absolute left-1",
         nav_button_next: "absolute right-1",
         table: "w-full border-collapse space-y-1",
-        head_row: "flex",
+        head_row: "flex justify-between",
         head_cell:
-          "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]",
-        row: "flex w-full mt-2",
+          "text-muted-foreground rounded-md w-9 font-medium text-[0.8rem] text-center",
+        row: "flex w-full mt-2 justify-between",
         cell: "h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
         day: cn(
           buttonVariants({ variant: "ghost" }),
@@ -44,7 +87,7 @@ function Calendar({
           "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
         day_today: "bg-accent text-accent-foreground",
         day_outside:
-          "day-outside text-muted-foreground opacity-50 aria-selected:bg-accent/50 aria-selected:text-muted-foreground aria-selected:opacity-30",
+          "day-outside text-muted-foreground opacity-0", // Hide outside days completely
         day_disabled: "text-muted-foreground opacity-50",
         day_range_middle:
           "aria-selected:bg-accent aria-selected:text-accent-foreground",
