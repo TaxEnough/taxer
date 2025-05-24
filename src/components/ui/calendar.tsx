@@ -19,6 +19,10 @@ function Calendar({
 }: CalendarProps) {
   const [currentMonth, setCurrentMonth] = React.useState<Date>(props.defaultMonth || new Date());
   const [currentYear, setCurrentYear] = React.useState<number>(currentMonth.getFullYear());
+  const [internalSelectedDay, setInternalSelectedDay] = React.useState<Date | undefined>(undefined);
+  
+  // Track last selected day to prevent double selection
+  const lastSelectedDayRef = React.useRef<Date | null>(null);
   
   // Generate years for dropdown (from 1900 to current year + 10)
   const thisYear = new Date().getFullYear();
@@ -62,41 +66,46 @@ function Calendar({
     }
   };
   
+  // Custom day click handler to prevent double-clicks
+  const handleDayClick: DayClickEventHandler = (day, modifiers, e) => {
+    // If it's a disabled day, do nothing
+    if (modifiers.disabled) return;
+    
+    // Check if it's the same day that was just selected
+    if (lastSelectedDayRef.current && isSameDay(day, lastSelectedDayRef.current)) {
+      // Prevent default to stop DayPicker from processing the click
+      e.preventDefault();
+      return;
+    }
+    
+    // Update our reference to the last selected day
+    lastSelectedDayRef.current = day;
+    setInternalSelectedDay(day);
+    
+    // Let the original handler run for anything else
+    if (props.onDayClick) {
+      props.onDayClick(day, modifiers, e);
+    }
+  };
+  
   // Jump to today
   const handleGoToToday = () => {
     const today = new Date();
     setCurrentMonth(today);
     setCurrentYear(today.getFullYear());
     
+    // Update our reference
+    lastSelectedDayRef.current = today;
+    setInternalSelectedDay(today);
+    
     if (props.onMonthChange) {
       props.onMonthChange(today);
     }
     
-    // Try to select today if possible
-    const defaultSelectHandler = (props as any).onSelect;
-    if (defaultSelectHandler && typeof defaultSelectHandler === "function") {
-      defaultSelectHandler(today);
-    }
-  };
-  
-  // Custom day click handler to handle double click on the same day
-  const handleDayClick: DayClickEventHandler = (day, modifiers, e) => {
-    // If the original onDayClick handler exists, call it
-    if (props.onDayClick) {
-      props.onDayClick(day, modifiers, e);
-    }
-    
-    // If the day is already selected, do nothing
-    // This prevents re-selecting today's date when clicking on an already selected date
-    if ((props as any).selected && isSameDay(day, (props as any).selected)) {
-      e.preventDefault();
-      return;
-    }
-    
-    // Otherwise, use the default select handler
-    const defaultSelectHandler = (props as any).onSelect;
-    if (defaultSelectHandler && typeof defaultSelectHandler === "function") {
-      defaultSelectHandler(day);
+    // Forward to original onSelect if it exists
+    const onSelectHandler = (props as any).onSelect;
+    if (typeof onSelectHandler === 'function') {
+      onSelectHandler(today);
     }
   };
   
@@ -109,7 +118,7 @@ function Calendar({
   }, [props.month]);
   
   return (
-    <div className="rdp-wrapper bg-white rounded-lg shadow-md border border-gray-200 p-4 max-w-[300px]">
+    <div className="rdp-wrapper bg-white rounded-lg shadow-md border border-gray-200 p-4 max-w-[350px]">
       <div className="flex items-center justify-between mb-4 space-x-2">
         <Select 
           value={months[getMonth(currentMonth)]} 
@@ -160,20 +169,21 @@ function Calendar({
           font-weight: 500;
           padding: 4px 0;
           color: #6b7280;
+          height: 28px;
         }
         
         /* Day cells */
         .calendar-root td {
           text-align: center;
           padding: 0;
-          height: 38px; /* Increased cell height */
+          height: 50px; /* Increased cell height to 50px */
           position: relative;
         }
         
         /* Day buttons */
         .calendar-root button.day {
-          width: 100%;
-          height: 100%;
+          width: 50px;      /* Exact 50px width */
+          height: 50px;     /* Exact 50px height */
           border-radius: 4px;
           padding: 0;
           font-size: 0.875rem;
@@ -183,9 +193,6 @@ function Calendar({
           cursor: pointer;
           border: none;
           background: none;
-          aspect-ratio: 1 / 1; /* Force square button */
-          min-width: 36px;     /* Minimum width */
-          min-height: 36px;    /* Minimum height */
           margin: 0 auto;
         }
         
