@@ -128,8 +128,10 @@ export default function TransactionsPage() {
       const totalCost = buyTransactions.reduce((sum, t) => sum + (t.amount || t.price * t.shares), 0);
       const totalFees = tickerTransactions.reduce((sum, t) => sum + (t.fee || 0), 0);
       
-      // Calculate average cost - using Math.round for precise calculation
-      const averageCost = totalBuyShares > 0 ? Math.round(((totalCost + totalFees) / totalBuyShares) * 100) / 100 : 0;
+      // Calculate average cost using precise calculation with fixed decimal places
+      const averageCost = totalBuyShares > 0 
+        ? Number(((totalCost + totalFees) / totalBuyShares).toFixed(2))
+        : 0;
       
       // Calculate realized profit/loss from sold shares
       let realizedProfitLoss = 0;
