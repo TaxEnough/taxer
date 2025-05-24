@@ -129,7 +129,7 @@ export default function TransactionsPage() {
       const totalFees = tickerTransactions.reduce((sum, t) => sum + (t.fee || 0), 0);
       
       // Calculate average cost
-      const averageCost = totalBuyShares > 0 ? (totalCost + totalFees) / totalBuyShares : 0;
+      const averageCost = totalBuyShares > 0 ? parseFloat(((totalCost + totalFees) / totalBuyShares).toFixed(2)) : 0;
       
       // Calculate realized profit/loss from sold shares
       let realizedProfitLoss = 0;
