@@ -1,7 +1,7 @@
 import * as React from "react"
 import { DayPicker, type DayClickEventHandler } from "react-day-picker"
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react"
-import { format, getMonth, getYear, setMonth, setYear } from "date-fns"
+import { format, getMonth, getYear, setMonth, setYear, isSameDay } from "date-fns"
 import { enUS } from "date-fns/locale"
 
 import { cn } from "@/lib/utils"
@@ -79,6 +79,27 @@ function Calendar({
     }
   };
   
+  // Custom day click handler to handle double click on the same day
+  const handleDayClick: DayClickEventHandler = (day, modifiers, e) => {
+    // If the original onDayClick handler exists, call it
+    if (props.onDayClick) {
+      props.onDayClick(day, modifiers, e);
+    }
+    
+    // If the day is already selected, do nothing
+    // This prevents re-selecting today's date when clicking on an already selected date
+    if ((props as any).selected && isSameDay(day, (props as any).selected)) {
+      e.preventDefault();
+      return;
+    }
+    
+    // Otherwise, use the default select handler
+    const defaultSelectHandler = (props as any).onSelect;
+    if (defaultSelectHandler && typeof defaultSelectHandler === "function") {
+      defaultSelectHandler(day);
+    }
+  };
+  
   // Update current month when month changes
   React.useEffect(() => {
     if (props.month) {
@@ -145,7 +166,7 @@ function Calendar({
         .calendar-root td {
           text-align: center;
           padding: 0;
-          height: 32px;
+          height: 38px; /* Increased cell height */
           position: relative;
         }
         
@@ -162,6 +183,10 @@ function Calendar({
           cursor: pointer;
           border: none;
           background: none;
+          aspect-ratio: 1 / 1; /* Force square button */
+          min-width: 36px;     /* Minimum width */
+          min-height: 36px;    /* Minimum height */
+          margin: 0 auto;
         }
         
         .calendar-root button.day:hover:not(.selected) {
@@ -197,6 +222,7 @@ function Calendar({
           locale={enUS}
           month={currentMonth}
           onMonthChange={setCurrentMonth}
+          onDayClick={handleDayClick}
           modifiersClassNames={{
             selected: "selected", 
             today: "today",
