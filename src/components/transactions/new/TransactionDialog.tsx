@@ -330,7 +330,7 @@ export default function TransactionDialog({
                           </Button>
                         </FormControl>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
+                      <PopoverContent className="w-auto p-0" align="start" side="bottom">
                         <Calendar
                           mode="single"
                           selected={field.value}

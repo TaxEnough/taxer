@@ -134,19 +134,19 @@ export default function NewTransactionsPage() {
         amount: data.amount || calculateAmount(),
       };
       
-      // Create new transaction
-      const response = await fetch('/api/transactions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        // Create new transaction
+        const response = await fetch('/api/transactions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
         body: JSON.stringify(formattedData)
-      });
+        });
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create transaction');
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to create transaction');
       }
       
       // Successfully added transaction
@@ -157,7 +157,7 @@ export default function NewTransactionsPage() {
       toast.error(error.message || 'Failed to process transaction');
     } finally {
       setIsSubmitting(false);
-    }
+  }
   };
   
   return (
@@ -165,13 +165,13 @@ export default function NewTransactionsPage() {
       <Navbar />
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <div className="flex items-center mb-2">
-            <Link href="/transactions" className="inline-flex items-center text-gray-600 hover:text-gray-900 mr-2">
-              <ArrowLeft className="h-4 w-4 mr-1" />
+            <div className="flex items-center mb-2">
+              <Link href="/transactions" className="inline-flex items-center text-gray-600 hover:text-gray-900 mr-2">
+                <ArrowLeft className="h-4 w-4 mr-1" />
               Back to Transactions
-            </Link>
-          </div>
-          <p className="text-gray-500">
+              </Link>
+            </div>
+            <p className="text-gray-500">
             Record a new investment transaction to your portfolio
           </p>
         </div>
@@ -312,7 +312,7 @@ export default function NewTransactionsPage() {
                             </Button>
                           </FormControl>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0 bg-white border-gray-200 shadow-lg z-50" align="start">
+                        <PopoverContent className="w-auto p-0 bg-white border-gray-200 shadow-lg z-50" align="start" side="bottom">
                           <Calendar
                             mode="single"
                             selected={field.value}
@@ -354,8 +354,8 @@ export default function NewTransactionsPage() {
                     </FormItem>
                   )}
                 />
-              </div>
-              
+                    </div>
+                    
               {/* Notes */}
               <FormField
                 control={form.control}
@@ -383,14 +383,14 @@ export default function NewTransactionsPage() {
                   <span className="font-bold text-lg">
                     ${totalAmount.toFixed(2)}
                   </span>
-                </div>
+                      </div>
                 <p className="text-sm text-gray-500 mt-1">
                   {form.getValues('type') === 'buy' 
                     ? "Total cost including commission/fees"
                     : "Net proceeds after commission/fees"}
                 </p>
-              </div>
-              
+                    </div>
+                    
               <div className="flex justify-end space-x-4 pt-4">
                 <Button
                   type="button"
@@ -410,7 +410,7 @@ export default function NewTransactionsPage() {
               </div>
             </form>
           </Form>
-        </div>
+          </div>
       </div>
     </div>
   );

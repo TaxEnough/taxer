@@ -178,12 +178,16 @@ function Calendar({
           padding: 0;
           height: 50px; /* Increased cell height to 50px */
           position: relative;
+          width: 50px;  /* Ensure cells are exactly 50px wide */
         }
         
         /* Day buttons */
         .calendar-root button.day {
-          width: 50px;      /* Exact 50px width */
-          height: 50px;     /* Exact 50px height */
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100% !important;
+          height: 100% !important;
           border-radius: 4px;
           padding: 0;
           font-size: 0.875rem;
@@ -193,7 +197,7 @@ function Calendar({
           cursor: pointer;
           border: none;
           background: none;
-          margin: 0 auto;
+          margin: 0;
         }
         
         .calendar-root button.day:hover:not(.selected) {
