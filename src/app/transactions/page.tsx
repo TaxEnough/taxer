@@ -130,7 +130,7 @@ export default function TransactionsPage() {
       
       // Calculate average cost using precise calculation with fixed decimal places
       const averageCost = totalBuyShares > 0 
-        ? Number(((totalCost + totalFees) / totalBuyShares).toFixed(2))
+        ? Number((totalCost / totalBuyShares).toFixed(2))
         : 0;
       
       // Calculate realized profit/loss from sold shares

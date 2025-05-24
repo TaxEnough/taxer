@@ -321,7 +321,8 @@ export async function getTransactionsByTicker(userId: string) {
       
       // Recalculate average cost if we have shares
       if (summary.totalShares > 0) {
-        summary.averageCost = (summary.totalInvested + summary.totalFees) / summary.totalShares;
+        // Komisyon bedeli iki kez hesaplanmamalı - amount zaten komisyonları içeriyorsa fee ayrıca eklenmemeli
+        summary.averageCost = summary.totalInvested / summary.totalShares;
       }
       
       // Current holdings are the total shares we still have
