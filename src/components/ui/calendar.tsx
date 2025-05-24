@@ -88,7 +88,7 @@ function Calendar({
   }, [props.month]);
   
   return (
-    <div className="rdp-wrapper bg-white rounded-lg shadow-md border border-gray-200 p-4">
+    <div className="rdp-wrapper bg-white rounded-lg shadow-md border border-gray-200 p-4 max-w-[300px]">
       <div className="flex items-center justify-between mb-4 space-x-2">
         <Select 
           value={months[getMonth(currentMonth)]} 
@@ -124,40 +124,88 @@ function Calendar({
       </div>
       
       <style jsx global>{`
-        .rdp-cell {
-          display: flex;
-          justify-content: center;
-          align-items: center;
+        /* Force table layout with fixed cells */
+        .calendar-root table {
+          border-collapse: separate;
+          border-spacing: 2px;
+          width: 100%;
+          table-layout: fixed;
         }
         
-        .rdp-day {
-          width: 100% !important;
-          height: 100% !important;
+        /* Header cells for weekday names */
+        .calendar-root th {
+          text-align: center;
+          font-size: 0.8rem;
+          font-weight: 500;
+          padding: 4px 0;
+          color: #6b7280;
+        }
+        
+        /* Day cells */
+        .calendar-root td {
+          text-align: center;
+          padding: 0;
+          height: 32px;
+          position: relative;
+        }
+        
+        /* Day buttons */
+        .calendar-root button.day {
+          width: 100%;
+          height: 100%;
           border-radius: 4px;
+          padding: 0;
+          font-size: 0.875rem;
           display: flex;
-          justify-content: center;
           align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          border: none;
+          background: none;
         }
         
-        .rdp-day_today:not(.rdp-day_selected) {
-          border: 1px solid var(--primary);
+        .calendar-root button.day:hover:not(.selected) {
+          background-color: #f3f4f6;
+        }
+        
+        .calendar-root button.day.selected {
+          background-color: hsl(var(--primary));
+          color: hsl(var(--primary-foreground));
+        }
+        
+        .calendar-root button.day.today:not(.selected) {
+          border: 1px solid hsl(var(--primary));
+          background-color: hsl(var(--accent));
+          color: hsl(var(--accent-foreground));
+        }
+        
+        .calendar-root button.day.outside {
+          color: #9ca3af;
+          opacity: 0.5;
+        }
+        
+        .calendar-root button.day.disabled {
+          color: #d1d5db;
+          cursor: not-allowed;
         }
       `}</style>
       
-      <div className="calendar-container">
+      <div className="calendar-container overflow-hidden">
         <DayPicker
           showOutsideDays={showOutsideDays}
-          className={cn("p-0", className)}
+          className={cn("p-0 calendar-root", className)}
           locale={enUS}
           month={currentMonth}
           onMonthChange={setCurrentMonth}
           modifiersClassNames={{
-            selected: "bg-primary text-primary-foreground", 
-            today: "bg-accent text-accent-foreground"
+            selected: "selected", 
+            today: "today",
+            outside: "outside",
+            disabled: "disabled"
           }}
           classNames={{
-            months: "flex flex-col space-y-4",
-            month: "space-y-0",
+            months: "flex flex-col",
+            month: "",
             caption: "hidden", // Hide the default caption
             nav: "flex items-center justify-between px-1 py-1",
             nav_button: cn(
@@ -167,16 +215,15 @@ function Calendar({
             nav_button_previous: "ml-1",
             nav_button_next: "mr-1",
             table: "w-full border-collapse",
-            head_row: "grid grid-cols-7 w-full mb-1",
-            head_cell: "text-center text-xs font-medium text-gray-500 py-2",
-            row: "grid grid-cols-7 w-full mt-0 gap-0",
-            cell: "w-full aspect-square p-0 relative focus-within:relative focus-within:z-20 text-center rdp-cell",
-            day: "w-full h-full p-0 font-normal aria-selected:opacity-100 hover:bg-gray-100 rdp-day",
-            day_selected: "!bg-primary !text-primary-foreground hover:bg-primary hover:text-primary-foreground",
-            day_today: "bg-accent text-accent-foreground rdp-day_today",
-            day_outside: "text-gray-400 opacity-50",
-            day_disabled: "text-gray-300",
-            day_range_middle: "aria-selected:bg-accent aria-selected:text-accent-foreground",
+            head_row: "",
+            head_cell: "",
+            row: "",
+            cell: "",
+            day: "day",
+            day_selected: "selected",
+            day_today: "today",
+            day_outside: "outside",
+            day_disabled: "disabled",
             day_hidden: "invisible",
             ...classNames,
           }}
