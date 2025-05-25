@@ -205,8 +205,8 @@ function Calendar({
         }
         
         .calendar-root button.day.selected {
-          background-color: hsl(var(--primary));
-          color: hsl(var(--primary-foreground));
+          background-color: #22c55e;
+          color: #fff;
         }
         
         .calendar-root button.day.today:not(.selected) {
@@ -227,8 +227,8 @@ function Calendar({
       `}</style>
       
       <div className="calendar-container overflow-hidden">
-        <DayPicker
-          showOutsideDays={showOutsideDays}
+    <DayPicker
+      showOutsideDays={showOutsideDays}
           className={cn("p-0 calendar-root", className)}
           locale={enUS}
           month={currentMonth}
@@ -240,15 +240,15 @@ function Calendar({
             outside: "outside",
             disabled: "disabled"
           }}
-          classNames={{
+      classNames={{
             months: "flex flex-col",
             month: "",
             caption: "hidden", // Hide the default caption
             nav: "flex items-center justify-between px-1 py-1",
-            nav_button: cn(
-              buttonVariants({ variant: "outline" }),
+        nav_button: cn(
+          buttonVariants({ variant: "outline" }),
               "h-8 w-8 bg-white border border-gray-200 p-0 hover:bg-gray-100 flex items-center justify-center"
-            ),
+        ),
             nav_button_previous: "ml-1",
             nav_button_next: "mr-1",
             table: "w-full border-collapse",
@@ -261,11 +261,11 @@ function Calendar({
             day_today: "today",
             day_outside: "outside",
             day_disabled: "disabled",
-            day_hidden: "invisible",
-            ...classNames,
-          }}
-          {...props}
-        />
+        day_hidden: "invisible",
+        ...classNames,
+      }}
+      {...props}
+    />
       </div>
       
       <div className="mt-3 flex justify-center">
