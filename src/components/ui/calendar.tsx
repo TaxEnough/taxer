@@ -200,16 +200,17 @@ function Calendar({
           margin: 0;
         }
         
-        .calendar-root button.day:hover:not(.selected) {
+        .calendar-root button.day.selected,
+        .calendar-root button.day.day_selected {
+          background-color: #22c55e !important;
+          color: #fff !important;
+        }
+        
+        .calendar-root button.day:hover:not(.selected):not(.day_selected) {
           background-color: #f3f4f6;
         }
         
-        .calendar-root button.day.selected {
-          background-color: #22c55e;
-          color: #fff;
-        }
-        
-        .calendar-root button.day.today:not(.selected) {
+        .calendar-root button.day.today:not(.selected):not(.day_selected) {
           border: 1px solid hsl(var(--primary));
           background-color: hsl(var(--accent));
           color: hsl(var(--accent-foreground));
@@ -235,7 +236,7 @@ function Calendar({
           onMonthChange={setCurrentMonth}
           onDayClick={handleDayClick}
           modifiersClassNames={{
-            selected: "selected", 
+            selected: "selected day_selected", 
             today: "today",
             outside: "outside",
             disabled: "disabled"
@@ -257,7 +258,7 @@ function Calendar({
             row: "",
             cell: "",
             day: "day",
-            day_selected: "selected",
+            day_selected: "day_selected",
             day_today: "today",
             day_outside: "outside",
             day_disabled: "disabled",

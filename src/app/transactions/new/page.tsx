@@ -312,7 +312,7 @@ export default function NewTransactionsPage() {
                             </Button>
                           </FormControl>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0 bg-white border-gray-200 shadow-lg z-50" align="start" side="bottom">
+                        <PopoverContent className="w-auto p-0 bg-white border-gray-200 shadow-lg z-50" align="start" side="bottom" avoidCollisions={false} collisionPadding={0}>
                           <Calendar
                             mode="single"
                             selected={field.value}
