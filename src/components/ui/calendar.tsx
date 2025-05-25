@@ -202,12 +202,17 @@ function Calendar({
         
         .calendar-root button.day.selected,
         .calendar-root button.day.day_selected {
-          background-color: #22c55e !important;
-          color: #fff !important;
+          background-color: #22c55e !important; /* Yeşil renk */
+          color: #ffffff !important;
+          font-weight: 600;
+          border: none;
+          box-shadow: 0 2px 4px rgba(34, 197, 94, 0.2);
         }
         
         .calendar-root button.day:hover:not(.selected):not(.day_selected) {
           background-color: #f3f4f6;
+          border: 1px solid #22c55e;
+          color: #22c55e;
         }
         
         .calendar-root button.day.today:not(.selected):not(.day_selected) {
