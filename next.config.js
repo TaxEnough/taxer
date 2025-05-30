@@ -3,8 +3,7 @@ const nextConfig = {
   reactStrictMode: false,
   swcMinify: true,
   typescript: {
-    // !! UYARI !!
-    // Bu sadece build hatalarını görmezden gelmek için geçici bir çözüm
+
     ignoreBuildErrors: true,
   },
   eslint: {
