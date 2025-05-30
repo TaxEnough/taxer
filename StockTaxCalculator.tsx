@@ -61,7 +61,7 @@ export default function StockTaxCalculator() {
     // Stock silme
     const removeStock = (id: string) => {
         if (stocks.length === 1) {
-            // Don't remove the last stock, just reset it
+
             setStocks([{ 
                 id: '1', 
                 symbol: '', 
