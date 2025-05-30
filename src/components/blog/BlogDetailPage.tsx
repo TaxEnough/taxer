@@ -126,7 +126,7 @@ export default function BlogDetailPage({ post }: { post: BlogPost }) {
         )}
 
         <div className="prose prose-blue max-w-none">
-          {generateContent(post.content)}
+          <div dangerouslySetInnerHTML={{ __html: post.content }} />
         </div>
 
         <div className="mt-12 pt-8 border-t border-gray-200">
@@ -183,36 +183,5 @@ export default function BlogDetailPage({ post }: { post: BlogPost }) {
         </div>
       </article>
     </div>
-  );
-}
-
-// Simple content generator function
-function generateContent(content: string) {
-  // Markdown to HTML conversion can be added here
-  // For now, we're using simple formatting
-  if (!content || content.trim().length === 0) {
-    return <p className="text-gray-500">No content found.</p>;
-  }
-  
-  // Split paragraphs
-  const paragraphs = content.split('\n\n');
-  
-  return (
-    <>
-      {paragraphs.map((paragraph, index) => {
-        // Heading check - if starts with #
-        if (paragraph.startsWith('# ')) {
-          return <h2 key={index} className="text-2xl font-bold mb-4 mt-8">{paragraph.substring(2)}</h2>;
-        }
-        // Subheading check - if starts with ##
-        else if (paragraph.startsWith('## ')) {
-          return <h3 key={index} className="text-xl font-bold mb-3 mt-6">{paragraph.substring(3)}</h3>;
-        }
-        // Normal paragraph
-        else {
-          return <p key={index} className="mb-4">{paragraph}</p>;
-        }
-      })}
-    </>
   );
 } 
