@@ -31,7 +31,7 @@ interface Results {
     totalTaxes: number;
 }
 
-// Vergi dilimleri için tip tanımlamaları
+
 interface TaxBracket {
     rate: number;
     threshold: number;
