@@ -395,20 +395,6 @@ export default function Navbar() {
                         >
                           Profile Settings
                         </a>
-                        <a 
-                          href="/settings" 
-                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                          onClick={() => setProfileMenuOpen(false)}
-                        >
-                          Account Settings
-                        </a>
-                        <a 
-                          href="/subscription" 
-                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                          onClick={() => setProfileMenuOpen(false)}
-                        >
-                          Subscription
-                        </a>
                         <button 
                           onClick={() => {
                             logout();
@@ -518,13 +504,6 @@ export default function Navbar() {
                     onClick={handleLinkClick}
                   >
                     Profile
-                  </a>
-                  <a
-                    href="/settings"
-                    className="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"
-                    onClick={handleLinkClick}
-                  >
-                    Settings
                   </a>
                   <button
                     onClick={() => {
