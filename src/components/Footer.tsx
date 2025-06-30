@@ -13,46 +13,31 @@ export default function Footer() {
     e.preventDefault();
     setStatus('loading');
     setMessage('');
-    // API çağrısı burada olacak (sonra eklenecek)
-    setTimeout(() => {
-      setStatus('success');
-      setMessage('Thank you for subscribing!');
-      setEmail('');
-    }, 1000);
+    try {
+      const res = await fetch('/api/newsletter/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, extra: { userAgent: navigator.userAgent } }),
+      });
+      if (res.ok) {
+        setStatus('success');
+        setMessage('Thank you for subscribing!');
+        setEmail('');
+      } else {
+        setStatus('error');
+        setMessage('Subscription failed. Please try again.');
+      }
+    } catch {
+      setStatus('error');
+      setMessage('Subscription failed. Please try again.');
+    }
   };
 
   return (
     <footer className="bg-gray-900 text-white py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {/* Newsletter Subscription */}
-          <div className="md:col-span-3 mb-8">
-            <form onSubmit={handleSubscribe} className="flex flex-col md:flex-row items-center bg-gray-800 rounded-lg p-4 gap-2 max-w-xl mx-auto">
-              <label htmlFor="newsletter-email" className="sr-only">Email address</label>
-              <input
-                id="newsletter-email"
-                type="email"
-                required
-                placeholder="Enter your email to subscribe"
-                className="flex-1 px-4 py-2 rounded-md text-black focus:outline-none"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                disabled={status === 'loading'}
-              />
-              <button
-                type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md font-semibold disabled:opacity-50"
-                disabled={status === 'loading'}
-              >
-                {status === 'loading' ? 'Subscribing...' : 'Subscribe'}
-              </button>
-            </form>
-            {message && (
-              <p className={`mt-2 text-center ${status === 'success' ? 'text-green-400' : 'text-red-400'}`}>{message}</p>
-            )}
-          </div>
-
-          {/* Logo ve açıklama kısmı */}
+          {/* Logo ve açıklama kısmı + Newsletter kutusu */}
           <div className="flex flex-col items-start">
             <Image
               src="/images/logo_text_wb.png"
@@ -61,7 +46,30 @@ export default function Footer() {
               height={60}
               className="mb-4"
             />
-            <p className="text-gray-400 text-xs mb-4">
+            {/* Newsletter kutusu - küçük ve logonun hemen altında */}
+            <form onSubmit={handleSubscribe} className="flex w-full max-w-xs gap-2 mb-2">
+              <input
+                id="newsletter-email"
+                type="email"
+                required
+                placeholder="Your email"
+                className="flex-1 px-2 py-1 rounded text-black text-sm focus:outline-none"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                disabled={status === 'loading'}
+              />
+              <button
+                type="submit"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm font-semibold disabled:opacity-50"
+                disabled={status === 'loading'}
+              >
+                {status === 'loading' ? '...' : 'Subscribe'}
+              </button>
+            </form>
+            {message && (
+              <p className={`mt-1 text-xs ${status === 'success' ? 'text-green-400' : 'text-red-400'}`}>{message}</p>
+            )}
+            <p className="text-gray-400 text-xs mt-2 mb-4">
               30 N Gould St Ste N, Sheridan, WY 82801 USA
             </p>
           </div>
