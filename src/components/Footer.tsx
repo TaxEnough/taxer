@@ -1,11 +1,57 @@
+'use client';
+
 import Link from 'next/link';
 import Image from 'next/image';
+import { useState } from 'react';
 
 export default function Footer() {
+  const [email, setEmail] = useState('');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [message, setMessage] = useState('');
+
+  const handleSubscribe = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatus('loading');
+    setMessage('');
+    // API çağrısı burada olacak (sonra eklenecek)
+    setTimeout(() => {
+      setStatus('success');
+      setMessage('Thank you for subscribing!');
+      setEmail('');
+    }, 1000);
+  };
+
   return (
     <footer className="bg-gray-900 text-white py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {/* Newsletter Subscription */}
+          <div className="md:col-span-3 mb-8">
+            <form onSubmit={handleSubscribe} className="flex flex-col md:flex-row items-center bg-gray-800 rounded-lg p-4 gap-2 max-w-xl mx-auto">
+              <label htmlFor="newsletter-email" className="sr-only">Email address</label>
+              <input
+                id="newsletter-email"
+                type="email"
+                required
+                placeholder="Enter your email to subscribe"
+                className="flex-1 px-4 py-2 rounded-md text-black focus:outline-none"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                disabled={status === 'loading'}
+              />
+              <button
+                type="submit"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md font-semibold disabled:opacity-50"
+                disabled={status === 'loading'}
+              >
+                {status === 'loading' ? 'Subscribing...' : 'Subscribe'}
+              </button>
+            </form>
+            {message && (
+              <p className={`mt-2 text-center ${status === 'success' ? 'text-green-400' : 'text-red-400'}`}>{message}</p>
+            )}
+          </div>
+
           {/* Logo ve açıklama kısmı */}
           <div className="flex flex-col items-start">
             <Image
