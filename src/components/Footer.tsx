@@ -52,7 +52,7 @@ export default function Footer() {
                 id="newsletter-email"
                 type="email"
                 required
-                placeholder="Your email"
+                placeholder="Join our Waitlist!"
                 className="flex-1 px-2 py-1 rounded text-black text-sm focus:outline-none"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
@@ -69,9 +69,6 @@ export default function Footer() {
             {message && (
               <p className={`mt-1 text-xs ${status === 'success' ? 'text-green-400' : 'text-red-400'}`}>{message}</p>
             )}
-            <p className="text-gray-400 text-xs mt-2 mb-4">
-              30 N Gould St Ste N, Sheridan, WY 82801 USA
-            </p>
           </div>
 
           {/* Hızlı Linkler */}
