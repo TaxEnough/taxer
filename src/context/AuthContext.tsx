@@ -6,7 +6,7 @@ import { useClerkAuthCache } from '@/lib/clerk-utils';
 import { useUser, useSignIn, useClerk } from '@clerk/nextjs';
 
 // Debug modunu belirle
-const DEBUG_LOGS = process.env.NODE_ENV === 'development' && false; // Debug loglarını kapatmak için false
+const DEBUG_LOGS = process.env.NODE_ENV === 'development' && false;
 
 // User interface'ini Clerk'e uygun olarak tanımla
 export interface User {
