@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useClerkAuthCache } from '@/lib/clerk-utils';
 import { useUser, useSignIn, useClerk } from '@clerk/nextjs';
 
-// Debug modunu belirle
+
 const DEBUG_LOGS = process.env.NODE_ENV === 'development' && false;
 export interface User {
   id: string;
