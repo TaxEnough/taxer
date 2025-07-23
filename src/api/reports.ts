@@ -1,7 +1,6 @@
 import { TaxSummary } from '@/types/reports';
 
-/**
- * Belirli bir yıl için vergi özetini getiren API fonksiyonu
+
  * @param year Vergi özeti istenilen yıl (default: mevcut yıl)
  */
 export async function fetchTaxSummary(year: string = new Date().getFullYear().toString()): Promise<TaxSummary> {
